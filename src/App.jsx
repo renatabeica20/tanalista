@@ -1467,9 +1467,6 @@ export default function App(){
   // ── Classificação por IA em tempo real ──────────────────────────────
   const [dlgLoading, setDlgLoading] = useState(false);
 
-  const classifyWithAI = classifyProduct;
-
-
   const openProductDialog = async (name, existing=null) => {
     if (existing) {
       const cfg = getProductConfig(name);
@@ -1490,7 +1487,7 @@ export default function App(){
     setDlgQty(1); setDlgUnit("unidade");
     setItemDialog({name});
     try {
-      const cfg = await classifyWithAI(name);
+      const cfg = await classifyProduct(name);
       setDlgConfig(cfg);
       setDlgMarca(cfg.marcas?.[0]||"");
       setDlgTipo(cfg.tipos?.[0]||"");
@@ -1759,9 +1756,9 @@ export default function App(){
   };
 
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
-  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
+  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
 
   // ── Preview do item no diálogo ────────────────────────────────────────
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
