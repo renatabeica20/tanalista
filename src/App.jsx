@@ -1454,19 +1454,19 @@ function demoOrganize(items) {
 }
 
 // ── ESTILOS BASE ───────────────────────────────────────────────────────────
-const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E0E4EA",borderRadius:10,fontSize:16,color:"#1A202C",outline:"none",fontFamily:"inherit",background:"white",boxSizing:"border-box",...extra});
+const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:18,fontSize:16,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",...extra});
 const lbl = {fontWeight:700,fontSize:13,color:"#4A5568",marginBottom:8,display:"block"};
-const chip = (sel,bc="#7C3AED",bg="#EDE9FE",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:100,border:`2px solid ${sel?bc:"#E0E4EA"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#8896A8",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
-const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
-const btnGr = {padding:"13px 16px",borderRadius:10,background:"white",border:"2px solid #E0E4EA",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
-const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E0E4EA",background:"white",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
+const chip = (sel,bc="#6D28D9",bg="#F5F3FF",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:180,border:`2px solid ${sel?bc:"#E5E7EB"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#6B7280",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
+const btnG = {width:"100%",padding:16,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
+const btnGr = {padding:"13px 16px",borderRadius:18,background:"#FFFFFF",border:"2px solid #E5E7EB",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
+const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E5E7EB",background:"#FFFFFF",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
 
 function ModalSheet({onClose,children}){
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{background:"white",borderRadius:"24px 24px 0 0",padding:"20px 20px 48px",width:"100%",maxWidth:430,maxHeight:"90vh",overflowY:"auto"}}>
-        <div style={{width:40,height:4,background:"#E0E4EA",borderRadius:2,margin:"0 auto 20px"}}/>
+      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.52)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{background:"#FFFFFF",borderRadius:"26px 26px 0 0",padding:"20px 20px 48px",width:"100%",maxWidth:430,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{width:40,height:4,background:"#E5E7EB",borderRadius:2,margin:"0 auto 20px"}}/>
         {children}
       </div>
     </div>
@@ -2094,29 +2094,29 @@ export default function App(){
 
   // ─────────────────────────────────────────────────────────────────────
   return(
-    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#F0F2F5",fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative"}}>
+    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#F9FAFB",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative"}}>
 
       {/* LOADING */}
       {loading&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(255,255,255,0.94)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-          <div style={{width:48,height:48,borderRadius:"50%",border:"4px solid #B3F0D6",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite"}}/>
+        <div style={{position:"fixed",inset:0,background:"rgba(249,250,251,0.96)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+          <div style={{width:48,height:48,borderRadius:"50%",border:"4px solid #B3F0D6",borderTopColor:"#6D28D9",animation:"spin 0.8s linear infinite"}}/>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           <div style={{fontWeight:700,fontSize:15,color:"#4A5568"}}>✨ Organizando com IA...</div>
         </div>
       )}
 
       {/* TOAST */}
-      <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#1A202C",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 14px 30px rgba(0,0,0,0.25)",pointerEvents:"none"}}>
+      <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
         {toast.msg}
       </div>
 
       {/* LISTA FINALIZADA */}
       {showFinished&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-          <div style={{background:"white",borderRadius:24,padding:32,textAlign:"center",maxWidth:360,width:"100%"}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.56)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+          <div style={{background:"#FFFFFF",borderRadius:24,padding:32,textAlign:"center",maxWidth:360,width:"100%"}}>
             <div style={{fontSize:64,marginBottom:12}}>🎉</div>
-            <div style={{fontWeight:900,fontSize:22,color:"#1A202C",marginBottom:8}}>Lista finalizada!</div>
-            <div style={{fontSize:14,color:"#8896A8",marginBottom:12}}>Todos os itens foram marcados.</div>
+            <div style={{fontWeight:900,fontSize:22,color:"#111827",marginBottom:8}}>Lista finalizada!</div>
+            <div style={{fontSize:14,color:"#6B7280",marginBottom:12}}>Todos os itens foram marcados.</div>
             <div style={{fontWeight:800,fontSize:22,color:"#6D28D9",marginBottom:16}}>{fmtR(fullTotal)}</div>
             {budget>0&&(
               <div style={{fontSize:13,fontWeight:700,marginBottom:20,color:fullTotal>budget?"#E53935":"#43A047"}}>
@@ -2125,11 +2125,11 @@ export default function App(){
             )}
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>{setShowFinished(false);shareWhatsApp();}}
-                style={{flex:1,padding:14,borderRadius:10,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
+                style={{flex:1,padding:14,borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
                 💬 WhatsApp
               </button>
               <button onClick={()=>setShowFinished(false)}
-                style={{flex:1,padding:14,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
+                style={{flex:1,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
                 Fechar
               </button>
             </div>
@@ -2143,17 +2143,17 @@ export default function App(){
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,#6D28D9 0%,#8B5CF6 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
             <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
-              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
+              <div style={{fontWeight:800,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
+              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.22)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
               <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,fontStyle:"italic"}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
-            <div style={{fontWeight:800,fontSize:12,color:"#8896A8",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
+            <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
                 {icon:"🛒",name:"Compras",desc:"Lista inteligente",active:true},
@@ -2164,17 +2164,17 @@ export default function App(){
                 {icon:"🏢",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
-                  style={{background:"white",borderRadius:16,padding:"18px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 1px 4px rgba(0,0,0,0.08)",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
-                  {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E0E4EA",color:"#8896A8",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:100,textTransform:"uppercase"}}>Em breve</div>}
+                  style={{background:"#FFFFFF",borderRadius:20,padding:"18px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 8px 24px rgba(17,24,39,0.06)",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
+                  {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
                   <div style={{fontSize:30,marginBottom:10}}>{m.icon}</div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#1A202C"}}>{m.name}</div>
-                  <div style={{fontSize:12,color:"#8896A8",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
+                  <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
                 </div>
               ))}
             </div>
-            <div style={{fontWeight:800,fontSize:12,color:"#8896A8",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Listas recentes</div>
+            <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Listas recentes</div>
             {lists.length===0?(
-              <div style={{textAlign:"center",padding:"32px 20px",color:"#8896A8"}}>
+              <div style={{textAlign:"center",padding:"32px 20px",color:"#6B7280"}}>
                 <div style={{fontSize:48,marginBottom:12}}>🛒</div>
                 <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no <strong>+</strong> para criar!</p>
               </div>
@@ -2185,31 +2185,31 @@ export default function App(){
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   return(
-                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"visible",position:"relative"}}>
+                    <div key={list.id} style={{background:"#FFFFFF",borderRadius:20,boxShadow:"0 8px 24px rgba(17,24,39,0.06)",overflow:"visible",position:"relative"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
                         style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",cursor:"pointer"}}>
                         <div style={{fontSize:26,flexShrink:0}}>{icons[list.type]||"📦"}</div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontWeight:700,fontSize:15,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name}</div>
-                          <div style={{fontSize:12,color:"#8896A8",marginTop:2}}>
+                          <div style={{fontWeight:700,fontSize:15,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name}</div>
+                          <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
                             {list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0)}/{list.categories.reduce((s,c)=>s+c.items.length,0)} itens · {new Date(list.createdAt).toLocaleDateString("pt-BR")} · {fmtR(list.total||0)}
                           </div>
                         </div>
-                        <div style={{color:"#C0C8D4",fontSize:18,flexShrink:0}}>›</div>
+                        <div style={{color:"#9CA3AF",fontSize:18,flexShrink:0}}>›</div>
                       </div>
                       <div style={{borderTop:"1px solid #F0F2F5",padding:"8px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{fontSize:12,color:"#8896A8"}}>
+                        <div style={{fontSize:12,color:"#6B7280"}}>
                           {list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0)}/{list.categories.reduce((s,c)=>s+c.items.length,0)} itens · {fmtR(list.total||0)}
                         </div>
                         <div style={{position:"relative"}}>
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
-                            style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
+                            style={{background:"#F9FAFB",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,bottom:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:210,overflow:"hidden"}}>
+                            <div style={{position:"absolute",right:0,bottom:42,background:"#FFFFFF",borderRadius:20,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",border:"1px solid #E5E7EB",zIndex:500,minWidth:210,overflow:"hidden"}}>
                               <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar Lista</button>
-                              <div style={{height:1,background:"#F0F2F5"}}/>
-                              <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
-                              <div style={{height:1,background:"#F0F2F5"}}/>
+                              <div style={{height:1,background:"#F9FAFB"}}/>
+                              <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
+                              <div style={{height:1,background:"#F9FAFB"}}/>
                               <button onClick={()=>{setConfirmDelete(list.id);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#FF4444",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🗑 Excluir lista</button>
                             </div>
                           )}
@@ -2222,11 +2222,11 @@ export default function App(){
             )}
             <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
                           <button onClick={shareAppWhatsApp}
-                            style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)"}}>
+                            style={{width:"100%",padding:"13px 16px",borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)"}}>
                             💬 Link do app
                           </button>
                           <button onClick={installApp}
-                            style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"white",border:"1px solid #D9DDE6",color:"#4C1D95",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                            style={{width:"100%",padding:"13px 16px",borderRadius:18,background:"#FFFFFF",border:"1px solid #D9DDE6",color:"#4C1D95",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                             📲 Adicionar à Tela de Início
                           </button>
                         </div>
@@ -2240,12 +2240,12 @@ export default function App(){
         <ModalSheet onClose={()=>setConfirmDelete(null)}>
           <div style={{textAlign:"center",marginBottom:24}}>
             <div style={{fontSize:48,marginBottom:12}}>🗑️</div>
-            <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:8}}>Excluir lista?</div>
-            <div style={{fontSize:14,color:"#8896A8"}}>Essa ação não pode ser desfeita.</div>
+            <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:8}}>Excluir lista?</div>
+            <div style={{fontSize:14,color:"#6B7280"}}>Essa ação não pode ser desfeita.</div>
           </div>
           <div style={{display:"flex",gap:10}}>
             <button onClick={()=>setConfirmDelete(null)} style={{...btnGr,flex:1}}>Cancelar</button>
-            <button onClick={()=>deleteList(confirmDelete)} style={{flex:1,padding:14,borderRadius:10,background:"#FF4444",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Excluir</button>
+            <button onClick={()=>deleteList(confirmDelete)} style={{flex:1,padding:14,borderRadius:18,background:"#FF4444",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Excluir</button>
           </div>
         </ModalSheet>
       )}
@@ -2255,48 +2255,48 @@ export default function App(){
       ════════════════════════════════════ */}
       {screen==="create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"white",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E0E4EA",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+          <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
-              style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-            <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+              style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{fontWeight:800,fontSize:18,color:"#111827",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
+            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
               <label style={lbl}>💰 Orçamento</label>
               {budgetConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
                   <div>
-                    <div style={{fontSize:11,color:"#5B21B6",fontWeight:600}}>Limite definido</div>
-                    <div style={{fontSize:20,fontWeight:900,color:"#7C3AED"}}>{fmtR(parseBRL(budgetText)||0)}</div>
+                    <div style={{fontSize:11,color:"#6D28D9",fontWeight:600}}>Limite definido</div>
+                    <div style={{fontSize:20,fontWeight:900,color:"#6D28D9"}}>{fmtR(parseBRL(budgetText)||0)}</div>
                   </div>
-                  <button onClick={()=>setBudgetConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
+                  <button onClick={()=>setBudgetConfirmed(false)} style={{background:"none",border:"none",color:"#6D28D9",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
                 </div>
               ):(
                 <div>
                   <div style={{display:"flex",gap:8}}>
                     <div style={{position:"relative",flex:1}}>
-                      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:15,pointerEvents:"none"}}>R$</span>
+                      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:15,pointerEvents:"none"}}>R$</span>
                       <input value={budgetText} onChange={e=>setBudgetText(maskBRLInput(e.target.value))}
                         onKeyDown={e=>e.key==="Enter"&&budgetText&&setBudgetConfirmed(true)}
                         placeholder="0,00" inputMode="numeric"
                         style={inp({paddingLeft:44})}
-                        onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                        onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                     </div>
                     <button onClick={()=>{if(budgetText)setBudgetConfirmed(true);}}
-                      style={{padding:"0 18px",borderRadius:10,background:budgetText?"#7C3AED":"#F0F2F5",border:"none",color:budgetText?"white":"#8896A8",fontWeight:700,fontSize:14,cursor:budgetText?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap"}}>OK</button>
+                      style={{padding:"0 18px",borderRadius:18,background:budgetText?"#6D28D9":"#F0F2F5",border:"none",color:budgetText?"white":"#6B7280",fontWeight:700,fontSize:14,cursor:budgetText?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap"}}>OK</button>
                   </div>
-                  <div style={{fontSize:12,color:"#B0B7C3",marginTop:6}}>Deixe em branco para não definir limite</div>
+                  <div style={{fontSize:12,color:"#9CA3AF",marginTop:6}}>Deixe em branco para não definir limite</div>
                 </div>
               )}
             </div>
             {/* NOME DA LISTA */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
+            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
               <label style={lbl}>📝 Nome da lista</label>
               {listNameConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED"}}>{listName||"Minha lista"}</div>
-                  <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
+                  <div style={{fontWeight:800,fontSize:15,color:"#6D28D9"}}>{listName||"Minha lista"}</div>
+                  <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#6D28D9",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
                 </div>
               ):(
                 <div style={{display:"flex",gap:8}}>
@@ -2304,14 +2304,14 @@ export default function App(){
                     onKeyDown={e=>e.key==="Enter"&&setListNameConfirmed(true)}
                     placeholder="Ex: Compras da semana..."
                     style={inp({flex:1})}
-                    onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                    onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                   <button onClick={()=>setListNameConfirmed(true)}
-                    style={{padding:"0 18px",borderRadius:10,background:"#7C3AED",border:"none",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>OK</button>
+                    style={{padding:"0 18px",borderRadius:18,background:"#6D28D9",border:"none",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>OK</button>
                 </div>
               )}
             </div>
             {/* TIPO DE LISTA */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
+            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
               <label style={lbl}>🏷️ Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -2327,19 +2327,19 @@ export default function App(){
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
                   placeholder="Nome do produto..."
-                  style={inp()} onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                  style={inp()} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 <button onClick={handleAddItem}
-                  style={{padding:"0 20px",height:52,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>Inserir</button>
+                  style={{padding:"0 20px",height:52,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>Inserir</button>
               </div>
-              <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
+              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
-                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2px solid #7C3AED",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                style={{width:"100%",padding:"14px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 📋 Cole sua lista aqui
               </button>
             </div>
             {pendingItems.length>0&&(
-              <div style={{background:"white",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}>
-                <div style={{padding:"10px 14px",background:"#F8F9FA",borderBottom:"1px solid #E0E4EA",fontSize:12,fontWeight:700,color:"#8896A8",display:"flex",justifyContent:"space-between"}}>
+              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+                <div style={{padding:"10px 14px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",fontSize:12,fontWeight:700,color:"#6B7280",display:"flex",justifyContent:"space-between"}}>
                   <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"}</span>
                   <button onClick={()=>setPendingItems([])} style={{background:"none",border:"none",color:"#FF4444",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Limpar tudo</button>
                 </div>
@@ -2349,12 +2349,12 @@ export default function App(){
                     <div key={i} style={{padding:"11px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
                       <span style={{fontSize:16}}>🛒</span>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {[item.qty+" "+item.unit,item.marca,item.tipo,item.name,emb].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <button onClick={()=>editPendingItem(i)}
-                        style={{background:"#EDE9FE",border:"none",borderRadius:6,padding:"4px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14,marginRight:4}}>✏️</button>
+                        style={{background:"#F5F3FF",border:"none",borderRadius:6,padding:"4px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14,marginRight:4}}>✏️</button>
                       <button onClick={()=>setPendingItems(prev=>prev.filter((_,j)=>j!==i))}
                         style={{background:"#FFE8E8",border:"none",borderRadius:6,padding:"4px 10px",color:"#FF4444",cursor:"pointer",fontSize:14}}>×</button>
                     </div>
@@ -2373,12 +2373,12 @@ export default function App(){
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
         <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}}>
-          <div style={{fontWeight:900,fontSize:20,color:"#1A202C",marginBottom:4}}>🛒 {itemDialog.name}</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:8}}>{dlgLoading?"":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
+          <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialog.name}</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:8}}>{dlgLoading?"":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
           {dlgLoading&&(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 0",gap:14}}>
-              <div style={{width:40,height:40,borderRadius:"50%",border:"4px solid #E6FAF2",borderTopColor:"#7C3AED",animation:"spin 0.8s linear infinite"}}/>
-              <div style={{fontSize:14,color:"#8896A8",fontWeight:600}}>✨ IA classificando...</div>
+              <div style={{width:40,height:40,borderRadius:"50%",border:"4px solid #E6FAF2",borderTopColor:"#6D28D9",animation:"spin 0.8s linear infinite"}}/>
+              <div style={{fontSize:14,color:"#6B7280",fontWeight:600}}>✨ IA classificando...</div>
             </div>
           )}
           {!dlgLoading&&dlgConfig&&(<>
@@ -2431,7 +2431,7 @@ export default function App(){
             <label style={lbl}>Quantidade</label>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <button onClick={()=>setDlgQty(q=>Math.max(1,q-1))} style={qBtn}>−</button>
-              <span style={{fontWeight:900,fontSize:24,color:"#1A202C",minWidth:36,textAlign:"center"}}>{dlgQty}</span>
+              <span style={{fontWeight:900,fontSize:24,color:"#111827",minWidth:36,textAlign:"center"}}>{dlgQty}</span>
               <button onClick={()=>setDlgQty(q=>q+1)} style={qBtn}>＋</button>
             </div>
           </div>
@@ -2445,7 +2445,7 @@ export default function App(){
           </div>
 
           {/* Preview */}
-          <div style={{background:"#EDE9FE",borderRadius:10,padding:"12px 14px",marginBottom:16,fontSize:13,color:"#6D28D9",fontWeight:700}}>
+          <div style={{background:"#F5F3FF",borderRadius:18,padding:"12px 14px",marginBottom:16,fontSize:13,color:"#6D28D9",fontWeight:700}}>
             ✅ {[dlgQty+" "+dlgUnit, dlgMarca, dlgTipo, itemDialog.name, dlgPeso||dlgVolume].filter(Boolean).join(" · ")}
           </div>
 
@@ -2454,7 +2454,7 @@ export default function App(){
             <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
             {!dlgLoading&&(
               <button onClick={confirmDialog}
-                style={{flex:2,padding:14,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
+                style={{flex:2,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
                 {editPendingIdx!=null?"Atualizar ✓":"Confirmar ✓"}
               </button>
             )}
@@ -2467,15 +2467,15 @@ export default function App(){
       ════════════════════════════════════ */}
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(135deg,#7C3AED,#6D28D9)",padding:"20px 20px 24px"}}>
+          <div style={{background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",padding:"20px 20px 24px"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
               <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
             </div>
-            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:18,padding:"12px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
@@ -2497,7 +2497,7 @@ export default function App(){
 
           {/* Painel orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(
-            <div style={{margin:"10px 20px 0",background:"#FEF2F2",borderRadius:14,border:"2px solid #EF4444",overflow:"hidden"}}>
+            <div style={{margin:"10px 20px 0",background:"#FEF2F2",borderRadius:18,border:"2px solid #EF4444",overflow:"hidden"}}>
               <div onClick={()=>setShowSuggestions(s=>!s)}
                 style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
                 <span style={{fontSize:18}}>⚠️</span>
@@ -2516,13 +2516,13 @@ export default function App(){
                       Plano de ajuste até voltar ao orçamento
                     </div>
                     {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"#FFFFFF"}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-                            {tipo==="remover"&&<span style={{fontSize:10,fontWeight:700,background:"#FEF2F2",color:"#B91C1C",padding:"2px 6px",borderRadius:100,border:"1px solid #FECACA",flexShrink:0}}>supérfluo</span>}
+                            <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+                            {tipo==="remover"&&<span style={{fontSize:10,fontWeight:700,background:"#FEF2F2",color:"#B91C1C",padding:"2px 6px",borderRadius:180,border:"1px solid #FECACA",flexShrink:0}}>supérfluo</span>}
                           </div>
-                          <div style={{fontSize:12,color:"#8896A8",marginTop:2}}>
+                          <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
                             {tipo==="reduzir"?`${qty} un · reduzir 1 un economiza ${fmtR(price)}`:`remover economiza ${fmtR(price*qty)}`}
                           </div>
                         </div>
@@ -2532,7 +2532,7 @@ export default function App(){
                               style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
                             <span style={{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}}>{qty}</span>
                             <button onClick={()=>quickAdjust(ci,ii,1)}
-                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
+                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #6D28D9",background:"#F5F3FF",color:"#6D28D9",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
                           </div>
                         ):(
                           <button onClick={()=>{
@@ -2558,14 +2558,14 @@ export default function App(){
 
           {/* Search */}
           <div style={{margin:"14px 20px 0",position:"relative"}}>
-            <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#C0C8D4"}}>🔍</span>
+            <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#9CA3AF"}}>🔍</span>
             <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)}
               placeholder="Buscar item na lista..."
-              style={{...inp({padding:"12px 16px 12px 42px",borderRadius:100})}}
-              onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+              style={{...inp({padding:"12px 16px 12px 42px",borderRadius:180})}}
+              onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
             {search&&(
               <button onClick={()=>{setSearch("");searchRef.current?.focus();}}
-                style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#8896A8",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+                style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#6B7280",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
             )}
           </div>
 
@@ -2590,7 +2590,7 @@ export default function App(){
               if(search&&filtered.length===0)return null;
 
               return(
-                <div key={ci} style={{marginBottom:12,borderRadius:14,overflow:"hidden",border:`2px solid ${allDone?"#7C3AED":theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
+                <div key={ci} style={{marginBottom:12,borderRadius:18,overflow:"hidden",border:`2px solid ${allDone?"#6D28D9":theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
                     style={{background:allDone?"#E8F5E9":theme.bg,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",borderBottom:isCollapsed?"none":`1px solid ${theme.border}40`}}>
@@ -2637,24 +2637,24 @@ export default function App(){
                             }}>
                             {/* Checkbox com cor da categoria */}
                             <div onClick={e=>{e.stopPropagation();toggleCheck(ci,realII);if(search)setSearch("");}}
-                              style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:"#E0E4EA"}`,background:item.checked?theme.border:"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,color:"white",cursor:"pointer",transition:"all 0.2s"}}>
+                              style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:"#E5E7EB"}`,background:item.checked?theme.border:"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,color:"white",cursor:"pointer",transition:"all 0.2s"}}>
                               {item.checked?"✓":""}
                             </div>
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#111827",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
-                                {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>extra</span>}
-                                {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
+                                {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>extra</span>}
+                                {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
                               </div>
                               {/* Linha 2: qty × preço = total */}
                               <div style={{fontSize:12,marginTop:4,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                                <span style={{color:"#8896A8"}}>{priceLine}</span>
+                                <span style={{color:"#6B7280"}}>{priceLine}</span>
                                 {hasPrice?(
                                   <span style={{fontWeight:800,fontSize:14,color:item.checked?"#9E9E9E":theme.header,flexShrink:0}}>{totalItemPrice}</span>
                                 ):(
-                                  <span style={{fontSize:12,color:"#C0C8D4",flexShrink:0}}>+ preço</span>
+                                  <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
                               </div>
                             </div>
@@ -2669,7 +2669,7 @@ export default function App(){
           </div>
 
           <button onClick={()=>setExtraModal(true)}
-            style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",borderRadius:100,padding:"14px 24px",fontWeight:800,fontSize:14,cursor:"pointer",boxShadow:"0 6px 24px rgba(124,58,237,0.4)",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",zIndex:200,fontFamily:"inherit"}}>
+            style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",borderRadius:180,padding:"14px 24px",fontWeight:800,fontSize:14,cursor:"pointer",boxShadow:"0 6px 24px rgba(124,58,237,0.4)",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",zIndex:200,fontFamily:"inherit"}}>
             ＋ Adicionar item extra
           </button>
         </div>
@@ -2682,17 +2682,17 @@ export default function App(){
         const theme=getCatTheme(currentList.categories[itemModal.ci]?.name);
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
-            <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
-            <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>{currentList.categories[itemModal.ci]?.name}</div>
+            <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
+            <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>{currentList.categories[itemModal.ci]?.name}</div>
             {/* Nao encontrado toggle */}
-            <div style={{display:"flex",alignItems:"center",gap:12,background:mNotFound?"#FEF2F2":"#F8F9FA",borderRadius:12,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}
+            <div style={{display:"flex",alignItems:"center",gap:12,background:mNotFound?"#FEF2F2":"#F9FAFB",borderRadius:20,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}
               onClick={()=>setMNotFound(!mNotFound)}>
-              <div style={{width:28,height:28,borderRadius:"50%",border:"2.5px solid "+(mNotFound?"#EF4444":"#E0E4EA"),background:mNotFound?"#FEE2E2":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>
+              <div style={{width:28,height:28,borderRadius:"50%",border:"2.5px solid "+(mNotFound?"#EF4444":"#E5E7EB"),background:mNotFound?"#FEE2E2":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>
                 {mNotFound?"✗":""}
               </div>
               <div>
-                <div style={{fontWeight:700,fontSize:14,color:mNotFound?"#EF4444":"#1A202C"}}>Item não encontrado / em falta</div>
-                <div style={{fontSize:12,color:"#8896A8"}}>Marcar como indisponível na loja</div>
+                <div style={{fontWeight:700,fontSize:14,color:mNotFound?"#EF4444":"#111827"}}>Item não encontrado / em falta</div>
+                <div style={{fontSize:12,color:"#6B7280"}}>Marcar como indisponível na loja</div>
               </div>
             </div>
 
@@ -2701,19 +2701,19 @@ export default function App(){
               <label style={lbl}>Quantidade</label>
               <div style={{display:"flex",alignItems:"center",gap:14}}>
                 <button onClick={()=>setMQty(q=>Math.max(1,q-1))} style={qBtn}>−</button>
-                <span style={{fontWeight:900,fontSize:24,color:"#1A202C",minWidth:36,textAlign:"center"}}>{mQty}</span>
+                <span style={{fontWeight:900,fontSize:24,color:"#111827",minWidth:36,textAlign:"center"}}>{mQty}</span>
                 <button onClick={()=>setMQty(q=>q+1)} style={qBtn}>＋</button>
-                <span style={{fontSize:14,color:"#8896A8",marginLeft:4}}>{item.unit||"un"}</span>
+                <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{item.unit||"un"}</span>
               </div>
             </div>
             <div style={{marginBottom:20}}>
               <label style={lbl}>Preço unitário</label>
               <div style={{position:"relative"}}>
-                <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:16,pointerEvents:"none"}}>R$</span>
+                <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
                 <input value={mPriceText} onChange={e=>setMPriceText(e.target.value.replace(/[^0-9.,]/g,""))}
                   placeholder="0,00" inputMode="decimal"
                   style={inp({paddingLeft:44})}
-                  onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                  onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
               {mPriceText&&parseBRL(mPriceText)!=null&&(
                 <div style={{fontSize:13,fontWeight:700,marginTop:8,color:theme.header}}>
@@ -2724,10 +2724,10 @@ export default function App(){
             </>}
 
             <div style={{display:"flex",gap:10}}>
-              <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:10,background:"#FFE8E8",border:"none",color:"#FF4444",fontWeight:700,fontSize:16,cursor:"pointer"}}>🗑</button>
+              <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:18,background:"#FFE8E8",border:"none",color:"#FF4444",fontWeight:700,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
                 disabled={!mNotFound&&!mPriceText.trim()}
-                style={{flex:1,padding:14,borderRadius:10,background:mNotFound?"#EF4444":`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mNotFound&&!mPriceText.trim())?0.5:1,cursor:(!mNotFound&&!mPriceText.trim())?"not-allowed":"pointer"}}>
+                style={{flex:1,padding:14,borderRadius:18,background:mNotFound?"#EF4444":`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mNotFound&&!mPriceText.trim())?0.5:1,cursor:(!mNotFound&&!mPriceText.trim())?"not-allowed":"pointer"}}>
                 {mNotFound?"✗ Não encontrado":!mPriceText.trim()?"Informe o preço":"✓ Confirmar"}
               </button>
             </div>
@@ -2738,18 +2738,18 @@ export default function App(){
       {/* MODAL: EXTRA */}
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Item extra</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>⭐ Item extra</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
           <div style={{marginBottom:10}}>
             <label style={lbl}>Produto</label>
             <div style={{display:"flex",gap:8}}>
               <input value={exName} onChange={e=>setExName(e.target.value)}
                 onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
                 placeholder="Nome do produto..."
-                style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
                 disabled={!exName.trim()}
-                style={{padding:"0 16px",borderRadius:10,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#8896A8",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
+                style={{padding:"0 16px",borderRadius:18,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#6B7280",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
                 Inserir IA
               </button>
             </div>
@@ -2776,9 +2776,9 @@ export default function App(){
           <div style={{marginBottom:16}}>
             <label style={lbl}>Preço (R$) — opcional</label>
             <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:16,pointerEvents:"none"}}>R$</span>
+              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
               <input value={exPrice} onChange={e=>setExPrice(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="0,00" inputMode="decimal"
-                style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
             </div>
           </div>
           <button onClick={addExtra} style={btnG}>＋ Adicionar à lista</button>
@@ -2788,21 +2788,21 @@ export default function App(){
       {/* MODAL: SHARE */}
       {shareModal&&(
         <ModalSheet onClose={()=>{setShareModal(false);setShareTargetList(null);}}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               WhatsApp
             </button>
             <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareTelegram(l);}}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              style={{width:"100%",padding:16,borderRadius:20,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
               Telegram
             </button>
             <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareOtherApps(l);}}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              style={{width:"100%",padding:16,borderRadius:20,background:"#6D28D9",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               🛍️ Outros apps / Copiar
             </button>
           </div>
@@ -2815,10 +2815,10 @@ export default function App(){
         if(!item)return null;
         return(
           <div onClick={()=>setCheckPopup(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#FFFFFF",borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center"}}>
               <div style={{fontSize:32,marginBottom:10}}>🛒</div>
-              <div style={{fontWeight:800,fontSize:17,color:"#1A202C",marginBottom:6}}>{item.name}</div>
-              <div style={{fontSize:14,color:"#8896A8",marginBottom:20}}>Deseja inserir o preço deste item?</div>
+              <div style={{fontWeight:800,fontSize:17,color:"#111827",marginBottom:6}}>{item.name}</div>
+              <div style={{fontSize:14,color:"#6B7280",marginBottom:20}}>Deseja inserir o preço deste item?</div>
               <div style={{display:"flex",gap:10}}>
                 <button onClick={()=>{
                   const l=JSON.parse(JSON.stringify(currentList));
@@ -2827,9 +2827,9 @@ export default function App(){
                   setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
-                }} style={{flex:1,padding:14,borderRadius:12,background:"#F0F2F5",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
+                }} style={{flex:1,padding:14,borderRadius:20,background:"#F9FAFB",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
                 <button onClick={()=>{setCheckPopup(null);openItemModal(checkPopup.ci,checkPopup.ii);}}
-                  style={{flex:1,padding:14,borderRadius:12,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Sim</button>
+                  style={{flex:1,padding:14,borderRadius:20,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Sim</button>
               </div>
             </div>
           </div>
@@ -2839,11 +2839,11 @@ export default function App(){
       {/* ── MODAL: COLAR TEXTO ── */}
       {showPasteModal&&(
         <ModalSheet onClose={()=>setShowPasteModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>📋 Colar lista de texto</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📋 Colar lista de texto</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
           <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
             placeholder={"- Arroz\n- Feijão\n- Leite\n- Detergente"}
-            style={{width:"100%",padding:"13px 16px",border:"2px solid #E0E4EA",borderRadius:12,fontSize:15,color:"#1A202C",outline:"none",fontFamily:"inherit",background:"white",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
+            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
           <button onClick={parsePastedText} disabled={!pasteText.trim()}
             style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
             ✅ Importar itens
@@ -2854,12 +2854,12 @@ export default function App(){
       {/* ── MODAL: REUTILIZAR LISTA ── */}
       {reuseModal&&(
         <ModalSheet onClose={()=>setReuseModal(null)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>🔁 Repetir lista</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:16,textAlign:"center"}}>Escolha a lista base:</div>
-          <div style={{background:"#F0F2F5",borderRadius:12,padding:12,marginBottom:16,maxHeight:200,overflowY:"auto"}}>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>🔁 Repetir lista</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Escolha a lista base:</div>
+          <div style={{background:"#F9FAFB",borderRadius:20,padding:12,marginBottom:16,maxHeight:200,overflowY:"auto"}}>
             {lists.map(l=>(
               <button key={l.id} onClick={()=>setReuseModal(l)}
-                style={{width:"100%",padding:"10px 14px",border:"none",background:reuseModal.id===l.id?"#EDE9FE":"none",borderRadius:10,textAlign:"left",fontSize:14,fontWeight:reuseModal.id===l.id?700:500,color:reuseModal.id===l.id?"#5B21B6":"#1A202C",cursor:"pointer",display:"flex",gap:10,marginBottom:4,fontFamily:"inherit"}}>
+                style={{width:"100%",padding:"10px 14px",border:"none",background:reuseModal.id===l.id?"#F5F3FF":"none",borderRadius:18,textAlign:"left",fontSize:14,fontWeight:reuseModal.id===l.id?700:500,color:reuseModal.id===l.id?"#6D28D9":"#111827",cursor:"pointer",display:"flex",gap:10,marginBottom:4,fontFamily:"inherit"}}>
                 <span>{({mercado:"🛒",hortifruti:"🥬",farmacia:"💊",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",eventos:"🎉",outros:"📦"})[l.type]||"📦"}</span>
                 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}</span>
               </button>
