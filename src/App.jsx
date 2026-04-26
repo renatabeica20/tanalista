@@ -1,10 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// ── API Anthropic integrada ────────────────────────────────────────────────
-// Observação: em produção, o ideal é chamar a Anthropic por um backend/proxy.
-// Em app Vite/React, variáveis VITE_* ficam expostas no navegador.
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
-const ANTHROPIC_VERSION = "2023-06-01";
+// ── API Anthropic via função segura do Vercel ─────────────────────────────
+// O navegador chama /api/anthropic; a chave fica protegida no servidor.
 const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY || "claude-3-5-haiku-latest";
 const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
 
@@ -82,33 +79,20 @@ function extractJsonObject(text) {
 }
 
 async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("Chave da Anthropic não configurada em VITE_ANTHROPIC_KEY");
-  }
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/anthropic", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": ANTHROPIC_VERSION,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      ...(system ? { system } : {}),
-      messages: [{ role: "user", content: prompt }],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, system, maxTokens, model }),
   });
 
   if (!res.ok) {
     const errorText = await res.text().catch(() => "");
-    throw new Error(`Erro Anthropic HTTP ${res.status}${errorText ? ` - ${errorText.slice(0, 160)}` : ""}`);
+    throw new Error(`Erro na função /api/anthropic HTTP ${res.status}${errorText ? ` - ${errorText.slice(0, 180)}` : ""}`);
   }
 
   const data = await res.json();
-  const text = data?.content?.find?.((c) => c.type === "text")?.text || data?.content?.[0]?.text || "";
-  return extractJsonObject(text);
+  if (data?.json && typeof data.json === "object") return data.json;
+  return extractJsonObject(data?.text || "");
 }
 
 async function classifyProduct(name) {
