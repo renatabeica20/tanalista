@@ -8,6 +8,70 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY || "claude-3-5-haiku-latest";
 const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
 
+// ── Supabase: listas compartilháveis ──────────────────────────────────────
+// Usa a REST API do Supabase diretamente para evitar dependência adicional.
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+function hasSupabaseConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+async function createSharedListRecord(list) {
+  if (!hasSupabaseConfig()) {
+    throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.");
+  }
+
+  const payload = {
+    title: list?.name || "Lista de compras",
+    list_type: list?.type || "geral",
+    budget: Number(list?.budget || 0),
+    data: list,
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
+    method: "POST",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ao salvar lista compartilhada (${res.status}) ${text}`.trim());
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function getSharedListRecord(id) {
+  if (!hasSupabaseConfig()) {
+    throw new Error("Supabase não configurado.");
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}&select=*`, {
+    method: "GET",
+    headers: supabaseHeaders(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ao abrir lista compartilhada (${res.status}) ${text}`.trim());
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : null;
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim().replace(/```json|```/g, "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
@@ -1510,6 +1574,102 @@ export default function App(){
     setInstallAvailable(false);
   };
 
+  const makeShareUrl=(sharedId)=>{
+    const origin=window.location?.origin;
+    if(origin && origin!=="null") return `${origin}/?lista=${encodeURIComponent(sharedId)}`;
+    const href=String(window.location?.href || "").split("?")[0].split("#")[0];
+    return `${href}?lista=${encodeURIComponent(sharedId)}`;
+  };
+
+  const extractSharedIdFromUrl=()=>{
+    try{
+      const url=new URL(window.location.href);
+      const byQuery=url.searchParams.get("lista");
+      if(byQuery)return byQuery;
+      const m=url.pathname.match(/\/lista\/([^/]+)/);
+      return m?decodeURIComponent(m[1]):null;
+    }catch{return null;}
+  };
+
+  const buildShareText=(list,link)=>{
+    const{fullTotal,notFoundItems}=getProgress(list);
+    const lines=[];
+    lines.push("🛒 *"+(list?.name||"Lista de compras")+"* — Tá na Lista");
+    if(list?.budget>0)lines.push("💰 Orçamento: "+fmtR(list.budget));
+    lines.push("");
+    (list?.categories||[]).forEach(cat=>{
+      const theme=getCatTheme(cat.name);
+      const sub=getCatSubtotal(cat);
+      lines.push(theme.icon+" *"+cat.name+"*"+(sub>0?" — "+fmtR(sub):""));
+      (cat.items||[]).forEach(i=>{
+        const status=i.notFound?"❌":i.checked?"✅":"⬜";
+        const detail=i.detail?" ("+i.detail+")":"";
+        const qty=i.qty>1?" "+i.qty+"×":"";
+        const price=i.price!=null?" — "+fmtR(i.price*(i.qty||1)):"";
+        lines.push(status+" "+i.name+detail+qty+price);
+      });
+      lines.push("");
+    });
+    lines.push("💰 *Total: "+fmtR(fullTotal)+"*");
+    if(notFoundItems>0)lines.push("❌ "+notFoundItems+" item"+(notFoundItems>1?"s":"")+" não encontrado"+(notFoundItems>1?"s":""));
+    if(link){
+      lines.push("");
+      lines.push("📲 Abrir esta lista no app Tá na Lista:");
+      lines.push(link);
+      lines.push("");
+      lines.push("Se ainda não usa o app, abra o link e toque em ‘Adicionar à Tela de Início’.");
+    }
+    return lines.join("\n");
+  };
+
+  const publishSharedList=async(list)=>{
+    if(!list)throw new Error("Lista não encontrada.");
+    if(list.sharedId)return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list};
+
+    const record=await createSharedListRecord(list);
+    if(!record?.id)throw new Error("Não foi possível gerar o link da lista.");
+
+    const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
+    setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
+    saveLists(lists.map(l=>l.id===list.id?updated:l));
+    return{sharedId:record.id,link:makeShareUrl(record.id),list:updated};
+  };
+
+  const loadSharedListFromUrl=useCallback(async()=>{
+    const sharedId=extractSharedIdFromUrl();
+    if(!sharedId)return;
+    setLoading(true);
+    try{
+      const record=await getSharedListRecord(sharedId);
+      if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      const received={
+        ...record.data,
+        id:record.data.id||("shared-"+sharedId),
+        sharedId,
+        isShared:true,
+        receivedAt:new Date().toISOString(),
+      };
+      const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+      const already=existing.some(l=>l.sharedId===sharedId||l.id===received.id);
+      if(!already){
+        const nl=[received,...existing];
+        setLists(nl);
+        localStorage.setItem("tnl_lists",JSON.stringify(nl));
+      }
+      setCurrentList(received);
+      setScreen("list");
+      setSearch("");
+      setCollapsedCats({});
+      showToast("📲 Lista aberta no Tá na Lista");
+    }catch(err){
+      showToast("⚠️ Não foi possível abrir a lista: "+(err?.message||"erro"),5200);
+    }finally{
+      setLoading(false);
+    }
+  },[showToast]);
+
+  useEffect(()=>{loadSharedListFromUrl();},[loadSharedListFromUrl]);
+
   // ── Dialog de produto ─────────────────────────────────────────────────
   // ── Classificação por IA em tempo real ──────────────────────────────
   const [dlgLoading, setDlgLoading] = useState(false);
@@ -1664,10 +1824,10 @@ export default function App(){
 
   // ── Progress ──────────────────────────────────────────────────────────
   const getProgress=(list)=>{
-    if(!list)return{totalItems:0,checkedItems:0,fullTotal:0};
-    let t=0,c=0,s=0;
-    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.price!=null)s+=i.price*i.qty;}));
-    return{totalItems:t,checkedItems:c,fullTotal:s};
+    if(!list)return{totalItems:0,checkedItems:0,fullTotal:0,notFoundItems:0};
+    let t=0,c=0,s=0,nf=0;
+    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;if(i.price!=null)s+=i.price*(i.qty||1);}));
+    return{totalItems:t,checkedItems:c,fullTotal:s,notFoundItems:nf};
   };
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.price!=null?i.price*i.qty:0),0);
 
@@ -1782,31 +1942,46 @@ export default function App(){
 
   const deleteList=(id)=>{saveLists(lists.filter(l=>l.id!==id));setConfirmDelete(null);showToast("🗑 Lista excluída");};
 
-  // ── WhatsApp share ─────────────────────────────────────────────────────
-  // Gera texto formatado e abre wa.me — funciona em qualquer dispositivo
-  const shareWhatsApp=()=>{
-    if(!currentList)return;
-    const{fullTotal,notFoundItems}=getProgress(currentList);
-    const lines=[];
-    lines.push("🛒 *"+currentList.name+"* — Tá na Lista");
-    if(currentList.budget>0)lines.push("💰 Orçamento: "+fmtR(currentList.budget));
-    lines.push("");
-    currentList.categories.forEach(cat=>{
-      const theme=getCatTheme(cat.name);
-      const sub=getCatSubtotal(cat);
-      lines.push(theme.icon+" *"+cat.name+"*"+(sub>0?" — "+fmtR(sub):""));
-      cat.items.forEach(i=>{
-        const status=i.notFound?"❌":i.checked?"✅":"⬜";
-        const detail=i.detail?" ("+i.detail+")":"";
-        const qty=i.qty>1?" "+i.qty+"×":"";
-        const price=i.price!=null?" — "+fmtR(i.price*i.qty):"";
-        lines.push(status+" "+i.name+detail+qty+price);
-      });
-      lines.push("");
-    });
-    lines.push("💰 *Total: "+fmtR(fullTotal)+"*");
-    if(notFoundItems>0)lines.push("❌ "+notFoundItems+" item"+(notFoundItems>1?"s":"")+" não encontrado"+(notFoundItems>1?"s":""));
-    window.open("https://wa.me/?text="+encodeURIComponent(lines.join("\n")),"_blank","noopener,noreferrer");
+  // ── Compartilhamento da lista ─────────────────────────────────────────────
+  const shareWhatsApp=async(listArg=null)=>{
+    const list=listArg||currentList;
+    if(!list)return;
+    try{
+      const{link,list:published}=await publishSharedList(list);
+      const text=buildShareText(published,link);
+      window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+    }catch(err){
+      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+    }
+  };
+
+  const shareTelegram=async(listArg=null)=>{
+    const list=listArg||currentList;
+    if(!list)return;
+    try{
+      const{link,list:published}=await publishSharedList(list);
+      const text=buildShareText(published,link);
+      window.open("https://telegram.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+    }catch(err){
+      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+    }
+  };
+
+  const shareOtherApps=async(listArg=null)=>{
+    const list=listArg||currentList;
+    if(!list)return;
+    try{
+      const{link,list:published}=await publishSharedList(list);
+      const text=buildShareText(published,link);
+      if(navigator.share){
+        await navigator.share({title:"Tá na Lista — "+published.name,text,url:link}).catch(()=>null);
+      }else if(navigator.clipboard){
+        await navigator.clipboard.writeText(text);
+        showToast("📋 Lista e link copiados!");
+      }
+    }catch(err){
+      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+    }
   };
 
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
@@ -2521,44 +2696,12 @@ export default function App(){
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               WhatsApp
             </button>
-            <button onClick={()=>{
-              setShareModal(false);
-              if(!currentList)return;
-              const{fullTotal,notFoundItems}=getProgress(currentList);
-              const lines=[];
-              lines.push("🛒 *"+currentList.name+"* — Tá na Lista");
-              if(currentList.budget>0)lines.push("💰 Orçamento: "+fmtR(currentList.budget));
-              lines.push("");
-              currentList.categories.forEach(cat=>{
-                const theme=getCatTheme(cat.name);
-                const sub=getCatSubtotal(cat);
-                lines.push(theme.icon+" *"+cat.name+"*"+(sub>0?" — "+fmtR(sub):""));
-                cat.items.forEach(i=>{
-                  const status=i.notFound?"❌":i.checked?"✅":"⬜";
-                  lines.push(status+" "+i.name+(i.detail?" ("+i.detail+")":"")+(i.qty>1?" "+i.qty+"×":"")+(i.price!=null?" — "+fmtR(i.price*i.qty):""));
-                });
-                lines.push("");
-              });
-              lines.push("💰 *Total: "+fmtR(fullTotal)+"*");
-              window.open("https://telegram.me/share/url?text="+encodeURIComponent(lines.join("\n")),"_blank","noopener,noreferrer");
-            }}
+            <button onClick={()=>{setShareModal(false);shareTelegram();}}
               style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
               Telegram
             </button>
-            <button onClick={()=>{
-              setShareModal(false);
-              if(!currentList)return;
-              const{fullTotal}=getProgress(currentList);
-              const lines=["🛒 *"+currentList.name+"* — Tá na Lista"];
-              currentList.categories.forEach(cat=>{
-                cat.items.forEach(i=>{lines.push((i.checked?"✅":"⬜")+" "+i.name+(i.price!=null?" "+fmtR(i.price*i.qty):""));});
-              });
-              lines.push("💰 Total: "+fmtR(fullTotal));
-              const text=lines.join("\n");
-              if(navigator.share){navigator.share({title:"Tá na Lista — "+currentList.name,text});}
-              else{navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>showToast("📋 Lista copiada!"));}
-            }}
+            <button onClick={()=>{setShareModal(false);shareOtherApps();}}
               style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               🛍️ Outros apps / Copiar
             </button>
