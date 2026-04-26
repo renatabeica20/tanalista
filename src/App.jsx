@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
 const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY || "claude-3-5-haiku-latest";
 const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
+const ANTHROPIC_MODEL_VISION = import.meta.env.VITE_ANTHROPIC_MODEL_VISION || "claude-3-5-sonnet-latest";
 
 // ── Supabase: listas compartilháveis ──────────────────────────────────────
 // Usa a REST API do Supabase diretamente para evitar dependência adicional.
@@ -1536,23 +1537,15 @@ function ModalSheet({onClose,children}){
 }
 
 
-// ── OCR: leitura de lista por foto (impresso/manuscrito) ─────────────────
-function loadTesseractFromCDN() {
-  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+// ── Leitura inteligente de lista por foto (impresso/manuscrito) ──────────
+// Usa a função segura /api/anthropic com visão. É muito mais confiável para
+// lista manuscrita do que OCR local puro.
+function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-tnl-tesseract="true"]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.Tesseract));
-      existing.addEventListener("error", reject);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-    script.async = true;
-    script.dataset.tnlTesseract = "true";
-    script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error("OCR não carregado"));
-    script.onerror = () => reject(new Error("Não foi possível carregar o leitor da imagem"));
-    document.head.appendChild(script);
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem"));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -1567,6 +1560,61 @@ function normalizeOcrText(text) {
     .map((line) => line.replace(/^[\s•·\-–—_*]+/, "").replace(/^\d+[.)-]\s*/, "").trim())
     .filter((line) => line && !/^total\b|^subtotal\b|^data\b|^mercado\b/i.test(line))
     .join("\n");
+}
+
+function photoItemsToText(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const qty = item?.qty || item?.quantidade || 1;
+      const unit = item?.unit || item?.unidade || "unidade";
+      const name = String(item?.name || item?.nome || "").trim();
+      if (!name) return "";
+      return `${qty} ${unit} ${name}`.trim();
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function readShoppingListFromImage(file) {
+  const dataUrl = await fileToDataUrl(file);
+  const [meta, base64] = dataUrl.split(",");
+  const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || file.type || "image/jpeg";
+
+  const prompt = [
+    "Você é um leitor de listas de compras em português do Brasil.",
+    "Leia a foto enviada, mesmo que a lista esteja manuscrita.",
+    "Extraia apenas os itens de compra, ignorando linhas de caderno, cabeçalho, dias da semana, data e rabiscos.",
+    "Corrija erros óbvios de leitura manuscrita quando o contexto indicar produto comum de mercado.",
+    "Retorne APENAS JSON válido, sem markdown, neste formato:",
+    '{"items":[{"name":"arroz","qty":2,"unit":"pacote"}]}',
+    "Regras:",
+    "- qty deve ser número;",
+    "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par ou peça;",
+    "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz;",
+    "- se a linha disser '2kg de carne', retorne qty 2, unit kg, name carne;",
+    "- não invente itens que não estejam na imagem.",
+  ].join("\n");
+
+  const res = await fetch("/api/anthropic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt,
+      model: ANTHROPIC_MODEL_VISION,
+      maxTokens: 900,
+      image: { mediaType, data: base64 },
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Erro na leitura por imagem (${res.status}) ${detail.slice(0, 180)}`);
+  }
+
+  const data = await res.json();
+  const parsed = data?.json || extractJsonObject(data?.text || "");
+  const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  return photoItemsToText(items);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2025,25 +2073,18 @@ export default function App(){
     if(!file)return;
     setOcrFileName(file.name||"foto da lista");
     setOcrText("");
-    setOcrProgress(0);
+    setOcrProgress(12);
     setOcrLoading(true);
     try{
-      const Tesseract=await loadTesseractFromCDN();
-      const result=await Tesseract.recognize(file,"por+eng",{
-        logger:(m)=>{
-          if(m?.status==="recognizing text"&&typeof m.progress==="number"){
-            setOcrProgress(Math.max(1,Math.min(99,Math.round(m.progress*100))));
-          }
-        }
-      });
-      const text=normalizeOcrText(result?.data?.text||"");
-      setOcrText(text);
+      setOcrProgress(35);
+      const text=normalizeOcrText(await readShoppingListFromImage(file));
       setOcrProgress(100);
-      if(text)showToast("✅ Texto reconhecido. Revise antes de importar.",3600);
-      else showToast("⚠️ Não consegui ler a imagem. Tente uma foto mais nítida.",4200);
+      setOcrText(text);
+      if(text)showToast("✅ Lista lida pela IA. Revise antes de importar.",3600);
+      else showToast("⚠️ Não consegui identificar itens na foto. Tente enquadrar melhor a lista.",4200);
     }catch(err){
-      console.error("Erro OCR:",err);
-      showToast("⚠️ Não foi possível ler a foto. Tente outra imagem.",4200);
+      console.error("Erro na leitura por foto:",err);
+      showToast("⚠️ Não foi possível ler a foto pela IA. Tente outra imagem mais nítida.",4600);
     }finally{
       setOcrLoading(false);
       e.target.value="";
@@ -3000,7 +3041,7 @@ export default function App(){
       {showPhotoModal&&(
         <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📷 Ler lista por foto</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>Fotografe uma lista impressa ou manuscrita. Para melhorar a leitura, use boa iluminação e enquadre apenas a lista.</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>Fotografe uma lista impressa ou manuscrita. A IA vai interpretar a imagem e montar os itens. Para melhorar a leitura, use boa iluminação e enquadre apenas a lista.</div>
           <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",marginBottom:12,cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1}}>
             📸 Tirar foto ou escolher imagem
             <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
@@ -3008,7 +3049,7 @@ export default function App(){
           {ocrFileName&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Arquivo: {ocrFileName}</div>}
           {ocrLoading&&(
             <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:14,marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Lendo imagem... {ocrProgress}%</div>
+              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Interpretando imagem... {ocrProgress}%</div>
               <div style={{height:10,background:"#E5E7EB",borderRadius:999,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${ocrProgress}%`,background:"linear-gradient(90deg,#16A34A,#22C55E)",borderRadius:999,transition:"width .25s"}}/>
               </div>
