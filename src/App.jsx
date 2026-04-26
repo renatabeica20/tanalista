@@ -1689,14 +1689,26 @@ export default function App(){
     });
     level2.sort((a,b)=>b.price*b.qty-a.price*a.qty);
     const all=[...level1,...level2];
+    // Seleciona itens suficientes para cobrir o excedente
     const selected=[];
     let acc=0;
     for(const item of all){
-      if(acc>=overBy)break;
       selected.push(item);
-      acc+=item.qty>1?item.price:item.price*item.qty;
+      // Economia estimada ao reduzir 1 unidade ou remover
+      const saving=item.qty>1?item.price:item.price*item.qty;
+      acc+=saving;
+      if(acc>=overBy)break;
     }
-    return selected.length>0?selected:all.slice(0,5);
+    // Se ainda há excedente, mostra mais sugestões
+    if(acc<overBy&&all.length>selected.length){
+      for(const item of all.slice(selected.length)){
+        selected.push(item);
+        const saving=item.qty>1?item.price:item.price*item.qty;
+        acc+=saving;
+        if(acc>=overBy)break;
+      }
+    }
+    return selected.length>0?selected:all;
   };
 
   const addExtra=()=>{
@@ -1748,7 +1760,7 @@ export default function App(){
 
 
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
-  const pct=totalItems>0?(checkedItems/totalItems)*100:0;
+  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
 
@@ -1871,7 +1883,7 @@ export default function App(){
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
                             style={{background:listMenuId===list.id?"#EDE9FE":"#F0F2F5",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:16,color:listMenuId===list.id?"#5B21B6":"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,bottom:"auto",top:36,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",border:"1px solid #E0E4EA",zIndex:400,minWidth:200,overflow:"hidden"}}>
+                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:200,overflow:"hidden"}}>
                               <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>💬 Compartilhar no WhatsApp</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
@@ -2170,7 +2182,13 @@ export default function App(){
                 return(
                   <div style={{borderTop:"1px solid #FECACA"}}>
                     <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                      {suggs[0]?.tipo==="reduzir"?"Reduza a quantidade:":"Considere remover:"}
+                      {(()=>{
+                      const totalEcon=suggs.reduce((s,i)=>s+(i.qty>1?i.price:i.price*i.qty),0);
+                      const stillOver=totalEcon<Math.abs(budgetDiff);
+                      return suggs[0]?.tipo==="reduzir"
+                        ?"Reduza a quantidade destes itens:"+(stillOver?" (pode não ser suficiente)":"")
+                        :"Considere remover estes itens:"+(stillOver?" (pode não ser suficiente)":"");
+                    })()}
                     </div>
                     {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
                       <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
@@ -2283,7 +2301,7 @@ export default function App(){
 
                         return(
                           <div key={ii}
-                            onClick={()=>{openItemModal(ci,realII);if(search)setSearch("");}}
+                            onClick={()=>{openItemModal(ci,realII);if(search)setSearch("");setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},200);}}
                             style={{
                               display:"flex",alignItems:"center",gap:12,
                               padding:"13px 14px",
@@ -2459,7 +2477,7 @@ export default function App(){
             <button onClick={()=>{
               setShareModal(false);
               const text=buildShareText();
-              window.open("https://t.me/share/url?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+              window.open("https://telegram.me/share/url?url="+encodeURIComponent("https://tanalista-rho.vercel.app")+"&text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
             }}
               style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
@@ -2497,6 +2515,7 @@ export default function App(){
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
                   updateList(l);
                   setCheckPopup(null);
+                  setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
                 }}
