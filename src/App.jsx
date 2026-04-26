@@ -1827,9 +1827,8 @@ export default function App(){
       {/* ════════════════════════════════════
           HOME
       ════════════════════════════════════ */}
+      {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:299}}/>}
       {screen==="home"&&(
-        <>
-        {listMenuId&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:299}}/>}
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 32px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
@@ -1913,7 +1912,6 @@ export default function App(){
           </div>
 
         </div>
-        </>
       )}
 
       {/* CONFIRM DELETE */}
@@ -2441,12 +2439,7 @@ export default function App(){
           <div style={{background:"#FFF3E0",borderRadius:10,padding:"8px 12px",fontSize:12,color:"#E65100",marginBottom:14}}>
             💡 Toque em "Incluir IA" para que a IA sugira marca, tipo e tamanho.
           </div>
-          <div style={{height:1,background:"#E0E4EA",marginBottom:12}}/>
-          <div style={{marginBottom:12}}>
-            <label style={lbl}>Ou adicione sem classificação:</label>
-            <input value={exName} onChange={e=>setExName(e.target.value)} placeholder="Nome do produto..."
-              style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-          </div>
+
           <div style={{display:"flex",gap:10,marginBottom:12}}>
             <div style={{flex:1}}>
               <label style={lbl}>Quantidade</label>
