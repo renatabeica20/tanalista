@@ -1376,7 +1376,6 @@ export default function App(){
   const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
   const btnGr = {padding:"13px 16px",borderRadius:10,background:"white",border:"2px solid #E0E4EA",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
   const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E0E4EA",background:"white",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
-l);
   const [listNameConfirmed,setListNameConfirmed]=useState(false);
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
   const [showPasteModal,setShowPasteModal]=useState(false);
