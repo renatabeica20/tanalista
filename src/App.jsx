@@ -96,11 +96,23 @@ async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
 }
 
 async function classifyProduct(name) {
+  // Primeiro tenta a base local. Ela já cobre os itens mais comuns e evita falha/custo de IA.
+  const localCfg = getProductConfig(name);
+  const hasLocalDetails =
+    (Array.isArray(localCfg.marcas) && localCfg.marcas.length > 0) ||
+    (Array.isArray(localCfg.tipos) && localCfg.tipos.length > 0) ||
+    (Array.isArray(localCfg.pesos) && localCfg.pesos.length > 0) ||
+    (Array.isArray(localCfg.volumes) && localCfg.volumes.length > 0);
+
+  if (hasLocalDetails) {
+    return localCfg;
+  }
+
   const prompt = [
     "Você é especialista em supermercados brasileiros, como Atacadão, Carrefour e Assaí.",
     "Classifique o produto para lista de compras: " + name,
     "",
-    "Retorne APENAS JSON válido, sem markdown:",
+    "Retorne APENAS JSON válido, sem markdown, sem explicação e sem texto antes ou depois:",
     '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":["500g","1kg"],"volumes":["500ml","1L"],"unidades":["unidade","pacote","kg"]}',
     "",
     "Regras:",
@@ -111,19 +123,24 @@ async function classifyProduct(name) {
     "- unidades: formas de contagem, como pacote, kg, fardo, lata, garrafa e unidade.",
   ].join("\n");
 
-  const p = await callAnthropicJSON({
-    prompt,
-    model: ANTHROPIC_MODEL_CLASSIFY,
-    maxTokens: 600,
-  });
+  try {
+    const p = await callAnthropicJSON({
+      prompt,
+      model: ANTHROPIC_MODEL_CLASSIFY,
+      maxTokens: 600,
+    });
 
-  return {
-    marcas: Array.isArray(p.marcas) ? p.marcas : [],
-    tipos: Array.isArray(p.tipos) ? p.tipos : [],
-    pesos: Array.isArray(p.pesos) ? p.pesos : [],
-    volumes: Array.isArray(p.volumes) ? p.volumes : [],
-    unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
-  };
+    return {
+      marcas: Array.isArray(p.marcas) ? p.marcas : [],
+      tipos: Array.isArray(p.tipos) ? p.tipos : [],
+      pesos: Array.isArray(p.pesos) ? p.pesos : [],
+      volumes: Array.isArray(p.volumes) ? p.volumes : [],
+      unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
+    };
+  } catch (err) {
+    console.warn("Classificação por IA indisponível; usando base local.", err);
+    return localCfg;
+  }
 }
 
 
@@ -1783,7 +1800,7 @@ export default function App(){
       setDlgPeso(cfg.pesos?.[0]||"");
       setDlgVolume(cfg.volumes?.[0]||"");
       setDlgUnit(cfg.unidades?.[0]||"unidade");
-      showToast("⚠️ Classificação básica: " + (err?.message||"").substring(0,40));
+      console.warn("Classificação básica aplicada sem exibir erro ao usuário.", err);
     } finally {
       setDlgLoading(false);
     }
