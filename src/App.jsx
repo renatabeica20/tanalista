@@ -1689,18 +1689,13 @@ export default function App(){
     if(!list)throw new Error("Lista não encontrada.");
     if(list.sharedId)return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
 
-    try{
-      const record=await createSharedListRecord(list);
-      if(!record?.id)throw new Error("Não foi possível gerar o link da lista.");
-      const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
-      setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
-      saveLists(lists.map(l=>l.id===list.id?updated:l));
-      return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
-    }catch(err){
-      console.warn("Falha ao salvar no Supabase; usando link incorporado.",err);
-      const embedded={...list,sharedAt:new Date().toISOString(),isShared:true};
-      return{sharedId:null,link:makeEmbeddedShareUrl(embedded),list:embedded,mode:"embedded"};
-    }
+    const record=await createSharedListRecord(list);
+    if(!record?.id)throw new Error("Não foi possível gerar o link curto da lista no Supabase.");
+
+    const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
+    setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
+    saveLists(lists.map(l=>l.id===list.id?updated:l));
+    return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
   };
 
   const loadSharedListFromUrl=useCallback(async()=>{
@@ -1739,6 +1734,9 @@ export default function App(){
       setScreen("list");
       setSearch("");
       setCollapsedCats({});
+      try {
+        window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+      } catch {}
       showToast("📲 Lista aberta no Tá na Lista");
     }catch(err){
       showToast("⚠️ Não foi possível abrir a lista: "+(err?.message||"erro"),5200);
@@ -2034,7 +2032,8 @@ export default function App(){
       openShareWindow(url,preparedWindow);
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
-      showToast("⚠️ Não foi possível enviar pelo WhatsApp: "+(err?.message||"verifique o Supabase"),6500);
+      console.error("Erro ao compartilhar no WhatsApp:",err);
+      showToast("⚠️ Não foi possível gerar o link curto. Verifique as variáveis do Supabase e as permissões da tabela.",7500);
     }
   };
 
