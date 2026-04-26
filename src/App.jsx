@@ -10,37 +10,10 @@ const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE |
 
 // ── Supabase: listas compartilháveis ──────────────────────────────────────
 // Usa a REST API do Supabase diretamente para evitar dependência adicional.
-const DEFAULT_SUPABASE_URL = "https://zkuihomwrnqctutswszq.supabase.co";
-
-function normalizeSupabaseUrl(value) {
-  let url = String(value || "").trim();
-
-  // Aceita tanto a URL base quanto a URL copiada da aba Data API.
-  url = url
-    .replace(/\/rest\/v1.*$/i, "")
-    .replace(/\/shared_lists.*$/i, "")
-    .replace(/\/$/, "");
-
-  // Corrige caso a variável tenha sido colada sem protocolo.
-  if (url && !/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
-
-  // Se a variável vier incompleta, com reticências, ou com valor inválido,
-  // usa a URL oficial do projeto para evitar ERR_NAME_NOT_RESOLVED.
-  try {
-    const parsed = new URL(url);
-    if (!parsed.hostname.endsWith(".supabase.co") || parsed.hostname.includes("...")) {
-      return DEFAULT_SUPABASE_URL;
-    }
-    return parsed.origin;
-  } catch {
-    return DEFAULT_SUPABASE_URL;
-  }
-}
-
-const SUPABASE_URL = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
-const SUPABASE_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "")
+  .replace(/\/rest\/v1\/?$/, "")
+  .replace(/\/$/, "");
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -57,7 +30,7 @@ function supabaseHeaders(extra = {}) {
 
 async function createSharedListRecord(list) {
   if (!hasSupabaseConfig()) {
-    throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_ANON_KEY no Vercel.");
+    throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.");
   }
 
   const payload = {
@@ -67,18 +40,11 @@ async function createSharedListRecord(list) {
     data: list,
   };
 
-  const endpoint = `${SUPABASE_URL}/rest/v1/shared_lists`;
-  let res;
-  try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      mode: "cors",
-      headers: supabaseHeaders({ Prefer: "return=representation" }),
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    throw new Error(`Falha de rede ao acessar Supabase em ${endpoint}. Confira se VITE_SUPABASE_URL está como ${DEFAULT_SUPABASE_URL} e se houve reimplantação no Vercel. Detalhe: ${err?.message || err}`);
-  }
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
+    method: "POST",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(payload),
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -1399,9 +1365,22 @@ function parseBRL(str) {
 }
 function fmtBRL(val) {
   if (val == null || isNaN(val)) return "";
-  return val.toFixed(2).replace(".",",");
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(val));
 }
-function fmtR(val) { return "R$ " + fmtBRL(val); }
+function fmtR(val) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(val || 0));
+}
+function maskBRLInput(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return fmtBRL(Number(digits) / 100);
+}
 
 // ── AI ─────────────────────────────────────────────────────────────────────
 async function aiOrganize(items, type) {
@@ -1613,9 +1592,9 @@ export default function App(){
 
   const makeShareUrl=(sharedId)=>{
     const origin=window.location?.origin;
-    if(origin && origin!=="null") return `${origin}/?lista=${encodeURIComponent(sharedId)}`;
-    const href=String(window.location?.href || "").split("?")[0].split("#")[0];
-    return `${href}?lista=${encodeURIComponent(sharedId)}`;
+    if(origin && origin!=="null") return `${origin}/l/${encodeURIComponent(sharedId)}`;
+    const href=String(window.location?.href || "").split("?")[0].split("#")[0].replace(/\/+$|\/l\/.*$|\/lista\/.*$/g, "");
+    return `${href}/l/${encodeURIComponent(sharedId)}`;
   };
 
   const extractSharedIdFromUrl=()=>{
@@ -1623,7 +1602,7 @@ export default function App(){
       const url=new URL(window.location.href);
       const byQuery=url.searchParams.get("lista");
       if(byQuery)return byQuery;
-      const m=url.pathname.match(/\/lista\/([^/]+)/);
+      const m=url.pathname.match(/\/(?:l|lista)\/([^/]+)/);
       return m?decodeURIComponent(m[1]):null;
     }catch{return null;}
   };
@@ -1769,7 +1748,7 @@ export default function App(){
       setSearch("");
       setCollapsedCats({});
       try {
-        window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+        window.history.replaceState({}, document.title, window.location.origin + "/");
       } catch {}
       showToast("📲 Lista aberta no Tá na Lista");
     }catch(err){
@@ -2067,7 +2046,7 @@ export default function App(){
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
       console.error("Erro ao compartilhar no WhatsApp:",err);
-      showToast("⚠️ Não foi possível gerar o link curto. Abra o Console para ver o erro técnico do Supabase.",7500);
+      showToast("⚠️ Não foi possível gerar o link curto. Verifique as variáveis do Supabase e as permissões da tabela.",7500);
     }
   };
 
@@ -2298,9 +2277,9 @@ export default function App(){
                   <div style={{display:"flex",gap:8}}>
                     <div style={{position:"relative",flex:1}}>
                       <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:15,pointerEvents:"none"}}>R$</span>
-                      <input value={budgetText} onChange={e=>setBudgetText(e.target.value.replace(/[^0-9.,]/g,""))}
+                      <input value={budgetText} onChange={e=>setBudgetText(maskBRLInput(e.target.value))}
                         onKeyDown={e=>e.key==="Enter"&&budgetText&&setBudgetConfirmed(true)}
-                        placeholder="0,00" inputMode="decimal"
+                        placeholder="0,00" inputMode="numeric"
                         style={inp({paddingLeft:44})}
                         onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
                     </div>
