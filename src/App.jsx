@@ -1325,13 +1325,6 @@ function demoOrganize(items) {
 }
 
 // ── ESTILOS BASE ───────────────────────────────────────────────────────────
-const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E0E4EA",borderRadius:10,fontSize:16,color:"#1A202C",outline:"none",fontFamily:"inherit",background:"white",boxSizing:"border-box",...extra});
-const lbl = {fontWeight:700,fontSize:13,color:"#4A5568",marginBottom:8,display:"block"};
-const chip = (sel,bc="#7C3AED",bg="#EDE9FE",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:100,border:`2px solid ${sel?bc:"#E0E4EA"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#8896A8",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
-const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
-const btnGr = {padding:"13px 16px",borderRadius:10,background:"white",border:"2px solid #E0E4EA",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
-const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E0E4EA",background:"white",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
-
 function ModalSheet({onClose,children}){
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
@@ -1375,7 +1368,15 @@ export default function App(){
   const [dlgQty,setDlgQty]=useState(1);
   const [dlgUnit,setDlgUnit]=useState("unidade");
   const [dlgConfig,setDlgConfig]=useState(null);
-  const [editPendingIdx,setEditPendingIdx]=useState(null);
+  const [editPendingIdx,setEditPendingIdx]=useState(nul
+
+const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E0E4EA",borderRadius:10,fontSize:16,color:"#1A202C",outline:"none",fontFamily:"inherit",background:"white",boxSizing:"border-box",...extra});
+const lbl = {fontWeight:700,fontSize:13,color:"#4A5568",marginBottom:8,display:"block"};
+const chip = (sel,bc="#7C3AED",bg="#EDE9FE",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:100,border:`2px solid ${sel?bc:"#E0E4EA"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#8896A8",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
+const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
+const btnGr = {padding:"13px 16px",borderRadius:10,background:"white",border:"2px solid #E0E4EA",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
+const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E0E4EA",background:"white",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
+l);
   const [listNameConfirmed,setListNameConfirmed]=useState(false);
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
   const [showPasteModal,setShowPasteModal]=useState(false);
