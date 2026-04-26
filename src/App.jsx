@@ -1454,7 +1454,6 @@ export default function App(){
   const [shareModal,setShareModal]=useState(false);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
-  const [addExtraToCurrent,setAddExtraToCurrent]=useState(false);
 
   const showToast=useCallback((msg)=>{
     clearTimeout(toastTimer.current);
@@ -1463,6 +1462,18 @@ export default function App(){
   },[]);
 
   const saveLists=(nl)=>{setLists(nl);localStorage.setItem("tnl_lists",JSON.stringify(nl));};
+
+  const scrollToListTop=useCallback(()=>{
+    window.scrollTo({top:0,behavior:"smooth"});
+    if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});
+    setTimeout(()=>searchRef.current?.focus?.(),180);
+  },[]);
+
+  const shareAppWhatsApp=()=>{
+    const appUrl=window.location.href.split("#")[0];
+    const text=`Conheça o app Tá na Lista: ${appUrl}`;
+    window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+  };
 
   // ── Dialog de produto ─────────────────────────────────────────────────
   // ── Classificação por IA em tempo real ──────────────────────────────
@@ -1517,7 +1528,6 @@ export default function App(){
 
   const confirmDialog = () => {
     const embalagem = dlgPeso||dlgVolume||"";
-    const detail=[dlgMarca,dlgTipo,embalagem].filter(Boolean).join(" · ");
     const newItem = {
       name: itemDialog.name,
       marca: dlgMarca||"",
@@ -1525,27 +1535,12 @@ export default function App(){
       embalagem,
       peso: dlgPeso,
       volume: dlgVolume,
-      detail,
       qty: dlgQty,
       unit: dlgUnit,
       price: null,
       checked: false,
       notFound: false
     };
-    if (addExtraToCurrent && currentList) {
-      const l=JSON.parse(JSON.stringify(currentList));
-      let cat=l.categories.find(c=>c.name==="Itens Extras");
-      if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-      cat.items.push(newItem);
-      updateList(l);
-      setAddExtraToCurrent(false);
-      setExtraModal(false);
-      setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
-      setItemDialog(null);
-      showToast("⭐ Item extra adicionado!");
-      setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
-      return;
-    }
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -1653,7 +1648,10 @@ export default function App(){
       const l=JSON.parse(JSON.stringify(currentList));
       l.categories[ci].items[ii].checked=false;
       l.categories[ci].items[ii].price=null;
-      updateList(l);return;
+      updateList(l);
+      setSearch("");
+      setTimeout(scrollToListTop,100);
+      return;
     }
     setCheckPopup({ci,ii});
   };
@@ -1679,7 +1677,8 @@ export default function App(){
     updateList(l);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
     setItemModal(null);
-    setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
+    setSearch("");
+    setTimeout(scrollToListTop,100);
     const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
     if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
   };
@@ -1697,46 +1696,53 @@ export default function App(){
     const newQty=Math.max(0.5,Math.round((item.qty+delta)*10)/10);
     item.qty=newQty;
     updateList(l);
+    setSearch("");
+    setTimeout(scrollToListTop,100);
     showToast(delta>0?"+" +delta+" "+item.name:delta+" "+item.name);
   };
 
   const getSuggestions=()=>{
     if(!currentList||budgetDiff===null||budgetDiff>=0)return[];
     const overBy=Math.abs(budgetDiff);
-    const level1=[];
-    currentList.categories.forEach((cat,ci)=>{
-      cat.items.forEach((item,ii)=>{
-        if(item.checked&&item.qty>1&&item.price!=null)
-          level1.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"reduzir"});
-      });
-    });
-    level1.sort((a,b)=>b.price-a.price);
     const superfluous=["Bebidas Alcoólicas","Cervejas","Vinhos","Destilados","Snacks","Doces","Chocolates","Itens Extras"];
-    const level2=[];
+    const candidates=[];
+
     currentList.categories.forEach((cat,ci)=>{
       const isSuper=superfluous.some(s=>cat.name.includes(s));
       cat.items.forEach((item,ii)=>{
-        if(item.checked&&item.price!=null&&(isSuper||cat.name==="Itens Extras"))
-          level2.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"remover",catName:cat.name});
+        if(!item.checked||item.price==null)return;
+        const total=item.price*(item.qty||1);
+        if((item.qty||1)>1){
+          candidates.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"reduzir",catName:cat.name,economy:item.price,priority:isSuper?1:2});
+        }
+        candidates.push({ci,ii,name:item.name,qty:item.qty||1,price:item.price,tipo:"remover",catName:cat.name,economy:total,priority:isSuper||cat.name==="Itens Extras"?0:3});
       });
     });
-    level2.sort((a,b)=>b.price*b.qty-a.price*a.qty);
-    const all=[...level1,...level2];
+
+    candidates.sort((a,b)=>a.priority-b.priority||b.economy-a.economy);
     const selected=[];
     let acc=0;
-    for(const item of all){
-      if(acc>=overBy)break;
+    const usedRemove=new Set();
+    for(const item of candidates){
+      const key=item.ci+":"+item.ii;
+      if(item.tipo==="reduzir"&&usedRemove.has(key))continue;
       selected.push(item);
-      acc+=item.qty>1?item.price:item.price*item.qty;
+      acc+=item.economy;
+      if(item.tipo==="remover")usedRemove.add(key);
+      if(acc>=overBy)break;
     }
-    return selected.length>0?selected:all.slice(0,5);
+    return selected;
   };
 
-  const addExtra=async()=>{
-    const name=exName.trim();
-    if(!name){showToast("⚠️ Digite o nome");return;}
-    setAddExtraToCurrent(true);
-    await openProductDialog(name);
+  const addExtra=()=>{
+    if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
+    const l=JSON.parse(JSON.stringify(currentList));
+    let cat=l.categories.find(c=>c.name==="Itens Extras");
+    if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
+    cat.items.push({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false});
+    updateList(l);setExtraModal(false);
+    setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
+    showToast("⭐ Item extra adicionado!");
   };
 
   const deleteList=(id)=>{saveLists(lists.filter(l=>l.id!==id));setConfirmDelete(null);showToast("🗑 Lista excluída");};
@@ -1831,12 +1837,17 @@ export default function App(){
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
             <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 14px"}}>🛍️</div>
-              <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:8}}>Tá na Lista</div>
-              <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.6}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
+              <div style={{fontWeight:900,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
+              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
+              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
+            <button onClick={shareAppWhatsApp}
+              style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)",marginBottom:22}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              Compartilhar link do app
+            </button>
             <div style={{fontWeight:800,fontSize:12,color:"#8896A8",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
@@ -1860,7 +1871,7 @@ export default function App(){
             {lists.length===0?(
               <div style={{textAlign:"center",padding:"32px 20px",color:"#8896A8"}}>
                 <div style={{fontSize:48,marginBottom:12}}>🛒</div>
-                <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no módulo <strong>Compras</strong> para criar!</p>
+                <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no <strong>+</strong> para criar!</p>
               </div>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1869,7 +1880,7 @@ export default function App(){
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   return(
-                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"visible",position:"relative"}}>
+                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"hidden"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
                         style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",cursor:"pointer"}}>
                         <div style={{fontSize:26,flexShrink:0}}>{icons[list.type]||"📦"}</div>
@@ -1889,8 +1900,10 @@ export default function App(){
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
                             style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:190,overflow:"hidden"}}>
-                              <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Compartilhar</button>
+                            <div style={{position:"absolute",right:0,bottom:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:210,overflow:"hidden"}}>
+                              <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar Lista</button>
+                              <div style={{height:1,background:"#F0F2F5"}}/>
+                              <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setConfirmDelete(list.id);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#FF4444",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🗑 Excluir lista</button>
                             </div>
@@ -1931,7 +1944,6 @@ export default function App(){
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
-            <div style={{width:36,height:36,flexShrink:0}} />
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
@@ -1968,7 +1980,7 @@ export default function App(){
               <label style={lbl}>📝 Nome da lista</label>
               {listNameConfirmed?(
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED",flex:1,textAlign:"center"}}>{listName||"Minha lista"}</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED"}}>{listName||"Minha lista"}</div>
                   <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
                 </div>
               ):(
@@ -2006,7 +2018,7 @@ export default function App(){
               </div>
               <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
-                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2.5px dashed #7C3AED",boxShadow:"0 0 0 4px rgba(124,58,237,0.08)",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2px solid #7C3AED",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 📋 Cole sua lista aqui
               </button>
             </div>
@@ -2045,7 +2057,7 @@ export default function App(){
 
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
-        <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");setAddExtraToCurrent(false);}}>
+        <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}}>
           <div style={{fontWeight:900,fontSize:20,color:"#1A202C",marginBottom:4}}>🛒 {itemDialog.name}</div>
           <div style={{fontSize:13,color:"#8896A8",marginBottom:8}}>{dlgLoading?"":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
           {dlgLoading&&(
@@ -2124,7 +2136,7 @@ export default function App(){
 
           </>)}
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");setAddExtraToCurrent(false);}} style={{...btnGr,flex:1}}>Cancelar</button>
+            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
             {!dlgLoading&&(
               <button onClick={confirmDialog}
                 style={{flex:2,padding:14,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
@@ -2141,12 +2153,12 @@ export default function App(){
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"linear-gradient(135deg,#7C3AED,#6D28D9)",padding:"20px 20px 24px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,position:"relative"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>←</button>
-              <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",fontWeight:900,fontSize:20,color:"white",maxWidth:"46%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center",pointerEvents:"none"}}>{currentList.name}</div>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>setShareModal(true)}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",zIndex:2}}>💬 Enviar Lista</button>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
             </div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -2186,7 +2198,7 @@ export default function App(){
                 return(
                   <div style={{borderTop:"1px solid #FECACA"}}>
                     <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                      {suggs[0]?.tipo==="reduzir"?"Reduza a quantidade:":"Considere remover:"}
+                      Plano de ajuste até voltar ao orçamento
                     </div>
                     {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
                       <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
@@ -2196,10 +2208,10 @@ export default function App(){
                             {tipo==="remover"&&<span style={{fontSize:10,fontWeight:700,background:"#FEF2F2",color:"#B91C1C",padding:"2px 6px",borderRadius:100,border:"1px solid #FECACA",flexShrink:0}}>supérfluo</span>}
                           </div>
                           <div style={{fontSize:12,color:"#8896A8",marginTop:2}}>
-                            {qty>1?`${qty} un · ${fmtR(price)}/un · economiza ${fmtR(price)}/un`:`${fmtR(price*qty)} total`}
+                            {tipo==="reduzir"?`${qty} un · reduzir 1 un economiza ${fmtR(price)}`:`remover economiza ${fmtR(price*qty)}`}
                           </div>
                         </div>
-                        {qty>1?(
+                        {tipo==="reduzir"?(
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                             <button onClick={()=>quickAdjust(ci,ii,-1)}
                               style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
@@ -2212,7 +2224,7 @@ export default function App(){
                             const l=JSON.parse(JSON.stringify(currentList));
                             l.categories[ci].items.splice(ii,1);
                             if(l.categories[ci].items.length===0)l.categories.splice(ci,1);
-                            updateList(l);showToast("🗑 "+name+" removido");
+                            updateList(l);setSearch("");setTimeout(scrollToListTop,100);showToast("🗑 "+name+" removido");
                           }}
                             style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                             🗑 Remover
@@ -2221,7 +2233,7 @@ export default function App(){
                       </div>
                     ))}
                     <div style={{padding:"6px 14px 8px",fontSize:11,color:"#EF4444",fontStyle:"italic"}}>
-                      Sugestões baseadas nos itens já comprados
+                      As sugestões continuam aparecendo até o total voltar ao orçamento programado
                     </div>
                   </div>
                 );
@@ -2316,7 +2328,7 @@ export default function App(){
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"3px",textDecorationSkipInk:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>extra</span>}
                                 {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
@@ -2411,25 +2423,50 @@ export default function App(){
       {/* MODAL: EXTRA */}
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Adicionar item extra</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Digite o produto; em seguida, a IA mostrará marca, tipo, tamanho e quantidade antes de incluir na lista.</div>
-          <div style={{marginBottom:16}}>
+          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Item extra</div>
+          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
+          <div style={{marginBottom:10}}>
             <label style={lbl}>Produto</label>
             <div style={{display:"flex",gap:8}}>
               <input value={exName} onChange={e=>setExName(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim())addExtra();}}
+                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
                 placeholder="Nome do produto..."
                 style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-              <button onClick={addExtra}
+              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
                 disabled={!exName.trim()}
                 style={{padding:"0 16px",borderRadius:10,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#8896A8",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
-                Incluir
+                Inserir IA
               </button>
             </div>
+            <div style={{fontSize:12,color:"#E65100",marginTop:6,background:"#FFF3E0",borderRadius:8,padding:"6px 10px"}}>
+              💡 A IA vai sugerir marca, tipo e tamanho antes de adicionar.
+            </div>
           </div>
-          <div style={{fontSize:12,color:"#E65100",background:"#FFF3E0",borderRadius:10,padding:"10px 12px",lineHeight:1.5}}>
-            💡 O item será incluído em <strong>Itens Extras</strong> após a confirmação dos detalhes sugeridos pela IA.
+          <div style={{display:"flex",gap:10,marginBottom:12}}>
+            <div style={{flex:1}}>
+              <label style={lbl}>Quantidade</label>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>setExQty(q=>Math.max(1,q-1))} style={{...qBtn,width:38,height:38,fontSize:18}}>−</button>
+                <span style={{fontWeight:800,fontSize:20,minWidth:28,textAlign:"center"}}>{exQty}</span>
+                <button onClick={()=>setExQty(q=>q+1)} style={{...qBtn,width:38,height:38,fontSize:18}}>＋</button>
+              </div>
+            </div>
+            <div style={{flex:1}}>
+              <label style={lbl}>Unidade</label>
+              <select value={exUnit} onChange={e=>setExUnit(e.target.value)} style={{...inp(),padding:"10px 12px",height:44}}>
+                {["unidade","pacote","caixa","kg","g","L","ml","fardo","lata","garrafa","dúzia","par","peça"].map(u=><option key={u}>{u}</option>)}
+              </select>
+            </div>
           </div>
+          <div style={{marginBottom:16}}>
+            <label style={lbl}>Preço (R$) — opcional</label>
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:16,pointerEvents:"none"}}>R$</span>
+              <input value={exPrice} onChange={e=>setExPrice(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="0,00" inputMode="decimal"
+                style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+            </div>
+          </div>
+          <button onClick={addExtra} style={btnG}>＋ Adicionar à lista</button>
         </ModalSheet>
       )}
 
@@ -2483,7 +2520,7 @@ export default function App(){
               else{navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>showToast("📋 Lista copiada!"));}
             }}
               style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              🛍️ Enviar para quem tem o app
+              🛍️ Outros apps / Copiar
             </button>
           </div>
         </ModalSheet>
@@ -2503,8 +2540,8 @@ export default function App(){
                 <button onClick={()=>{
                   const l=JSON.parse(JSON.stringify(currentList));
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
-                  updateList(l);setCheckPopup(null);
-                  setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
+                  updateList(l);setCheckPopup(null);setSearch("");
+                  setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
                 }} style={{flex:1,padding:14,borderRadius:12,background:"#F0F2F5",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
