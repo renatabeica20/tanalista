@@ -1327,8 +1327,8 @@ function demoOrganize(items) {
 // ── ESTILOS BASE ───────────────────────────────────────────────────────────
 const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E0E4EA",borderRadius:10,fontSize:16,color:"#1A202C",outline:"none",fontFamily:"inherit",background:"white",boxSizing:"border-box",...extra});
 const lbl = {fontWeight:700,fontSize:13,color:"#4A5568",marginBottom:8,display:"block"};
-const chip = (sel,bc,bg,tc)=>({flexShrink:0,padding:"9px 14px",borderRadius:100,border:"2px solid "+(sel?(bc||"#7C3AED"):"#E0E4EA"),background:sel?(bg||"#EDE9FE"):"white",fontWeight:700,fontSize:13,color:sel?(tc||"#6D28D9"):"#8896A8",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
-const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#00C06B,#00A05A)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
+const chip = (sel,bc="#7C3AED",bg="#EDE9FE",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:100,border:`2px solid ${sel?bc:"#E0E4EA"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#8896A8",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
+const btnG = {width:"100%",padding:16,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
 const btnGr = {padding:"13px 16px",borderRadius:10,background:"white",border:"2px solid #E0E4EA",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
 const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E0E4EA",background:"white",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
 
@@ -1401,15 +1401,12 @@ export default function App(){
   const [exPrice,setExPrice]=useState("");
 
   const [shareModal,setShareModal]=useState(false);
-  const [showSuggestions,setShowSuggestions]=useState(false);
 
   const showToast=useCallback((msg)=>{
     clearTimeout(toastTimer.current);
     setToast({show:true,msg});
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),2800);
   },[]);
-
-
 
   const saveLists=(nl)=>{setLists(nl);localStorage.setItem("tnl_lists",JSON.stringify(nl));};
 
@@ -1621,46 +1618,6 @@ export default function App(){
     updateList(l);setItemModal(null);showToast("🗑 Removido");
   };
 
-  const quickAdjust=(ci,ii,delta)=>{
-    const l=JSON.parse(JSON.stringify(currentList));
-    const item=l.categories[ci].items[ii];
-    const newQty=Math.max(0.5,Math.round((item.qty+delta)*10)/10);
-    item.qty=newQty;
-    updateList(l);
-    showToast((delta>0?"+":"")+delta+" "+item.name);
-  };
-
-  const getSuggestions=()=>{
-    if(!currentList||budgetDiff===null||budgetDiff>=0)return[];
-    const overBy=Math.abs(budgetDiff);
-    const level1=[];
-    currentList.categories.forEach((cat,ci)=>{
-      cat.items.forEach((item,ii)=>{
-        if(item.checked&&item.qty>1&&item.price!=null)
-          level1.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"reduzir"});
-      });
-    });
-    level1.sort((a,b)=>b.price-a.price);
-    const superfluous=["Bebidas Alcoólicas","Cervejas","Vinhos","Snacks","Doces","Chocolates","Itens Extras"];
-    const level2=[];
-    currentList.categories.forEach((cat,ci)=>{
-      const isSuper=superfluous.some(s=>cat.name.includes(s));
-      cat.items.forEach((item,ii)=>{
-        if(item.checked&&item.price!=null&&(isSuper||cat.name==="Itens Extras"))
-          level2.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"remover",catName:cat.name});
-      });
-    });
-    level2.sort((a,b)=>b.price*b.qty-a.price*a.qty);
-    const all=[...level1,...level2];
-    const selected=[];let acc=0;
-    for(const item of all){
-      selected.push(item);
-      acc+=item.qty>1?item.price:item.price*item.qty;
-      if(acc>=overBy)break;
-    }
-    return selected.length>0?selected:all.slice(0,5);
-  };
-
   const addExtra=()=>{
     if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
     const l=JSON.parse(JSON.stringify(currentList));
@@ -1704,7 +1661,7 @@ export default function App(){
   };
 
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
-  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
+  const pct=totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
 
@@ -1761,14 +1718,12 @@ export default function App(){
       ════════════════════════════════════ */}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
-            <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
-            <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 14px"}}>🛍️</div>
-              <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:8}}>Tá na Lista</div>
-              <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.6}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
-            </div>
+          <div style={{background:"linear-gradient(135deg,#7C3AED,#6D28D9)",padding:"48px 24px 32px",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:-40,right:-40,width:180,height:180,background:"rgba(255,255,255,0.08)",borderRadius:"50%"}}/>
+            <div style={{position:"absolute",bottom:-20,left:-20,width:120,height:120,background:"rgba(255,255,255,0.06)",borderRadius:"50%"}}/>
+            <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 14px"}}>🛍️</div>
+            <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",marginBottom:8,textAlign:"center"}}>Tá na Lista</div>
+            <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,textAlign:"center"}}>Organize, controle o orçamento e compartilhe.</div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
             <div style={{fontWeight:800,fontSize:12,color:"#8896A8",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
@@ -1866,7 +1821,7 @@ export default function App(){
           <div style={{background:"white",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E0E4EA",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-            <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+            <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:18,overflowY:"auto",paddingBottom:40}}>
             <div>
@@ -1909,7 +1864,7 @@ export default function App(){
               </div>
               <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
-                style={{marginTop:10,width:"100%",padding:"10px 14px",borderRadius:10,background:"#F5F3FF",border:"2px dashed #7C3AED",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                style={{marginTop:10,width:"100%",padding:"10px 14px",borderRadius:10,background:"#F0F2F5",border:"2px dashed #E0E4EA",color:"#4A5568",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 📋 Cole sua lista aqui
               </button>
             </div>
@@ -2047,7 +2002,7 @@ export default function App(){
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
+              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentList.name}</div>
               <button onClick={()=>setShareModal(true)}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>💬 Enviar Lista</button>
             </div>
@@ -2057,7 +2012,7 @@ export default function App(){
                 <span style={{fontWeight:900,fontSize:18,color:"white"}}>{fmtR(fullTotal)}</span>
               </div>
               <div style={{height:6,background:"rgba(255,255,255,0.25)",borderRadius:3,overflow:"hidden"}}>
-                <div style={{height:"100%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",borderRadius:3,width:pct+"%",transition:"width 0.4s, background 0.6s"}}/>
+                <div style={{height:"100%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",borderRadius:3,width:pct+"%",transition:"width 0.4s"}}/>
               </div>
               {budget>0&&(
                 <div style={{fontSize:12,marginTop:6,color:budgetDiff<0?"#FF8080":budgetDiff<budget*0.15?"#FFE066":"rgba(255,255,255,0.85)"}}>
@@ -2069,35 +2024,6 @@ export default function App(){
             </div>
           </div>
 
-          {budget>0&&budgetDiff!==null&&budgetDiff<0&&(
-            <div style={{margin:"10px 20px 0",background:"#FEF2F2",borderRadius:14,border:"2px solid #EF4444",overflow:"hidden"}}>
-              <div onClick={()=>setShowSuggestions(s=>!s)} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-                <span style={{fontSize:18}}>⚠️</span>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:14,color:"#B91C1C"}}>Acima do orçamento em {fmtR(Math.abs(budgetDiff))}</div>
-                  <div style={{fontSize:12,color:"#EF4444"}}>Toque para ver sugestões de ajuste</div>
-                </div>
-                <span style={{fontSize:12,color:"#EF4444"}}>▾</span>
-              </div>
-              {showSuggestions&&getSuggestions().map(({ci,ii,name,qty,price,tipo},i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-                    <div style={{fontSize:12,color:"#8896A8"}}>{qty>1?qty+" un · "+fmtR(price)+"/un":fmtR(price*qty)+" total"}</div>
-                  </div>
-                  {qty>1?(
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <button onClick={()=>quickAdjust(ci,ii,-1)} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
-                      <span style={{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}}>{qty}</span>
-                      <button onClick={()=>quickAdjust(ci,ii,1)} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
-                    </div>
-                  ):(
-                    <button onClick={()=>{const l=JSON.parse(JSON.stringify(currentList));l.categories[ci].items.splice(ii,1);if(l.categories[ci].items.length===0)l.categories.splice(ci,1);updateList(l);showToast("🗑 "+name+" removido");}} style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>🗑 Remover</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
           {/* Search */}
           <div style={{margin:"14px 20px 0",position:"relative"}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#C0C8D4"}}>🔍</span>
@@ -2124,7 +2050,7 @@ export default function App(){
               if(search&&filtered.length===0)return null;
 
               return(
-                <div key={ci} style={{marginBottom:12,borderRadius:14,overflow:"hidden",border:"2px solid "+(allDone?"#7C3AED":theme.border),boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
+                <div key={ci} style={{marginBottom:12,borderRadius:14,overflow:"hidden",border:`2px solid ${allDone?"#7C3AED":theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
                     style={{background:allDone?"#E8F5E9":theme.bg,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",borderBottom:isCollapsed?"none":`1px solid ${theme.border}40`}}>
@@ -2316,7 +2242,7 @@ export default function App(){
           </div>
           <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
             style={{...btnG,background:"#25D366",boxShadow:"0 4px 16px rgba(37,211,102,0.35)"}}>
-            💬 Enviar pelo WhatsApp
+            WhatsApp
           </button>
         </ModalSheet>
       )}
