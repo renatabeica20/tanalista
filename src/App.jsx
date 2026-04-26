@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 
 // ── API Anthropic integrada ────────────────────────────────────────────────
 async function classifyProduct(name) {
@@ -2075,30 +2075,25 @@ export default function App(){
                   <div style={{fontWeight:800,fontSize:14,color:"#B91C1C"}}>Acima do orçamento em {fmtR(Math.abs(budgetDiff))}</div>
                   <div style={{fontSize:12,color:"#EF4444"}}>Toque para ver sugestões de ajuste</div>
                 </div>
-                <span style={{fontSize:12,color:"#EF4444",display:"inline-block",transform:showSuggestions?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s"}}>▾</span>
+                <span style={{fontSize:12,color:"#EF4444"}}>▾</span>
               </div>
-              {showSuggestions&&(()=>{
-                const suggs=getSuggestions();
-                if(!suggs||suggs.length===0)return React.createElement('div',{style:{padding:"8px 14px 14px",fontSize:13,color:"#B91C1C"}},"Nenhuma sugestão disponível.");
-                return React.createElement('div',{style:{borderTop:"1px solid #FECACA"}},
-                  React.createElement('div',{style:{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase"}},
-                    suggs[0]?.tipo==="reduzir"?"Reduza a quantidade:":"Considere remover:"
-                  ),
-                  suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>
-                    React.createElement('div',{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}},
-                      React.createElement('div',{style:{flex:1,minWidth:0}},
-                        React.createElement('div',{style:{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},name),
-                        React.createElement('div',{style:{fontSize:12,color:"#8896A8"}},qty>1?qty+" un · "+fmtR(price)+"/un":fmtR(price*qty)+" total")
-                      ),
-                      qty>1?React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6}},
-                        React.createElement('button',{onClick:()=>quickAdjust(ci,ii,-1),style:{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}},"−"),
-                        React.createElement('span',{style:{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}},qty),
-                        React.createElement('button',{onClick:()=>quickAdjust(ci,ii,1),style:{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}},"+")
-                      ):React.createElement('button',{onClick:()=>{const l=JSON.parse(JSON.stringify(currentList));l.categories[ci].items.splice(ii,1);if(l.categories[ci].items.length===0)l.categories.splice(ci,1);updateList(l);showToast("🗑 "+name+" removido");},style:{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}},"🗑 Remover")
-                    )
-                  )
-                );
-              })()}
+              {showSuggestions&&getSuggestions().map(({ci,ii,name,qty,price,tipo},i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+                    <div style={{fontSize:12,color:"#8896A8"}}>{qty>1?qty+" un · "+fmtR(price)+"/un":fmtR(price*qty)+" total"}</div>
+                  </div>
+                  {qty>1?(
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <button onClick={()=>quickAdjust(ci,ii,-1)} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
+                      <span style={{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}}>{qty}</span>
+                      <button onClick={()=>quickAdjust(ci,ii,1)} style={{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
+                    </div>
+                  ):(
+                    <button onClick={()=>{const l=JSON.parse(JSON.stringify(currentList));l.categories[ci].items.splice(ii,1);if(l.categories[ci].items.length===0)l.categories.splice(ci,1);updateList(l);showToast("🗑 "+name+" removido");}} style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>🗑 Remover</button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           {/* Search */}
