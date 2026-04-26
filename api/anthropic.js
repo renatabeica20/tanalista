@@ -1,10 +1,14 @@
 // api/anthropic.js — Vercel Serverless Function
-// Suporta tanto chamadas de texto quanto de visão (imagem)
+// Suporta chamadas de texto E visão (imagem/foto)
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -13,15 +17,14 @@ export default async function handler(req, res) {
 
   const { prompt, system, maxTokens = 1024, model = "claude-3-5-haiku-latest", image } = req.body || {};
 
-  if (!prompt) {
-    return res.status(400).json({ error: "prompt é obrigatório." });
-  }
+  if (!prompt) return res.status(400).json({ error: "prompt é obrigatório." });
 
-  // Montar o conteúdo da mensagem
-  let content;
+  // ── Montar conteúdo da mensagem ──────────────────────────────────────
+  let messageContent;
+
   if (image && image.data && image.mediaType) {
-    // Chamada com visão (foto da lista)
-    content = [
+    // Chamada com VISÃO — envia imagem + texto
+    messageContent = [
       {
         type: "image",
         source: {
@@ -36,20 +39,19 @@ export default async function handler(req, res) {
       },
     ];
   } else {
-    // Chamada de texto simples
-    content = prompt;
+    // Chamada de TEXTO simples
+    messageContent = [{ type: "text", text: prompt }];
   }
 
-  const body = {
+  const requestBody = {
     model,
     max_tokens: maxTokens,
-    messages: [{ role: "user", content }],
+    messages: [{ role: "user", content: messageContent }],
   };
 
-  if (system) {
-    body.system = system;
-  }
+  if (system) requestBody.system = system;
 
+  // ── Chamar API Anthropic ─────────────────────────────────────────────
   try {
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -58,26 +60,32 @@ export default async function handler(req, res) {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await upstream.json();
 
     if (!upstream.ok) {
-      console.error("Anthropic API error:", data);
-      return res.status(upstream.status).json({ error: data?.error?.message || "Erro na API Anthropic" });
+      console.error("Anthropic API error:", JSON.stringify(data));
+      return res.status(upstream.status).json({
+        error: data?.error?.message || "Erro na API Anthropic",
+        detail: data,
+      });
     }
 
     const text = data?.content?.[0]?.text || "";
 
-    // Tentar extrair JSON da resposta
+    // ── Extrair JSON da resposta ─────────────────────────────────────
     let json = null;
     try {
-      // Remover markdown se houver
-      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const cleaned = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
       json = JSON.parse(cleaned);
     } catch {
-      // Tentar encontrar JSON no texto
+      // Tentar encontrar objeto JSON no meio do texto
       const match = text.match(/\{[\s\S]*\}/);
       if (match) {
         try { json = JSON.parse(match[0]); } catch { /* noop */ }
@@ -85,8 +93,9 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ text, json });
+
   } catch (err) {
-    console.error("Erro no proxy Anthropic:", err);
+    console.error("Erro interno no proxy Anthropic:", err);
     return res.status(500).json({ error: "Erro interno: " + err.message });
   }
 }
