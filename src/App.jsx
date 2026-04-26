@@ -1716,9 +1716,9 @@ export default function App(){
   // Gera texto formatado e abre wa.me — funciona em qualquer dispositivo
   const buildShareText=()=>{
     if(!currentList)return"";
-    const text=buildShareText();
-    window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
-  };
+    const{fullTotal,notFoundItems}=getProgress(currentList);
+    const lines=[];
+    lines.push("🛒 *"+currentList.name+"* — Tá na Lista");
     if(currentList.budget>0)lines.push("💰 Orçamento: "+fmtR(currentList.budget));
     lines.push("");
     currentList.categories.forEach(cat=>{
@@ -1738,6 +1738,7 @@ export default function App(){
     if(notFoundItems>0)lines.push("❌ "+notFoundItems+" item"+(notFoundItems>1?"s":"")+" não encontrado"+(notFoundItems>1?"s":""));
     return lines.join("\n");
   };
+
 
   const shareWhatsApp=()=>{
     if(!currentList)return;
