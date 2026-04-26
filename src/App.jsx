@@ -1535,6 +1535,40 @@ function ModalSheet({onClose,children}){
   );
 }
 
+
+// ── OCR: leitura de lista por foto (impresso/manuscrito) ─────────────────
+function loadTesseractFromCDN() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-tnl-tesseract="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.Tesseract));
+      existing.addEventListener("error", reject);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.async = true;
+    script.dataset.tnlTesseract = "true";
+    script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error("OCR não carregado"));
+    script.onerror = () => reject(new Error("Não foi possível carregar o leitor da imagem"));
+    document.head.appendChild(script);
+  });
+}
+
+function normalizeOcrText(text) {
+  return String(text || "")
+    .replace(/[|]/g, "I")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 1)
+    .map((line) => line.replace(/^[\s•·\-–—_*]+/, "").replace(/^\d+[.)-]\s*/, "").trim())
+    .filter((line) => line && !/^total\b|^subtotal\b|^data\b|^mercado\b/i.test(line))
+    .join("\n");
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════
@@ -1572,6 +1606,11 @@ export default function App(){
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
   const [showPasteModal,setShowPasteModal]=useState(false);
   const [pasteText,setPasteText]=useState("");
+  const [showPhotoModal,setShowPhotoModal]=useState(false);
+  const [ocrLoading,setOcrLoading]=useState(false);
+  const [ocrProgress,setOcrProgress]=useState(0);
+  const [ocrText,setOcrText]=useState("");
+  const [ocrFileName,setOcrFileName]=useState("");
   const [reuseModal,setReuseModal]=useState(null);
   const [listMenuId,setListMenuId]=useState(null);
   const [mNotFound,setMNotFound]=useState(false);
@@ -1936,10 +1975,10 @@ export default function App(){
     setReuseModal(null);
   };
 
-  // ── Importar texto colado ─────────────────────────────────────────────
-  const parsePastedText=()=>{
-    const lines=pasteText.split("\n").map(l=>l.trim()).filter(l=>l.length>1);
-    const items=lines.map(line=>{
+  // ── Importar texto colado / foto ───────────────────────────────────────
+  const parseListTextToItems=(text)=>{
+    const lines=String(text||"").split("\n").map(l=>l.trim()).filter(l=>l.length>1);
+    return lines.map(line=>{
       let clean=line.trim();
       let qty=1,unit="unidade";
       // Tenta extrair quantidade ANTES de remover prefixos de lista
@@ -1968,10 +2007,47 @@ export default function App(){
       }
       return{name:clean,marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty,unit,price:null,checked:false,notFound:false};
     }).filter(i=>i.name.length>0);
+  };
+
+  const importTextAsPendingItems=(text,{closePaste=false,closePhoto=false}={})=>{
+    const items=parseListTextToItems(text);
+    if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
     setPendingItems(prev=>[...prev,...items]);
-    setPasteText("");
-    setShowPasteModal(false);
+    if(closePaste){setPasteText("");setShowPasteModal(false);}
+    if(closePhoto){setOcrText("");setOcrFileName("");setOcrProgress(0);setShowPhotoModal(false);}
     showToast("✅ "+items.length+" itens importados!");
+  };
+
+  const parsePastedText=()=>importTextAsPendingItems(pasteText,{closePaste:true});
+
+  const handlePhotoListFile=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    setOcrFileName(file.name||"foto da lista");
+    setOcrText("");
+    setOcrProgress(0);
+    setOcrLoading(true);
+    try{
+      const Tesseract=await loadTesseractFromCDN();
+      const result=await Tesseract.recognize(file,"por+eng",{
+        logger:(m)=>{
+          if(m?.status==="recognizing text"&&typeof m.progress==="number"){
+            setOcrProgress(Math.max(1,Math.min(99,Math.round(m.progress*100))));
+          }
+        }
+      });
+      const text=normalizeOcrText(result?.data?.text||"");
+      setOcrText(text);
+      setOcrProgress(100);
+      if(text)showToast("✅ Texto reconhecido. Revise antes de importar.",3600);
+      else showToast("⚠️ Não consegui ler a imagem. Tente uma foto mais nítida.",4200);
+    }catch(err){
+      console.error("Erro OCR:",err);
+      showToast("⚠️ Não foi possível ler a foto. Tente outra imagem.",4200);
+    }finally{
+      setOcrLoading(false);
+      e.target.value="";
+    }
   };
 
   // ── Progress ──────────────────────────────────────────────────────────
@@ -2394,10 +2470,16 @@ export default function App(){
                   style={{padding:"0 20px",height:52,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>Inserir</button>
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
-              <button onClick={()=>setShowPasteModal(true)}
-                style={{width:"100%",padding:"14px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-                📋 Cole sua lista aqui
-              </button>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+                <button onClick={()=>setShowPasteModal(true)}
+                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                  📋 Colar lista
+                </button>
+                <button onClick={()=>setShowPhotoModal(true)}
+                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#ECFDF5",border:"2px solid #16A34A",color:"#15803D",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                  📷 Ler foto
+                </button>
+              </div>
             </div>
             {pendingItems.length>0&&(
               <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
@@ -2909,6 +2991,35 @@ export default function App(){
           <button onClick={parsePastedText} disabled={!pasteText.trim()}
             style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
             ✅ Importar itens
+          </button>
+        </ModalSheet>
+      )}
+
+
+      {/* ── MODAL: LER FOTO DA LISTA ── */}
+      {showPhotoModal&&(
+        <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📷 Ler lista por foto</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>Fotografe uma lista impressa ou manuscrita. Para melhorar a leitura, use boa iluminação e enquadre apenas a lista.</div>
+          <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",marginBottom:12,cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1}}>
+            📸 Tirar foto ou escolher imagem
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
+          </label>
+          {ocrFileName&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Arquivo: {ocrFileName}</div>}
+          {ocrLoading&&(
+            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:14,marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Lendo imagem... {ocrProgress}%</div>
+              <div style={{height:10,background:"#E5E7EB",borderRadius:999,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${ocrProgress}%`,background:"linear-gradient(90deg,#16A34A,#22C55E)",borderRadius:999,transition:"width .25s"}}/>
+              </div>
+            </div>
+          )}
+          <textarea value={ocrText} onChange={e=>setOcrText(e.target.value)}
+            placeholder={ocrLoading?"Aguarde a leitura da imagem...":"O texto reconhecido aparecerá aqui para revisão antes de importar."}
+            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:190,resize:"none",marginBottom:14}}/>
+          <button onClick={()=>importTextAsPendingItems(ocrText,{closePhoto:true})} disabled={!ocrText.trim()||ocrLoading}
+            style={{...btnG,opacity:ocrText.trim()&&!ocrLoading?1:0.5,cursor:ocrText.trim()&&!ocrLoading?"pointer":"not-allowed"}}>
+            ✅ Transformar em itens da lista
           </button>
         </ModalSheet>
       )}
