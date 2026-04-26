@@ -95,6 +95,59 @@ async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
   return extractJsonObject(data?.text || "");
 }
 
+
+// ── CACHE LOCAL DE CLASSIFICAÇÃO ───────────────────────────────────────────
+// Evita repetir chamadas à IA para produtos já classificados neste navegador.
+const PRODUCT_CLASSIFICATION_CACHE_VERSION = "v1";
+const PRODUCT_CLASSIFICATION_CACHE_PREFIX = `ta-na-lista:product-classification:${PRODUCT_CLASSIFICATION_CACHE_VERSION}:`;
+
+function normalizeCacheKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getProductClassificationCache(name) {
+  try {
+    const key = normalizeCacheKey(name);
+    if (!key || typeof window === "undefined" || !window.localStorage) return null;
+    const raw = window.localStorage.getItem(PRODUCT_CLASSIFICATION_CACHE_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      marcas: Array.isArray(parsed.marcas) ? parsed.marcas : [],
+      tipos: Array.isArray(parsed.tipos) ? parsed.tipos : [],
+      pesos: Array.isArray(parsed.pesos) ? parsed.pesos : [],
+      volumes: Array.isArray(parsed.volumes) ? parsed.volumes : [],
+      unidades: Array.isArray(parsed.unidades) && parsed.unidades.length ? parsed.unidades : ["unidade", "pacote", "kg"],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function setProductClassificationCache(name, cfg) {
+  try {
+    const key = normalizeCacheKey(name);
+    if (!key || typeof window === "undefined" || !window.localStorage) return;
+    const safe = {
+      marcas: Array.isArray(cfg?.marcas) ? cfg.marcas.slice(0, 12) : [],
+      tipos: Array.isArray(cfg?.tipos) ? cfg.tipos.slice(0, 12) : [],
+      pesos: Array.isArray(cfg?.pesos) ? cfg.pesos.slice(0, 12) : [],
+      volumes: Array.isArray(cfg?.volumes) ? cfg.volumes.slice(0, 12) : [],
+      unidades: Array.isArray(cfg?.unidades) && cfg.unidades.length ? cfg.unidades.slice(0, 12) : ["unidade", "pacote", "kg"],
+      cachedAt: Date.now(),
+    };
+    window.localStorage.setItem(PRODUCT_CLASSIFICATION_CACHE_PREFIX + key, JSON.stringify(safe));
+  } catch {
+    // Se o armazenamento estiver cheio/bloqueado, apenas segue sem cache.
+  }
+}
+
 async function classifyProduct(name) {
   // Primeiro tenta a base local. Ela já cobre os itens mais comuns e evita falha/custo de IA.
   const localCfg = getProductConfig(name);
@@ -106,6 +159,11 @@ async function classifyProduct(name) {
 
   if (hasLocalDetails) {
     return localCfg;
+  }
+
+  const cachedCfg = getProductClassificationCache(name);
+  if (cachedCfg) {
+    return cachedCfg;
   }
 
   const prompt = [
@@ -130,13 +188,16 @@ async function classifyProduct(name) {
       maxTokens: 600,
     });
 
-    return {
+    const cfg = {
       marcas: Array.isArray(p.marcas) ? p.marcas : [],
       tipos: Array.isArray(p.tipos) ? p.tipos : [],
       pesos: Array.isArray(p.pesos) ? p.pesos : [],
       volumes: Array.isArray(p.volumes) ? p.volumes : [],
       unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
     };
+
+    setProductClassificationCache(name, cfg);
+    return cfg;
   } catch (err) {
     console.warn("Classificação por IA indisponível; usando base local.", err);
     return localCfg;
