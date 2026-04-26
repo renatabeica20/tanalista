@@ -10,10 +10,27 @@ const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE |
 
 // ── Supabase: listas compartilháveis ──────────────────────────────────────
 // Usa a REST API do Supabase diretamente para evitar dependência adicional.
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "")
-  .replace(/\/rest\/v1\/?$/, "")
-  .replace(/\/$/, "");
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const DEFAULT_SUPABASE_URL = "https://zkuihomwrnqctutswszq.supabase.co";
+
+function normalizeSupabaseUrl(value) {
+  let url = String(value || DEFAULT_SUPABASE_URL).trim();
+
+  // Aceita tanto a URL base quanto a URL copiada da aba Data API.
+  url = url
+    .replace(/\/rest\/v1.*$/i, "")
+    .replace(/\/shared_lists.*$/i, "")
+    .replace(/\/$/, "");
+
+  // Corrige caso a variável tenha sido colada sem protocolo.
+  if (url && !/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  return url;
+}
+
+const SUPABASE_URL = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
+const SUPABASE_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
 
 function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
