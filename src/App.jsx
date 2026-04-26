@@ -1471,10 +1471,22 @@ export default function App(){
     setTimeout(()=>searchRef.current?.focus?.(),180);
   },[]);
 
+  const getPublicAppUrl=()=>{
+    const origin=window.location?.origin;
+    const path=window.location?.pathname || "/";
+    if(origin && origin!=="null") return `${origin}${path}`.replace(/\/index\.html$/,"/");
+    return String(window.location?.href || "").split("#")[0];
+  };
+
   const shareAppWhatsApp=()=>{
-    const appUrl=window.location.href.split("#")[0];
-    const text=`Conheça o app Tá na Lista: ${appUrl}`;
-    window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+    const appUrl=getPublicAppUrl();
+    const text=`Conheça o app Tá na Lista:\n${appUrl}`;
+    const encoded=encodeURIComponent(text);
+    const whatsappUrl=`https://api.whatsapp.com/send?text=${encoded}`;
+    const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");
+    if(!opened){
+      window.location.href=whatsappUrl;
+    }
   };
 
   useEffect(()=>{
