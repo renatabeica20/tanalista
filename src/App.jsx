@@ -2098,6 +2098,34 @@ export default function App(){
     list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;if(i.price!=null)s+=i.price*(i.qty||1);}));
     return{totalItems:t,checkedItems:c,fullTotal:s,notFoundItems:nf};
   };
+
+  const getBudgetResultSummary=(list)=>{
+    if(!list)return null;
+    const{totalItems,fullTotal}=getProgress(list);
+    const listBudget=Number(list.budget||0);
+    const finished=totalItems>0&&list.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
+    if(!finished||listBudget<=0)return null;
+    const diff=listBudget-fullTotal;
+    const saved=diff>=0;
+    return{
+      saved,
+      diff:Math.abs(diff),
+      text:saved?`Economizou ${fmtR(diff)}`:`Ultrapassou ${fmtR(Math.abs(diff))}`,
+      bg:saved?"#ECFDF5":"#FEF2F2",
+      color:saved?"#047857":"#B91C1C",
+      border:saved?"#A7F3D0":"#FECACA",
+      icon:saved?"✅":"⚠️"
+    };
+  };
+
+  const closeFinishedModal=()=>{
+    setShowFinished(false);
+    setScreen("home");
+    setCurrentList(null);
+    setSearch("");
+    setCollapsedCats({});
+  };
+
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.price!=null?i.price*i.qty:0),0);
 
   const updateList=(ul)=>{
@@ -2293,7 +2321,10 @@ export default function App(){
       {showFinished&&(
         <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.56)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
           <div style={{background:"#FFFFFF",borderRadius:24,padding:32,textAlign:"center",maxWidth:360,width:"100%"}}>
-            <div style={{fontSize:64,marginBottom:12}}>🎉</div>
+            <div style={{width:86,height:86,borderRadius:"50%",margin:"0 auto 14px",background:"linear-gradient(135deg,#EEF2FF,#ECFDF5)",border:"2px solid #D1FAE5",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:"0 14px 32px rgba(16,185,129,0.16)"}}>
+              <span style={{fontSize:46,lineHeight:1}}>🛒</span>
+              <span style={{position:"absolute",right:8,bottom:8,width:30,height:30,borderRadius:"50%",background:"#10B981",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,border:"3px solid white"}}>✓</span>
+            </div>
             <div style={{fontWeight:900,fontSize:22,color:"#111827",marginBottom:8}}>Lista finalizada!</div>
             <div style={{fontSize:14,color:"#6B7280",marginBottom:12}}>Todos os itens foram marcados.</div>
             <div style={{fontWeight:800,fontSize:22,color:"#6D28D9",marginBottom:16}}>{fmtR(fullTotal)}</div>
@@ -2307,7 +2338,7 @@ export default function App(){
                 style={{flex:1,padding:14,borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
                 💬 WhatsApp
               </button>
-              <button onClick={()=>setShowFinished(false)}
+              <button onClick={closeFinishedModal}
                 style={{flex:1,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
                 Fechar
               </button>
@@ -2363,6 +2394,7 @@ export default function App(){
                   const ti=list.categories.reduce((s,c)=>s+c.items.length,0);
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
+                  const budgetSummary=getBudgetResultSummary(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.96)",borderRadius:24,boxShadow:"0 14px 34px rgba(17,24,39,0.08)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
@@ -2373,12 +2405,15 @@ export default function App(){
                           <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
                             {list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0)}/{list.categories.reduce((s,c)=>s+c.items.length,0)} itens · {new Date(list.createdAt).toLocaleDateString("pt-BR")} · {fmtR(list.total||0)}
                           </div>
+                          {budgetSummary&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,padding:"5px 9px",borderRadius:999,background:budgetSummary.bg,border:"1px solid "+budgetSummary.border,color:budgetSummary.color,fontSize:11,fontWeight:900}}>
+                            <span>{budgetSummary.icon}</span><span>{budgetSummary.text}</span>
+                          </div>)}
                         </div>
                         <div style={{color:"#9CA3AF",fontSize:18,flexShrink:0}}>›</div>
                       </div>
                       <div style={{borderTop:"1px solid #F0F2F5",padding:"8px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{fontSize:12,color:"#6B7280"}}>
-                          {list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0)}/{list.categories.reduce((s,c)=>s+c.items.length,0)} itens · {fmtR(list.total||0)}
+                        <div style={{fontSize:12,color:budgetSummary?budgetSummary.color:"#6B7280",fontWeight:budgetSummary?800:400}}>
+                          {budgetSummary?budgetSummary.text:`${list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0)}/${list.categories.reduce((s,c)=>s+c.items.length,0)} itens · ${fmtR(list.total||0)}`}
                         </div>
                         <div style={{position:"relative"}}>
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
