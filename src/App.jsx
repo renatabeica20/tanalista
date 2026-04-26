@@ -10,7 +10,9 @@ const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE |
 
 // ── Supabase: listas compartilháveis ──────────────────────────────────────
 // Usa a REST API do Supabase diretamente para evitar dependência adicional.
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "")
+  .replace(/\/rest\/v1\/?$/, "")
+  .replace(/\/$/, "");
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 function hasSupabaseConfig() {
@@ -1516,6 +1518,7 @@ export default function App(){
   const [exPrice,setExPrice]=useState("");
 
   const [shareModal,setShareModal]=useState(false);
+  const [shareTargetList,setShareTargetList]=useState(null);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
@@ -1649,6 +1652,37 @@ export default function App(){
       lines.push("Se ainda não usa o app, abra o link e toque em ‘Adicionar à Tela de Início’.");
     }
     return lines.join("\n");
+  };
+
+  const buildShareInviteText=(list,link)=>{
+    const {totalItems,checkedItems,fullTotal}=getProgress(list);
+    const lines=[];
+    lines.push("🛒 Tá na Lista");
+    lines.push("");
+    lines.push("Você recebeu uma lista de compras:");
+    lines.push("*"+(list?.name||"Lista de compras")+"*");
+    lines.push("");
+    lines.push("📌 Itens: "+checkedItems+"/"+totalItems);
+    if(list?.budget>0)lines.push("💰 Orçamento: "+fmtR(list.budget));
+    if(fullTotal>0)lines.push("🧾 Compras registradas: "+fmtR(fullTotal));
+    lines.push("");
+    lines.push("Abra a lista no app:");
+    lines.push(link);
+    lines.push("");
+    lines.push("Se ainda não usa o Tá na Lista, abra o link e toque em ‘Adicionar à Tela de Início’. ");
+    return lines.join("\n");
+  };
+
+  const openShareWindow=(url,preparedWindow=null)=>{
+    if(preparedWindow&&!preparedWindow.closed){
+      preparedWindow.location.href=url;
+      preparedWindow.focus?.();
+      return;
+    }
+    const opened=window.open(url,"_blank","noopener,noreferrer");
+    if(!opened){
+      window.location.href=url;
+    }
   };
 
   const publishSharedList=async(list)=>{
@@ -1989,43 +2023,52 @@ export default function App(){
 
   // ── Compartilhamento da lista ─────────────────────────────────────────────
   const shareWhatsApp=async(listArg=null)=>{
-    const list=listArg||currentList;
+    const list=listArg||shareTargetList||currentList;
     if(!list)return;
+    const preparedWindow=window.open("about:blank","_blank");
     try{
+      showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
-      const text=buildShareText(published,link);
-      window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+      const text=buildShareInviteText(published,link);
+      const url="https://api.whatsapp.com/send?text="+encodeURIComponent(text);
+      openShareWindow(url,preparedWindow);
     }catch(err){
-      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+      if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
+      showToast("⚠️ Não foi possível enviar pelo WhatsApp: "+(err?.message||"verifique o Supabase"),6500);
     }
   };
 
   const shareTelegram=async(listArg=null)=>{
-    const list=listArg||currentList;
+    const list=listArg||shareTargetList||currentList;
     if(!list)return;
+    const preparedWindow=window.open("about:blank","_blank");
     try{
+      showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
-      const text=buildShareText(published,link);
-      window.open("https://telegram.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+      const text=buildShareInviteText(published,link);
+      const url="https://telegram.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(text);
+      openShareWindow(url,preparedWindow);
     }catch(err){
-      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+      if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
+      showToast("⚠️ Não foi possível enviar pelo Telegram: "+(err?.message||"verifique o Supabase"),6500);
     }
   };
 
   const shareOtherApps=async(listArg=null)=>{
-    const list=listArg||currentList;
+    const list=listArg||shareTargetList||currentList;
     if(!list)return;
     try{
+      showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
-      const text=buildShareText(published,link);
+      const text=buildShareInviteText(published,link);
       if(navigator.share){
         await navigator.share({title:"Tá na Lista — "+published.name,text,url:link}).catch(()=>null);
       }else if(navigator.clipboard){
         await navigator.clipboard.writeText(text);
-        showToast("📋 Lista e link copiados!");
+        showToast("📋 Link da lista copiado!");
       }
     }catch(err){
-      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),5200);
+      showToast("⚠️ Erro ao gerar link: "+(err?.message||"verifique o Supabase"),6500);
     }
   };
 
@@ -2151,7 +2194,7 @@ export default function App(){
                             style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
                             <div style={{position:"absolute",right:0,bottom:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:210,overflow:"hidden"}}>
-                              <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar Lista</button>
+                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar Lista</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
@@ -2417,7 +2460,7 @@ export default function App(){
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
               <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
-              <button onClick={()=>setShareModal(true)}
+              <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
             </div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
@@ -2732,21 +2775,21 @@ export default function App(){
 
       {/* MODAL: SHARE */}
       {shareModal&&(
-        <ModalSheet onClose={()=>setShareModal(false)}>
+        <ModalSheet onClose={()=>{setShareModal(false);setShareTargetList(null);}}>
           <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
           <div style={{fontSize:13,color:"#8896A8",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
+            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
               style={{width:"100%",padding:16,borderRadius:12,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               WhatsApp
             </button>
-            <button onClick={()=>{setShareModal(false);shareTelegram();}}
+            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareTelegram(l);}}
               style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
               Telegram
             </button>
-            <button onClick={()=>{setShareModal(false);shareOtherApps();}}
+            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareOtherApps(l);}}
               style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               🛍️ Outros apps / Copiar
             </button>
