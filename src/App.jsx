@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 
 // ── API Anthropic integrada ────────────────────────────────────────────────
 async function classifyProduct(name) {
@@ -1357,7 +1357,6 @@ export default function App(){
   const [showFinished,setShowFinished]=useState(false);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
-  const listRef=useRef(null);
 
   // Create
   const [listName,setListName]=useState("");
@@ -1403,8 +1402,6 @@ export default function App(){
 
   const [shareModal,setShareModal]=useState(false);
   const [showSuggestions,setShowSuggestions]=useState(false);
-  const [isExtraItem,setIsExtraItem]=useState(false);
-  const [checkPopup,setCheckPopup]=useState(null);
 
   const showToast=useCallback((msg)=>{
     clearTimeout(toastTimer.current);
@@ -1510,18 +1507,6 @@ export default function App(){
       checked: false,
       notFound: false
     };
-    if(isExtraItem&&currentList){
-      const l=JSON.parse(JSON.stringify(currentList));
-      let cat=l.categories.find(c=>c.name==="Itens Extras");
-      if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-      cat.items.push({...newItem,detail:[newItem.marca,newItem.tipo,newItem.embalagem].filter(Boolean).join(" ")});
-      updateList(l);
-      setIsExtraItem(false);
-      setItemDialog(null);
-      setCurrentInput("");
-      showToast("⭐ "+itemDialog.name+" adicionado como extra!");
-      return;
-    }
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -1573,35 +1558,7 @@ export default function App(){
   // ── Importar texto colado ─────────────────────────────────────────────
   const parsePastedText=()=>{
     const lines=pasteText.split("\n").map(l=>l.trim()).filter(l=>l.length>1);
-    const items=lines.map(line=>{
-      let clean=line.trim();
-      let qty=1,unit="unidade";
-      // Tenta extrair quantidade ANTES de remover prefixos de lista
-      const qPatterns=[
-        /^(\d+[,.]?\d*)\s*[xX]\s+(.+)$/,
-        /^(\d+[,.]?\d*)\s*(kg|g|L|ml|un|unidade|pacote|caixa|lata|garrafa|fardo)\s+(.+)$/i,
-        /^(\d+[,.]?\d*)\s+(.+)$/,
-      ];
-      let matched=false;
-      for(const p of qPatterns){
-        const m=clean.match(p);
-        if(m){
-          const n=parseFloat(m[1].replace(",","."));
-          if(!isNaN(n)&&n>0&&n<1000){
-            qty=n;
-            if(m.length===4){unit=m[2].toLowerCase();clean=m[3].trim();}
-            else{clean=m[2].trim();}
-            matched=true;break;
-          }
-        }
-      }
-      // Se não encontrou quantidade, remove prefixos de lista (-, •, 1., 2) etc)
-      if(!matched){
-        clean=clean.replace(/^[\s•\-\*]+/,"").trim();
-        clean=clean.replace(/^\d+[.):]\s*/,"").trim();
-      }
-      return{name:clean,marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty,unit,price:null,checked:false,notFound:false};
-    }).filter(i=>i.name.length>0);
+    const items=lines.map(line=>({name:line.replace(/^[-•*\d.]+\s*/,"").trim(),marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty:1,unit:"unidade",price:null,checked:false,notFound:false})).filter(i=>i.name);
     setPendingItems(prev=>[...prev,...items]);
     setPasteText("");
     setShowPasteModal(false);
@@ -1624,17 +1581,11 @@ export default function App(){
   };
 
   const toggleCheck=(ci,ii)=>{
-    const item=currentList.categories[ci].items[ii];
-    if(item.checked){
-      // Desmarcar direto
-      const l=JSON.parse(JSON.stringify(currentList));
-      l.categories[ci].items[ii].checked=false;
-      l.categories[ci].items[ii].price=null;
-      updateList(l);
-      return;
-    }
-    // Marcar: perguntar se quer inserir preço
-    setCheckPopup({ci,ii});
+    const l=JSON.parse(JSON.stringify(currentList));
+    l.categories[ci].items[ii].checked=!l.categories[ci].items[ii].checked;
+    updateList(l);
+    const allDone=l.categories.every(c=>c.items.every(i=>i.checked));
+    if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
   };
 
   const openItemModal=(ci,ii)=>{
@@ -1655,10 +1606,8 @@ export default function App(){
       if(p!=null&&p>=0)item.price=p;
       item.checked=true;
     }
-    updateList(l);
+    updateList(l);setItemModal(null);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
-    setItemModal(null);
-    setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
     const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
     if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
   };
@@ -1676,7 +1625,7 @@ export default function App(){
     const newQty=Math.max(0.5,Math.round((item.qty+delta)*10)/10);
     item.qty=newQty;
     updateList(l);
-    showToast(delta>0?"+" +delta+" "+item.name:delta+" "+item.name);
+    showToast((delta>0?"+":"")+delta+" "+item.name);
   };
 
   const getSuggestions=()=>{
@@ -1690,7 +1639,7 @@ export default function App(){
       });
     });
     level1.sort((a,b)=>b.price-a.price);
-    const superfluous=["Bebidas Alcoólicas","Cervejas","Vinhos","Destilados","Snacks","Doces","Chocolates","Itens Extras"];
+    const superfluous=["Bebidas Alcoólicas","Cervejas","Vinhos","Snacks","Doces","Chocolates","Itens Extras"];
     const level2=[];
     currentList.categories.forEach((cat,ci)=>{
       const isSuper=superfluous.some(s=>cat.name.includes(s));
@@ -1701,26 +1650,13 @@ export default function App(){
     });
     level2.sort((a,b)=>b.price*b.qty-a.price*a.qty);
     const all=[...level1,...level2];
-    // Seleciona itens suficientes para cobrir o excedente
-    const selected=[];
-    let acc=0;
+    const selected=[];let acc=0;
     for(const item of all){
       selected.push(item);
-      // Economia estimada ao reduzir 1 unidade ou remover
-      const saving=item.qty>1?item.price:item.price*item.qty;
-      acc+=saving;
+      acc+=item.qty>1?item.price:item.price*item.qty;
       if(acc>=overBy)break;
     }
-    // Se ainda há excedente, mostra mais sugestões
-    if(acc<overBy&&all.length>selected.length){
-      for(const item of all.slice(selected.length)){
-        selected.push(item);
-        const saving=item.qty>1?item.price:item.price*item.qty;
-        acc+=saving;
-        if(acc>=overBy)break;
-      }
-    }
-    return selected.length>0?selected:all;
+    return selected.length>0?selected:all.slice(0,5);
   };
 
   const addExtra=()=>{
@@ -1738,40 +1674,34 @@ export default function App(){
 
   // ── WhatsApp share ─────────────────────────────────────────────────────
   // Gera texto formatado e abre wa.me — funciona em qualquer dispositivo
-  const buildShareText=()=>{
-    if(!currentList)return"";
-    const{fullTotal,notFoundItems}=getProgress(currentList);
+  const shareWhatsApp=()=>{
+    if(!currentList)return;
+    const{fullTotal}=getProgress(currentList);
     const lines=[];
-    lines.push("🛒 *"+currentList.name+"* — Tá na Lista");
-    if(currentList.budget>0)lines.push("💰 Orçamento: "+fmtR(currentList.budget));
+    lines.push(`🛒 *${currentList.name}* — Tá na Lista`);
+    if(currentList.budget>0) lines.push(`💰 Orçamento: ${fmtR(currentList.budget)}`);
     lines.push("");
     currentList.categories.forEach(cat=>{
       const theme=getCatTheme(cat.name);
       const sub=getCatSubtotal(cat);
-      lines.push(theme.icon+" *"+cat.name+"*"+(sub>0?" — "+fmtR(sub):""));
+      lines.push(`${theme.icon} *${cat.name}*${sub>0?" — "+fmtR(sub):""}`);
       cat.items.forEach(i=>{
-        const status=i.notFound?"❌":i.checked?"✅":"⬜";
-        const detail=i.detail?" ("+i.detail+")":"";
-        const qty=i.qty>1?" "+i.qty+"×":"";
-        const price=i.price!=null?" — "+fmtR(i.price*i.qty):"";
-        lines.push(status+" "+i.name+detail+qty+price);
+        const checked=i.checked?"✅":"⬜";
+        const detail=i.detail?` (${i.detail})`:"";
+        const qty=i.qty>1?` ${i.qty}×`:"";
+        const price=i.price!=null?` — ${fmtR(i.price*i.qty)}`:"";
+        lines.push(`${checked} ${i.name}${detail}${qty}${price}`);
       });
       lines.push("");
     });
-    lines.push("💰 *Total: "+fmtR(fullTotal)+"*");
-    if(notFoundItems>0)lines.push("❌ "+notFoundItems+" item"+(notFoundItems>1?"s":"")+" não encontrado"+(notFoundItems>1?"s":""));
-    return lines.join("\n");
+    lines.push(`💰 *Total: ${fmtR(fullTotal)}*`);
+    const text=lines.join("\n");
+    // wa.me funciona em mobile e desktop — abre direto o WhatsApp
+    const url=`https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url,"_blank","noopener,noreferrer");
   };
 
-
-  const shareWhatsApp=()=>{
-    if(!currentList)return;
-    const text=buildShareText();
-    window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
-  };
-
-
-  const{totalItems,checkedItems,fullTotal,notFoundItems}=getProgress(currentList);
+  const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
   const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
@@ -1827,18 +1757,15 @@ export default function App(){
       {/* ════════════════════════════════════
           HOME
       ════════════════════════════════════ */}
-      {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:299}}/>}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 32px",position:"relative",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
-            <div style={{position:"relative"}}>
-              <div style={{textAlign:"center",paddingTop:8,paddingBottom:8}}>
-                <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px"}}>🛍️</div>
-                <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:6}}>Tá na Lista</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.6}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
-              </div>
+            <div style={{position:"relative",textAlign:"center"}}>
+              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 14px"}}>🛍️</div>
+              <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:8}}>Tá na Lista</div>
+              <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.6}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
@@ -1892,9 +1819,9 @@ export default function App(){
                         </div>
                         <div style={{position:"relative"}}>
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
-                            style={{background:listMenuId===list.id?"#EDE9FE":"#F0F2F5",border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:16,color:listMenuId===list.id?"#5B21B6":"#4A5568",fontFamily:"inherit"}}>⋯</button>
+                            style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:200,overflow:"hidden"}}>
+                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",border:"1px solid #E0E4EA",zIndex:500,minWidth:200,overflow:"hidden"}}>
                               <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>💬 Compartilhar no WhatsApp</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
@@ -1939,66 +1866,34 @@ export default function App(){
               style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
           </div>
-          <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
-            {/* ORÇAMENTO */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
-              <label style={lbl}>💰 Orçamento</label>
-              {budgetConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
-                  <div>
-                    <div style={{fontSize:11,color:"#5B21B6",fontWeight:600}}>Limite definido</div>
-                    <div style={{fontSize:20,fontWeight:900,color:"#7C3AED"}}>{fmtR(parseBRL(budgetText)||0)}</div>
-                  </div>
-                  <button onClick={()=>setBudgetConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
-                </div>
-              ):(
-                <div>
-                  <div style={{display:"flex",gap:8}}>
-                    <div style={{position:"relative",flex:1}}>
-                      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:15,pointerEvents:"none"}}>R$</span>
-                      <input value={budgetText} onChange={e=>setBudgetText(e.target.value.replace(/[^0-9.,]/g,""))}
-                        onKeyDown={e=>e.key==="Enter"&&budgetText&&setBudgetConfirmed(true)}
-                        placeholder="0,00" inputMode="decimal"
-                        style={inp({paddingLeft:44})}
-                        onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-                    </div>
-                    <button onClick={()=>{if(budgetText)setBudgetConfirmed(true);}}
-                      style={{padding:"0 18px",borderRadius:10,background:budgetText?"#7C3AED":"#F0F2F5",border:"none",color:budgetText?"white":"#8896A8",fontWeight:700,fontSize:14,cursor:budgetText?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap"}}>OK</button>
-                  </div>
-                  <div style={{fontSize:12,color:"#B0B7C3",marginTop:6}}>Deixe em branco para não definir limite</div>
-                </div>
-              )}
+          <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:18,overflowY:"auto",paddingBottom:40}}>
+            <div>
+              <label style={lbl}>Nome da lista</label>
+              <input value={listName} onChange={e=>setListName(e.target.value)} placeholder="Ex: Compras da semana..."
+                style={inp()} onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
             </div>
-            {/* NOME DA LISTA */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
-              <label style={lbl}>📝 Nome da lista</label>
-              {listNameConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED"}}>{listName||"Minha lista"}</div>
-                  <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
-                </div>
-              ):(
-                <div style={{display:"flex",gap:8}}>
-                  <input value={listName} onChange={e=>setListName(e.target.value)}
-                    onKeyDown={e=>e.key==="Enter"&&setListNameConfirmed(true)}
-                    placeholder="Ex: Compras da semana..."
-                    style={inp({flex:1})}
-                    onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-                  <button onClick={()=>setListNameConfirmed(true)}
-                    style={{padding:"0 18px",borderRadius:10,background:"#7C3AED",border:"none",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>OK</button>
-                </div>
-              )}
-            </div>
-            {/* TIPO DE LISTA */}
-            <div style={{background:"white",borderRadius:14,padding:16,border:"1px solid #E0E4EA"}}>
-              <label style={lbl}>🏷️ Tipo de lista</label>
-              <div style={{position:"relative"}}>
-                <select value={listType} onChange={e=>setListType(e.target.value)}
-                  style={{...inp(),appearance:"none",cursor:"pointer",paddingRight:36}}>
-                  {LIST_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-                <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:12}}>▼</span>
+            <div>
+              <label style={lbl}>Tipo de lista</label>
+              <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
+                {LIST_TYPES.map(t=><button key={t.id} onClick={()=>setListType(t.id)} style={chip(listType===t.id)}>{t.label}</button>)}
               </div>
+            </div>
+            <div>
+              <label style={lbl}>Orçamento</label>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:budgetEnabled?10:0}}>
+                <div onClick={()=>setBudgetEnabled(!budgetEnabled)}
+                  style={{width:48,height:26,borderRadius:100,background:budgetEnabled?"#7C3AED":"#E0E4EA",position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}>
+                  <div style={{position:"absolute",width:20,height:20,borderRadius:"50%",background:"white",top:3,left:budgetEnabled?25:3,transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}/>
+                </div>
+                <span style={{fontSize:14,color:"#4A5568",fontWeight:600}}>Definir limite de gastos</span>
+              </div>
+              {budgetEnabled&&(
+                <div style={{position:"relative"}}>
+                  <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:16}}>R$</span>
+                  <input value={budgetText} onChange={e=>setBudgetText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="0,00" inputMode="decimal"
+                    style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+                </div>
+              )}
             </div>
             <div>
               <label style={lbl}>Adicionar itens</label>
@@ -2008,7 +1903,7 @@ export default function App(){
                   placeholder="Nome do produto..."
                   style={inp()} onFocus={e=>e.target.style.borderColor="#7C3AED"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
                 <button onClick={handleAddItem}
-                  style={{padding:"0 20px",height:52,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>Inserir</button>
+                  style={{width:52,height:52,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontSize:26,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>＋</button>
               </div>
               <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
@@ -2152,95 +2047,60 @@ export default function App(){
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
               <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>setShareModal(true)}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>💬 Enviar Lista</button>
             </div>
-            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
-                {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <span style={{color:"rgba(255,255,255,0.9)",fontSize:13,fontWeight:600}}>{checkedItems} de {totalItems} itens</span>
+                <span style={{fontWeight:900,fontSize:18,color:"white"}}>{fmtR(fullTotal)}</span>
               </div>
-              <div style={{height:10,background:"rgba(255,255,255,0.2)",borderRadius:5,overflow:"hidden",marginBottom:6}}>
-                <div style={{height:"100%",borderRadius:5,width:pct+"%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",transition:"width 0.4s, background 0.6s"}}/>
+              <div style={{height:6,background:"rgba(255,255,255,0.25)",borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",borderRadius:3,width:pct+"%",transition:"width 0.4s, background 0.6s"}}/>
               </div>
-              <div style={{textAlign:"center",fontSize:13,fontWeight:700}}>
-                {budget>0?(
-                  <span style={{color:budgetDiff<0?"#FCA5A5":"rgba(255,255,255,0.9)"}}>
-                    {budgetDiff<0?"⚠️ Acima em "+fmtR(Math.abs(budgetDiff)):"Saldo disponível: "+fmtR(budgetDiff)}
-                  </span>
-                ):(
-                  <span style={{color:"rgba(255,255,255,0.75)",fontSize:12}}>{checkedItems}/{totalItems} itens{notFoundItems>0?" · "+notFoundItems+" não encontrado"+(notFoundItems>1?"s":""):""}</span>
-                )}
-              </div>
+              {budget>0&&(
+                <div style={{fontSize:12,marginTop:6,color:budgetDiff<0?"#FF8080":budgetDiff<budget*0.15?"#FFE066":"rgba(255,255,255,0.85)"}}>
+                  {budgetDiff<0?`⚠️ Acima do orçamento em ${fmtR(Math.abs(budgetDiff))}`
+                    :budgetDiff<budget*0.15?`⚡ Restam ${fmtR(budgetDiff)} do orçamento`
+                    :`✅ Saldo: ${fmtR(budgetDiff)} de ${fmtR(budget)}`}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Painel orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(
             <div style={{margin:"10px 20px 0",background:"#FEF2F2",borderRadius:14,border:"2px solid #EF4444",overflow:"hidden"}}>
-              <div onClick={()=>setShowSuggestions(s=>!s)}
-                style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+              <div onClick={()=>setShowSuggestions(s=>!s)} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
                 <span style={{fontSize:18}}>⚠️</span>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:14,color:"#B91C1C"}}>Acima do orçamento em {fmtR(Math.abs(budgetDiff))}</div>
-                  <div style={{fontSize:12,color:"#EF4444",marginTop:1}}>Toque para ver sugestões de ajuste</div>
+                  <div style={{fontSize:12,color:"#EF4444"}}>Toque para ver sugestões de ajuste</div>
                 </div>
-                <span style={{fontSize:12,color:"#EF4444",transform:showSuggestions?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s",display:"inline-block"}}>▾</span>
+                <span style={{fontSize:12,color:"#EF4444",display:"inline-block",transform:showSuggestions?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s"}}>▾</span>
               </div>
               {showSuggestions&&(()=>{
                 const suggs=getSuggestions();
-                if(suggs.length===0)return <div style={{padding:"8px 14px 14px",fontSize:13,color:"#B91C1C"}}>Nenhum item comprado ainda para sugerir ajuste.</div>;
-                return(
-                  <div style={{borderTop:"1px solid #FECACA"}}>
-                    <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                      {(()=>{
-                      const totalEcon=suggs.reduce((s,i)=>s+(i.qty>1?i.price:i.price*i.qty),0);
-                      const stillOver=totalEcon<Math.abs(budgetDiff);
-                      return suggs[0]?.tipo==="reduzir"
-                        ?"Reduza a quantidade destes itens:"+(stillOver?" (pode não ser suficiente)":"")
-                        :"Considere remover estes itens:"+(stillOver?" (pode não ser suficiente)":"");
-                    })()}
-                    </div>
-                    {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-                            {tipo==="remover"&&<span style={{fontSize:10,fontWeight:700,background:"#FEF2F2",color:"#B91C1C",padding:"2px 6px",borderRadius:100,border:"1px solid #FECACA",flexShrink:0}}>supérfluo</span>}
-                          </div>
-                          <div style={{fontSize:12,color:"#8896A8",marginTop:2}}>
-                            {qty>1?`${qty} un · ${fmtR(price)}/un · economiza ${fmtR(price)}/un`:`${fmtR(price*qty)} total`}
-                          </div>
-                        </div>
-                        {qty>1?(
-                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                            <button onClick={()=>quickAdjust(ci,ii,-1)}
-                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
-                            <span style={{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}}>{qty}</span>
-                            <button onClick={()=>quickAdjust(ci,ii,1)}
-                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
-                          </div>
-                        ):(
-                          <button onClick={()=>{
-                            const l=JSON.parse(JSON.stringify(currentList));
-                            l.categories[ci].items.splice(ii,1);
-                            if(l.categories[ci].items.length===0)l.categories.splice(ci,1);
-                            updateList(l);showToast("🗑 "+name+" removido");
-                          }}
-                            style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                            🗑 Remover
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <div style={{padding:"6px 14px 8px",fontSize:11,color:"#EF4444",fontStyle:"italic"}}>
-                      Sugestões baseadas nos itens já comprados
-                    </div>
-                  </div>
+                if(!suggs||suggs.length===0)return React.createElement('div',{style:{padding:"8px 14px 14px",fontSize:13,color:"#B91C1C"}},"Nenhuma sugestão disponível.");
+                return React.createElement('div',{style:{borderTop:"1px solid #FECACA"}},
+                  React.createElement('div',{style:{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase"}},
+                    suggs[0]?.tipo==="reduzir"?"Reduza a quantidade:":"Considere remover:"
+                  ),
+                  suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>
+                    React.createElement('div',{key:i,style:{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"white"}},
+                      React.createElement('div',{style:{flex:1,minWidth:0}},
+                        React.createElement('div',{style:{fontWeight:700,fontSize:14,color:"#1A202C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},name),
+                        React.createElement('div',{style:{fontSize:12,color:"#8896A8"}},qty>1?qty+" un · "+fmtR(price)+"/un":fmtR(price*qty)+" total")
+                      ),
+                      qty>1?React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6}},
+                        React.createElement('button',{onClick:()=>quickAdjust(ci,ii,-1),style:{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}},"−"),
+                        React.createElement('span',{style:{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}},qty),
+                        React.createElement('button',{onClick:()=>quickAdjust(ci,ii,1),style:{width:30,height:30,borderRadius:"50%",border:"2px solid #7C3AED",background:"#EDE9FE",color:"#5B21B6",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}},"+")
+                      ):React.createElement('button',{onClick:()=>{const l=JSON.parse(JSON.stringify(currentList));l.categories[ci].items.splice(ii,1);if(l.categories[ci].items.length===0)l.categories.splice(ci,1);updateList(l);showToast("🗑 "+name+" removido");},style:{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}},"🗑 Remover")
+                    )
+                  )
                 );
               })()}
             </div>
           )}
-
           {/* Search */}
           <div style={{margin:"14px 20px 0",position:"relative"}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#C0C8D4"}}>🔍</span>
@@ -2255,16 +2115,8 @@ export default function App(){
           </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
-            {[...currentList.categories]
-              .map((cat,origIdx)=>({cat,origIdx}))
-              .sort((a,b)=>{
-                const aDone=a.cat.items.length>0&&a.cat.items.every(i=>i.checked||i.notFound);
-                const bDone=b.cat.items.length>0&&b.cat.items.every(i=>i.checked||i.notFound);
-                if(aDone===bDone)return a.origIdx-b.origIdx;
-                return aDone?1:-1;
-              })
-              .map(({cat,origIdx:ci})=>{
+          <div style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
+            {currentList.categories.map((cat,ci)=>{
               const theme=getCatTheme(cat.name);
               const done=cat.items.filter(i=>i.checked).length;
               const total=cat.items.length;
@@ -2311,7 +2163,7 @@ export default function App(){
 
                         return(
                           <div key={ii}
-                            onClick={()=>{openItemModal(ci,realII);if(search)setSearch("");setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},200);}}
+                            onClick={()=>{openItemModal(ci,realII);if(search)setSearch("");}}
                             style={{
                               display:"flex",alignItems:"center",gap:12,
                               padding:"13px 14px",
@@ -2328,7 +2180,7 @@ export default function App(){
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked&&!item.notFound)?"line-through":item.notFound?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":item.notFound?"#9E9E9E":"inherit",textDecorationThickness:item.checked&&!item.notFound?"2px":"auto",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"#9E9E9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>extra</span>}
                                 {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
@@ -2411,9 +2263,8 @@ export default function App(){
             <div style={{display:"flex",gap:10}}>
               <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:10,background:"#FFE8E8",border:"none",color:"#FF4444",fontWeight:700,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
-                disabled={!mNotFound&&!mPriceText.trim()}
-                style={{flex:1,padding:14,borderRadius:10,background:mNotFound?"#EF4444":`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mNotFound&&!mPriceText.trim())?0.5:1,cursor:(!mNotFound&&!mPriceText.trim())?"not-allowed":"pointer"}}>
-                {mNotFound?"✗ Não encontrado":!mPriceText.trim()?"Informe o preço":"✓ Confirmar"}
+                style={{flex:1,padding:14,borderRadius:10,background:mNotFound?"#EF4444":`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
+                {mNotFound?"✗ Não encontrado":"✓ Confirmar"}
               </button>
             </div>
           </ModalSheet>
@@ -2424,22 +2275,12 @@ export default function App(){
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Item extra</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:14}}>A IA classifica automaticamente ao inserir</div>
-          <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <input value={exName} onChange={e=>setExName(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){setIsExtraItem(true);openProductDialog(exName.trim());setExtraModal(false);}}}
-              placeholder="Nome do produto..."
+          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
+          <div style={{marginBottom:12}}>
+            <label style={lbl}>Produto</label>
+            <input value={exName} onChange={e=>setExName(e.target.value)} placeholder="Nome do produto..."
               style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-            <button onClick={()=>{if(exName.trim()){setIsExtraItem(true);openProductDialog(exName.trim());setExtraModal(false);}}}
-              disabled={!exName.trim()}
-              style={{padding:"0 16px",borderRadius:10,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#8896A8",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
-              Incluir IA
-            </button>
           </div>
-          <div style={{background:"#FFF3E0",borderRadius:10,padding:"8px 12px",fontSize:12,color:"#E65100",marginBottom:14}}>
-            💡 Toque em "Incluir IA" para que a IA sugira marca, tipo e tamanho.
-          </div>
-
           <div style={{display:"flex",gap:10,marginBottom:12}}>
             <div style={{flex:1}}>
               <label style={lbl}>Quantidade</label>
@@ -2471,74 +2312,18 @@ export default function App(){
       {/* MODAL: SHARE */}
       {shareModal&&(
         <ModalSheet onClose={()=>setShareModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:16,textAlign:"center"}}>Escolha como enviar a lista</div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              WhatsApp
-            </button>
-            <button onClick={()=>{
-              setShareModal(false);
-              const text=buildShareText();
-              window.open("https://telegram.me/share/url?url="+encodeURIComponent("https://tanalista-rho.vercel.app")+"&text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
-            }}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-              Telegram
-            </button>
-            <button onClick={()=>{
-              setShareModal(false);
-              const text=buildShareText();
-              if(navigator.share){navigator.share({title:"Tá na Lista — "+currentList?.name,text});}
-              else{navigator.clipboard?.writeText(text);showToast("📋 Lista copiada!");}
-            }}
-              style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              🛍️ Compartilhar via app
-            </button>
+          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>↗ Compartilhar lista</div>
+          <div style={{fontSize:14,color:"#8896A8",marginBottom:8}}>A lista será enviada formatada com todas as categorias e valores.</div>
+          <div style={{background:"#E8F5E9",borderRadius:10,padding:"12px 14px",marginBottom:20,fontSize:13,color:"#2E7D32",lineHeight:1.6}}>
+            📱 Quem receber o link pelo WhatsApp consegue visualizar a lista completa diretamente na conversa — sem precisar instalar nada.
           </div>
+          <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
+            style={{...btnG,background:"#25D366",boxShadow:"0 4px 16px rgba(37,211,102,0.35)"}}>
+            💬 Enviar pelo WhatsApp
+          </button>
         </ModalSheet>
       )}
 
-
-      {/* POPUP: INSERIR PREÇO? */}
-      {checkPopup&&currentList&&(()=>{
-        const item=currentList.categories[checkPopup.ci]?.items[checkPopup.ii];
-        if(!item)return null;
-        return(
-          <div onClick={()=>setCheckPopup(null)}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-            <div onClick={e=>e.stopPropagation()}
-              style={{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center"}}>
-              <div style={{fontSize:32,marginBottom:12}}>🛒</div>
-              <div style={{fontWeight:800,fontSize:17,color:"#1A202C",marginBottom:6}}>{item.name}</div>
-              <div style={{fontSize:14,color:"#8896A8",marginBottom:20}}>Deseja inserir o preço deste item?</div>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>{
-                  const l=JSON.parse(JSON.stringify(currentList));
-                  l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
-                  updateList(l);
-                  setCheckPopup(null);
-                  setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
-                  const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
-                  if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
-                }}
-                  style={{flex:1,padding:14,borderRadius:12,background:"#F0F2F5",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>
-                  Não
-                </button>
-                <button onClick={()=>{
-                  setCheckPopup(null);
-                  openItemModal(checkPopup.ci,checkPopup.ii);
-                }}
-                  style={{flex:1,padding:14,borderRadius:12,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
-                  Sim
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── MODAL: COLAR TEXTO ── */}
       {showPasteModal&&(
