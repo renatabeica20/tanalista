@@ -1,0 +1,17 @@
+{
+  "name": "Tá na Lista",
+  "short_name": "Tá na Lista",
+  "description": "Organize suas compras com IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#7C3AED",
+  "theme_color": "#7C3AED",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
