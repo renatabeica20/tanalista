@@ -1510,6 +1510,18 @@ export default function App(){
       checked: false,
       notFound: false
     };
+    if(isExtraItem&&currentList){
+      const l=JSON.parse(JSON.stringify(currentList));
+      let cat=l.categories.find(c=>c.name==="Itens Extras");
+      if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
+      cat.items.push({...newItem,detail:[newItem.marca,newItem.tipo,newItem.embalagem].filter(Boolean).join(" ")});
+      updateList(l);
+      setIsExtraItem(false);
+      setItemDialog(null);
+      setCurrentInput("");
+      showToast("⭐ "+itemDialog.name+" adicionado como extra!");
+      return;
+    }
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -1759,7 +1771,7 @@ export default function App(){
   };
 
 
-  const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
+  const{totalItems,checkedItems,fullTotal,notFoundItems}=getProgress(currentList);
   const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
