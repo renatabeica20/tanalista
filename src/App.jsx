@@ -13,7 +13,7 @@ const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE |
 const DEFAULT_SUPABASE_URL = "https://zkuihomwrnqctutswszq.supabase.co";
 
 function normalizeSupabaseUrl(value) {
-  let url = String(value || DEFAULT_SUPABASE_URL).trim();
+  let url = String(value || "").trim();
 
   // Aceita tanto a URL base quanto a URL copiada da aba Data API.
   url = url
@@ -26,7 +26,17 @@ function normalizeSupabaseUrl(value) {
     url = `https://${url}`;
   }
 
-  return url;
+  // Se a variável vier incompleta, com reticências, ou com valor inválido,
+  // usa a URL oficial do projeto para evitar ERR_NAME_NOT_RESOLVED.
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith(".supabase.co") || parsed.hostname.includes("...")) {
+      return DEFAULT_SUPABASE_URL;
+    }
+    return parsed.origin;
+  } catch {
+    return DEFAULT_SUPABASE_URL;
+  }
 }
 
 const SUPABASE_URL = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
@@ -47,7 +57,7 @@ function supabaseHeaders(extra = {}) {
 
 async function createSharedListRecord(list) {
   if (!hasSupabaseConfig()) {
-    throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.");
+    throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_ANON_KEY no Vercel.");
   }
 
   const payload = {
@@ -57,11 +67,18 @@ async function createSharedListRecord(list) {
     data: list,
   };
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
-    method: "POST",
-    headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload),
-  });
+  const endpoint = `${SUPABASE_URL}/rest/v1/shared_lists`;
+  let res;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      mode: "cors",
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    throw new Error(`Falha de rede ao acessar Supabase em ${endpoint}. Confira se VITE_SUPABASE_URL está como ${DEFAULT_SUPABASE_URL} e se houve reimplantação no Vercel. Detalhe: ${err?.message || err}`);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -2050,7 +2067,7 @@ export default function App(){
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
       console.error("Erro ao compartilhar no WhatsApp:",err);
-      showToast("⚠️ Não foi possível gerar o link curto. Verifique as variáveis do Supabase e as permissões da tabela.",7500);
+      showToast("⚠️ Não foi possível gerar o link curto. Abra o Console para ver o erro técnico do Supabase.",7500);
     }
   };
 
