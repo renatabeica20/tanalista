@@ -1,6 +1,42 @@
 const API_URL = "https://api.anthropic.com/v1/messages";
 
+// 🔥 CLASSIFICAÇÃO LOCAL (rápida e confiável)
+function classificarLocal(nome) {
+  const item = nome.toLowerCase();
+
+  if (item.includes("arroz") || item.includes("feijão")) {
+    return {
+      categoria: "mercearia",
+      tipo: "alimento",
+      subtipo: "grãos"
+    };
+  }
+
+  if (item.includes("macarrão")) {
+    return {
+      categoria: "mercearia",
+      tipo: "alimento",
+      subtipo: "massas"
+    };
+  }
+
+  if (item.includes("leite")) {
+    return {
+      categoria: "laticínios",
+      tipo: "bebida",
+      subtipo: "leite"
+    };
+  }
+
+  return null;
+}
+
 export async function classificarItem(nomeItem) {
+  // ✅ tenta primeiro local
+  const local = classificarLocal(nomeItem);
+  if (local) return local;
+
+  // 🌐 fallback IA
   try {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -16,11 +52,9 @@ export async function classificarItem(nomeItem) {
           {
             role: "user",
             content: `
-Classifique o item abaixo em JSON válido.
+Responda SOMENTE com JSON válido.
 
 Item: "${nomeItem}"
-
-Responda SOMENTE com JSON.
 
 Formato:
 {
@@ -35,29 +69,24 @@ Formato:
     });
 
     const data = await response.json();
-
-    // 🔍 texto retornado pela IA
     const texto = data?.content?.[0]?.text || "";
 
-    // 🔥 extrai JSON mesmo que venha com texto junto
     const match = texto.match(/\{[\s\S]*\}/);
 
     if (!match) {
-      throw new Error("JSON não encontrado na resposta da IA");
+      throw new Error("JSON não encontrado");
     }
 
-    let json;
-
-    try {
-      json = JSON.parse(match[0]);
-    } catch {
-      throw new Error("JSON inválido retornado pela IA");
-    }
-
-    return json;
+    return JSON.parse(match[0]);
 
   } catch (error) {
-    console.error("Erro na classificação:", error);
-    return null;
+    console.error("Erro IA:", error);
+
+    // 🔥 fallback final (evita erro no app)
+    return {
+      categoria: "outros",
+      tipo: "outros",
+      subtipo: "outros"
+    };
   }
 }
