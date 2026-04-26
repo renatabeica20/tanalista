@@ -1457,10 +1457,10 @@ export default function App(){
   const [installPrompt,setInstallPrompt]=useState(null);
   const [installAvailable,setInstallAvailable]=useState(false);
 
-  const showToast=useCallback((msg)=>{
+  const showToast=useCallback((msg,duration=2800)=>{
     clearTimeout(toastTimer.current);
     setToast({show:true,msg});
-    toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),2800);
+    toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
   const saveLists=(nl)=>{setLists(nl);localStorage.setItem("tnl_lists",JSON.stringify(nl));};
@@ -1501,7 +1501,7 @@ export default function App(){
 
   const installApp=async()=>{
     if(!installPrompt){
-      showToast("No celular, toque no menu do navegador e escolha Adicionar à Tela de Início");
+      showToast("Para adicionar à Tela de Início, toque no menu do navegador e escolha Adicionar à Tela de Início.",6500);
       return;
     }
     installPrompt.prompt();
@@ -1831,7 +1831,7 @@ export default function App(){
       )}
 
       {/* TOAST */}
-      <div style={{position:"fixed",bottom:100,left:"50%",transform:`translateX(-50%) translateY(${toast.show?0:16}px)`,background:"#1A202C",color:"white",padding:"12px 20px",borderRadius:100,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"nowrap",pointerEvents:"none"}}>
+      <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#1A202C",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 14px 30px rgba(0,0,0,0.25)",pointerEvents:"none"}}>
         {toast.msg}
       </div>
 
@@ -1874,7 +1874,7 @@ export default function App(){
             <div style={{position:"relative",textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
               <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
-              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontStyle:"italic"}}>Organize, Compartilhe sua Lista e Controle o Orçamento</div>
+              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,fontStyle:"italic"}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
