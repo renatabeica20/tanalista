@@ -36,12 +36,20 @@ Formato:
 
     const data = await response.json();
 
+    // 🔍 texto retornado pela IA
     const texto = data?.content?.[0]?.text || "";
+
+    // 🔥 extrai JSON mesmo que venha com texto junto
+    const match = texto.match(/\{[\s\S]*\}/);
+
+    if (!match) {
+      throw new Error("JSON não encontrado na resposta da IA");
+    }
 
     let json;
 
     try {
-      json = JSON.parse(texto);
+      json = JSON.parse(match[0]);
     } catch {
       throw new Error("JSON inválido retornado pela IA");
     }
