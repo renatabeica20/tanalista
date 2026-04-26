@@ -1454,6 +1454,7 @@ export default function App(){
   const [shareModal,setShareModal]=useState(false);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
+  const [addExtraToCurrent,setAddExtraToCurrent]=useState(false);
 
   const showToast=useCallback((msg)=>{
     clearTimeout(toastTimer.current);
@@ -1516,6 +1517,7 @@ export default function App(){
 
   const confirmDialog = () => {
     const embalagem = dlgPeso||dlgVolume||"";
+    const detail=[dlgMarca,dlgTipo,embalagem].filter(Boolean).join(" · ");
     const newItem = {
       name: itemDialog.name,
       marca: dlgMarca||"",
@@ -1523,12 +1525,27 @@ export default function App(){
       embalagem,
       peso: dlgPeso,
       volume: dlgVolume,
+      detail,
       qty: dlgQty,
       unit: dlgUnit,
       price: null,
       checked: false,
       notFound: false
     };
+    if (addExtraToCurrent && currentList) {
+      const l=JSON.parse(JSON.stringify(currentList));
+      let cat=l.categories.find(c=>c.name==="Itens Extras");
+      if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
+      cat.items.push(newItem);
+      updateList(l);
+      setAddExtraToCurrent(false);
+      setExtraModal(false);
+      setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
+      setItemDialog(null);
+      showToast("⭐ Item extra adicionado!");
+      setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
+      return;
+    }
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -1715,15 +1732,11 @@ export default function App(){
     return selected.length>0?selected:all.slice(0,5);
   };
 
-  const addExtra=()=>{
-    if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
-    const l=JSON.parse(JSON.stringify(currentList));
-    let cat=l.categories.find(c=>c.name==="Itens Extras");
-    if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-    cat.items.push({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false});
-    updateList(l);setExtraModal(false);
-    setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
-    showToast("⭐ Item extra adicionado!");
+  const addExtra=async()=>{
+    const name=exName.trim();
+    if(!name){showToast("⚠️ Digite o nome");return;}
+    setAddExtraToCurrent(true);
+    await openProductDialog(name);
   };
 
   const deleteList=(id)=>{saveLists(lists.filter(l=>l.id!==id));setConfirmDelete(null);showToast("🗑 Lista excluída");};
@@ -1847,7 +1860,7 @@ export default function App(){
             {lists.length===0?(
               <div style={{textAlign:"center",padding:"32px 20px",color:"#8896A8"}}>
                 <div style={{fontSize:48,marginBottom:12}}>🛒</div>
-                <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no <strong>+</strong> para criar!</p>
+                <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no módulo <strong>Compras</strong> para criar!</p>
               </div>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1856,7 +1869,7 @@ export default function App(){
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   return(
-                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"hidden"}}>
+                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"visible",position:"relative"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
                         style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",cursor:"pointer"}}>
                         <div style={{fontSize:26,flexShrink:0}}>{icons[list.type]||"📦"}</div>
@@ -1876,10 +1889,8 @@ export default function App(){
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
                             style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:210,overflow:"hidden"}}>
-                              <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>💬 Compartilhar no WhatsApp</button>
-                              <div style={{height:1,background:"#F0F2F5"}}/>
-                              <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
+                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:190,overflow:"hidden"}}>
+                              <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Compartilhar</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setConfirmDelete(list.id);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#FF4444",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🗑 Excluir lista</button>
                             </div>
@@ -1920,6 +1931,7 @@ export default function App(){
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+            <div style={{width:36,height:36,flexShrink:0}} />
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
@@ -1956,7 +1968,7 @@ export default function App(){
               <label style={lbl}>📝 Nome da lista</label>
               {listNameConfirmed?(
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#EDE9FE",borderRadius:10,padding:"10px 14px"}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED"}}>{listName||"Minha lista"}</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#7C3AED",flex:1,textAlign:"center"}}>{listName||"Minha lista"}</div>
                   <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#5B21B6",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
                 </div>
               ):(
@@ -1994,7 +2006,7 @@ export default function App(){
               </div>
               <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
-                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2px solid #7C3AED",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2.5px dashed #7C3AED",boxShadow:"0 0 0 4px rgba(124,58,237,0.08)",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 📋 Cole sua lista aqui
               </button>
             </div>
@@ -2033,7 +2045,7 @@ export default function App(){
 
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
-        <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}}>
+        <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");setAddExtraToCurrent(false);}}>
           <div style={{fontWeight:900,fontSize:20,color:"#1A202C",marginBottom:4}}>🛒 {itemDialog.name}</div>
           <div style={{fontSize:13,color:"#8896A8",marginBottom:8}}>{dlgLoading?"":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
           {dlgLoading&&(
@@ -2112,7 +2124,7 @@ export default function App(){
 
           </>)}
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
+            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");setAddExtraToCurrent(false);}} style={{...btnGr,flex:1}}>Cancelar</button>
             {!dlgLoading&&(
               <button onClick={confirmDialog}
                 style={{flex:2,padding:14,borderRadius:10,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
@@ -2129,12 +2141,12 @@ export default function App(){
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"linear-gradient(135deg,#7C3AED,#6D28D9)",padding:"20px 20px 24px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,position:"relative"}}>
               <button onClick={()=>setScreen("home")}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>←</button>
+              <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",fontWeight:900,fontSize:20,color:"white",maxWidth:"46%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center",pointerEvents:"none"}}>{currentList.name}</div>
               <button onClick={()=>setShareModal(true)}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",zIndex:2}}>💬 Enviar Lista</button>
             </div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -2304,7 +2316,7 @@ export default function App(){
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"3px",textDecorationSkipInk:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>extra</span>}
                                 {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
@@ -2399,50 +2411,25 @@ export default function App(){
       {/* MODAL: EXTRA */}
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Item extra</div>
-          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
-          <div style={{marginBottom:10}}>
+          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Adicionar item extra</div>
+          <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Digite o produto; em seguida, a IA mostrará marca, tipo, tamanho e quantidade antes de incluir na lista.</div>
+          <div style={{marginBottom:16}}>
             <label style={lbl}>Produto</label>
             <div style={{display:"flex",gap:8}}>
               <input value={exName} onChange={e=>setExName(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim())addExtra();}}
                 placeholder="Nome do produto..."
                 style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+              <button onClick={addExtra}
                 disabled={!exName.trim()}
                 style={{padding:"0 16px",borderRadius:10,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#8896A8",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
-                Inserir IA
+                Incluir
               </button>
             </div>
-            <div style={{fontSize:12,color:"#E65100",marginTop:6,background:"#FFF3E0",borderRadius:8,padding:"6px 10px"}}>
-              💡 A IA vai sugerir marca, tipo e tamanho antes de adicionar.
-            </div>
           </div>
-          <div style={{display:"flex",gap:10,marginBottom:12}}>
-            <div style={{flex:1}}>
-              <label style={lbl}>Quantidade</label>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setExQty(q=>Math.max(1,q-1))} style={{...qBtn,width:38,height:38,fontSize:18}}>−</button>
-                <span style={{fontWeight:800,fontSize:20,minWidth:28,textAlign:"center"}}>{exQty}</span>
-                <button onClick={()=>setExQty(q=>q+1)} style={{...qBtn,width:38,height:38,fontSize:18}}>＋</button>
-              </div>
-            </div>
-            <div style={{flex:1}}>
-              <label style={lbl}>Unidade</label>
-              <select value={exUnit} onChange={e=>setExUnit(e.target.value)} style={{...inp(),padding:"10px 12px",height:44}}>
-                {["unidade","pacote","caixa","kg","g","L","ml","fardo","lata","garrafa","dúzia","par","peça"].map(u=><option key={u}>{u}</option>)}
-              </select>
-            </div>
+          <div style={{fontSize:12,color:"#E65100",background:"#FFF3E0",borderRadius:10,padding:"10px 12px",lineHeight:1.5}}>
+            💡 O item será incluído em <strong>Itens Extras</strong> após a confirmação dos detalhes sugeridos pela IA.
           </div>
-          <div style={{marginBottom:16}}>
-            <label style={lbl}>Preço (R$) — opcional</label>
-            <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#8896A8",fontSize:16,pointerEvents:"none"}}>R$</span>
-              <input value={exPrice} onChange={e=>setExPrice(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="0,00" inputMode="decimal"
-                style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
-            </div>
-          </div>
-          <button onClick={addExtra} style={btnG}>＋ Adicionar à lista</button>
         </ModalSheet>
       )}
 
@@ -2496,7 +2483,7 @@ export default function App(){
               else{navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>showToast("📋 Lista copiada!"));}
             }}
               style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              🛍️ Outros apps / Copiar
+              🛍️ Enviar para quem tem o app
             </button>
           </div>
         </ModalSheet>
