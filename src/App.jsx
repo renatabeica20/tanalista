@@ -1591,6 +1591,35 @@ export default function App(){
     }catch{return null;}
   };
 
+  const encodeListForUrl=(list)=>{
+    const json=JSON.stringify(list||{});
+    const bytes=new TextEncoder().encode(json);
+    let binary="";
+    bytes.forEach(b=>{binary+=String.fromCharCode(b);});
+    return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+  };
+
+  const decodeListFromUrl=(value)=>{
+    const normalized=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+    const padded=normalized+"=".repeat((4-normalized.length%4)%4);
+    const binary=atob(padded);
+    const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  };
+
+  const makeEmbeddedShareUrl=(list)=>{
+    const origin=(window.location?.origin&&window.location.origin!=="null")?window.location.origin:String(window.location?.href||"").split("?")[0].split("#")[0];
+    return `${origin}/?listaData=${encodeURIComponent(encodeListForUrl(list))}`;
+  };
+
+  const extractEmbeddedListFromUrl=()=>{
+    try{
+      const url=new URL(window.location.href);
+      const data=url.searchParams.get("listaData");
+      return data?decodeListFromUrl(data):null;
+    }catch{return null;}
+  };
+
   const buildShareText=(list,link)=>{
     const{fullTotal,notFoundItems}=getProgress(list);
     const lines=[];
@@ -1624,33 +1653,49 @@ export default function App(){
 
   const publishSharedList=async(list)=>{
     if(!list)throw new Error("Lista não encontrada.");
-    if(list.sharedId)return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list};
+    if(list.sharedId)return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
 
-    const record=await createSharedListRecord(list);
-    if(!record?.id)throw new Error("Não foi possível gerar o link da lista.");
-
-    const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
-    setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
-    saveLists(lists.map(l=>l.id===list.id?updated:l));
-    return{sharedId:record.id,link:makeShareUrl(record.id),list:updated};
+    try{
+      const record=await createSharedListRecord(list);
+      if(!record?.id)throw new Error("Não foi possível gerar o link da lista.");
+      const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
+      setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
+      saveLists(lists.map(l=>l.id===list.id?updated:l));
+      return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
+    }catch(err){
+      console.warn("Falha ao salvar no Supabase; usando link incorporado.",err);
+      const embedded={...list,sharedAt:new Date().toISOString(),isShared:true};
+      return{sharedId:null,link:makeEmbeddedShareUrl(embedded),list:embedded,mode:"embedded"};
+    }
   };
 
   const loadSharedListFromUrl=useCallback(async()=>{
+    const embedded=extractEmbeddedListFromUrl();
     const sharedId=extractSharedIdFromUrl();
-    if(!sharedId)return;
+    if(!sharedId&&!embedded)return;
     setLoading(true);
     try{
-      const record=await getSharedListRecord(sharedId);
-      if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
-      const received={
-        ...record.data,
-        id:record.data.id||("shared-"+sharedId),
-        sharedId,
-        isShared:true,
-        receivedAt:new Date().toISOString(),
-      };
+      let received;
+      if(embedded){
+        received={
+          ...embedded,
+          id:embedded.id||("embedded-"+Date.now()),
+          isShared:true,
+          receivedAt:new Date().toISOString(),
+        };
+      }else{
+        const record=await getSharedListRecord(sharedId);
+        if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+        received={
+          ...record.data,
+          id:record.data.id||("shared-"+sharedId),
+          sharedId,
+          isShared:true,
+          receivedAt:new Date().toISOString(),
+        };
+      }
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const already=existing.some(l=>l.sharedId===sharedId||l.id===received.id);
+      const already=existing.some(l=>(sharedId&&l.sharedId===sharedId)||l.id===received.id);
       if(!already){
         const nl=[received,...existing];
         setLists(nl);
