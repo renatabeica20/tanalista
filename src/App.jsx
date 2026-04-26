@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 // ── API Anthropic integrada ────────────────────────────────────────────────
 // Observação: em produção, o ideal é chamar a Anthropic por um backend/proxy.
@@ -1454,6 +1454,8 @@ export default function App(){
   const [shareModal,setShareModal]=useState(false);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
+  const [installPrompt,setInstallPrompt]=useState(null);
+  const [installAvailable,setInstallAvailable]=useState(false);
 
   const showToast=useCallback((msg)=>{
     clearTimeout(toastTimer.current);
@@ -1473,6 +1475,27 @@ export default function App(){
     const appUrl=window.location.href.split("#")[0];
     const text=`Conheça o app Tá na Lista: ${appUrl}`;
     window.open("https://wa.me/?text="+encodeURIComponent(text),"_blank","noopener,noreferrer");
+  };
+
+  useEffect(()=>{
+    const handler=(event)=>{
+      event.preventDefault();
+      setInstallPrompt(event);
+      setInstallAvailable(true);
+    };
+    window.addEventListener("beforeinstallprompt",handler);
+    return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
+
+  const installApp=async()=>{
+    if(!installPrompt){
+      showToast("No celular, toque no menu do navegador e escolha Adicionar à Tela de Início");
+      return;
+    }
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(()=>null);
+    setInstallPrompt(null);
+    setInstallAvailable(false);
   };
 
   // ── Dialog de produto ─────────────────────────────────────────────────
@@ -1839,15 +1862,10 @@ export default function App(){
             <div style={{position:"relative",textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
               <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
-              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
+              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontStyle:"italic"}}>Organize, Compartilhe sua Lista e Controle o Orçamento</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
-            <button onClick={shareAppWhatsApp}
-              style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)",marginBottom:22}}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              Compartilhar link do app
-            </button>
             <div style={{fontWeight:800,fontSize:12,color:"#8896A8",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
@@ -1880,7 +1898,7 @@ export default function App(){
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   return(
-                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"hidden"}}>
+                    <div key={list.id} style={{background:"white",borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.08)",overflow:"visible",position:"relative"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
                         style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",cursor:"pointer"}}>
                         <div style={{fontSize:26,flexShrink:0}}>{icons[list.type]||"📦"}</div>
@@ -1915,6 +1933,16 @@ export default function App(){
                 })}
               </div>
             )}
+            <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
+                          <button onClick={shareAppWhatsApp}
+                            style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)"}}>
+                            💬 Link do app
+                          </button>
+                          <button onClick={installApp}
+                            style={{width:"100%",padding:"13px 16px",borderRadius:14,background:"white",border:"1px solid #D9DDE6",color:"#4C1D95",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                            📲 Adicionar à Tela de Início
+                          </button>
+                        </div>
           </div>
 
         </div>
