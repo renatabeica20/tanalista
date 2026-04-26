@@ -1,68 +1,92 @@
+// api/anthropic.js — Vercel Serverless Function
+// Suporta tanto chamadas de texto quanto de visão (imagem)
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY não configurada no servidor." });
+  }
+
+  const { prompt, system, maxTokens = 1024, model = "claude-3-5-haiku-latest", image } = req.body || {};
+
+  if (!prompt) {
+    return res.status(400).json({ error: "prompt é obrigatório." });
+  }
+
+  // Montar o conteúdo da mensagem
+  let content;
+  if (image && image.data && image.mediaType) {
+    // Chamada com visão (foto da lista)
+    content = [
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: image.mediaType,
+          data: image.data,
+        },
+      },
+      {
+        type: "text",
+        text: prompt,
+      },
+    ];
+  } else {
+    // Chamada de texto simples
+    content = prompt;
+  }
+
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content }],
+  };
+
+  if (system) {
+    body.system = system;
   }
 
   try {
-    const { image } = req.body;
-
-    if (!image) {
-      return res.status(400).json({ error: 'Imagem não enviada' });
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1000,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: 'image/jpeg',
-                  data: image.replace(/^data:image\/\w+;base64,/, '')
-                }
-              },
-              {
-                type: 'text',
-                text: `
-Leia esta lista de compras manuscrita e retorne SOMENTE um JSON no formato:
-
-[
-  { "nome": "arroz", "quantidade": 2, "unidade": "pacote" },
-  { "nome": "feijão", "quantidade": 2, "unidade": "pacote" }
-]
-
-Regras:
-- Corrigir erros de leitura
-- Ignorar rabiscos
-- Normalizar nomes
-- Não retornar texto fora do JSON
-`
-              }
-            ]
-          }
-        ]
-      })
+      body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    const data = await upstream.json();
 
-    const text = data?.content?.[0]?.text || '';
+    if (!upstream.ok) {
+      console.error("Anthropic API error:", data);
+      return res.status(upstream.status).json({ error: data?.error?.message || "Erro na API Anthropic" });
+    }
 
-    return res.status(200).json({ text });
+    const text = data?.content?.[0]?.text || "";
 
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao processar imagem' });
+    // Tentar extrair JSON da resposta
+    let json = null;
+    try {
+      // Remover markdown se houver
+      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      json = JSON.parse(cleaned);
+    } catch {
+      // Tentar encontrar JSON no texto
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { json = JSON.parse(match[0]); } catch { /* noop */ }
+      }
+    }
+
+    return res.status(200).json({ text, json });
+  } catch (err) {
+    console.error("Erro no proxy Anthropic:", err);
+    return res.status(500).json({ error: "Erro interno: " + err.message });
   }
 }
