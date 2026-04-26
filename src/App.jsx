@@ -2094,7 +2094,7 @@ export default function App(){
 
   // ─────────────────────────────────────────────────────────────────────
   return(
-    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#F9FAFB",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative"}}>
+    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative"}}>
 
       {/* LOADING */}
       {loading&&(
@@ -2143,13 +2143,13 @@ export default function App(){
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(135deg,#6D28D9 0%,#8B5CF6 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
-            <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
+          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"48px 24px 34px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
+            <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
+            <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(139,92,246,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{fontWeight:800,fontSize:30,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:12}}>Tá na Lista</div>
-              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.22)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 12px"}}>🛍️</div>
-              <div style={{color:"rgba(255,255,255,0.88)",fontSize:12,lineHeight:1.3,fontStyle:"italic"}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
+              <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:14}}>Tá na Lista</div>
+              <div style={{width:74,height:74,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"1px solid rgba(109,40,217,0.20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 18px 40px rgba(109,40,217,0.26)"}}>🛍️</div>
+              <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
@@ -2164,7 +2164,7 @@ export default function App(){
                 {icon:"🏢",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
-                  style={{background:"#FFFFFF",borderRadius:20,padding:"18px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 8px 24px rgba(17,24,39,0.06)",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
+                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
                   <div style={{fontSize:30,marginBottom:10}}>{m.icon}</div>
                   <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
@@ -2185,7 +2185,7 @@ export default function App(){
                   const ci2=list.categories.reduce((s,c)=>s+c.items.filter(i=>i.checked).length,0);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   return(
-                    <div key={list.id} style={{background:"#FFFFFF",borderRadius:20,boxShadow:"0 8px 24px rgba(17,24,39,0.06)",overflow:"visible",position:"relative"}}>
+                    <div key={list.id} style={{background:"rgba(255,255,255,0.96)",borderRadius:24,boxShadow:"0 14px 34px rgba(17,24,39,0.08)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
                         style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",cursor:"pointer"}}>
                         <div style={{fontSize:26,flexShrink:0}}>{icons[list.type]||"📦"}</div>
@@ -2262,7 +2262,7 @@ export default function App(){
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
-            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
+            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>💰 Orçamento</label>
               {budgetConfirmed?(
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
@@ -2291,7 +2291,7 @@ export default function App(){
               )}
             </div>
             {/* NOME DA LISTA */}
-            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
+            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>📝 Nome da lista</label>
               {listNameConfirmed?(
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
@@ -2311,7 +2311,7 @@ export default function App(){
               )}
             </div>
             {/* TIPO DE LISTA */}
-            <div style={{background:"#FFFFFF",borderRadius:18,padding:16,border:"1px solid #E5E7EB"}}>
+            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>🏷️ Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -2467,7 +2467,7 @@ export default function App(){
       ════════════════════════════════════ */}
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",padding:"20px 20px 24px"}}>
+          <div style={{background:"linear-gradient(135deg,#5B21B6,#7C3AED)",padding:"22px 20px 26px",boxShadow:"0 18px 42px rgba(91,33,182,0.22)"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
