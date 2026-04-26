@@ -1,47 +1,78 @@
 import { useState, useRef, useCallback } from "react";
 
 // ── API Anthropic integrada ────────────────────────────────────────────────
-async function classifyProduct(name) {
-  const API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
-  if (!API_KEY) throw new Error("Chave nao configurada");
-  const prompt = [
-    "Voce e especialista em supermercados brasileiros (Atacadao, Carrefour, Assai).",
-    "Classifique o produto para lista de compras: " + name,
-    "",
-    "Retorne APENAS JSON valido sem markdown:",
-    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":["500g","1kg"],"volumes":["500ml","1L"],"unidades":["unidade","pacote","kg"]}',
-    "",
-    "- marcas: 4-8 marcas brasileiras mais vendidas",
-    "- tipos: 3-7 variacoes comuns",
-    "- pesos: tamanhos g/kg se solido, senao []",
-    "- volumes: tamanhos ml/L se liquido, senao []",
-    "- unidades: como contar (pacote,kg,fardo,lata,garrafa,unidade etc)",
-  ].join("\n");
+// Observação: em produção, o ideal é chamar a Anthropic por um backend/proxy.
+// Em app Vite/React, variáveis VITE_* ficam expostas no navegador.
+const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
+const ANTHROPIC_VERSION = "2023-06-01";
+const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY || "claude-3-5-haiku-latest";
+const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
+
+function extractJsonObject(text) {
+  const raw = String(text || "").trim().replace(/```json|```/g, "").trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("JSON não encontrado na resposta da IA");
+  return JSON.parse(match[0]);
+}
+
+async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("Chave da Anthropic não configurada em VITE_ANTHROPIC_KEY");
+  }
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
+      model,
+      max_tokens: maxTokens,
+      ...(system ? { system } : {}),
       messages: [{ role: "user", content: prompt }],
     }),
   });
-  if (!res.ok) throw new Error("HTTP " + res.status);
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`Erro Anthropic HTTP ${res.status}${errorText ? ` - ${errorText.slice(0, 160)}` : ""}`);
+  }
+
   const data = await res.json();
-  const raw = data.content[0].text.trim();
-  const m = raw.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("JSON nao encontrado");
-  const p = JSON.parse(m[0]);
+  const text = data?.content?.find?.((c) => c.type === "text")?.text || data?.content?.[0]?.text || "";
+  return extractJsonObject(text);
+}
+
+async function classifyProduct(name) {
+  const prompt = [
+    "Você é especialista em supermercados brasileiros, como Atacadão, Carrefour e Assaí.",
+    "Classifique o produto para lista de compras: " + name,
+    "",
+    "Retorne APENAS JSON válido, sem markdown:",
+    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":["500g","1kg"],"volumes":["500ml","1L"],"unidades":["unidade","pacote","kg"]}',
+    "",
+    "Regras:",
+    "- marcas: 4 a 8 marcas brasileiras comuns;",
+    "- tipos: 3 a 7 variações comuns;",
+    "- pesos: tamanhos em g/kg se for sólido, senão [];",
+    "- volumes: tamanhos em ml/L se for líquido, senão [];",
+    "- unidades: formas de contagem, como pacote, kg, fardo, lata, garrafa e unidade.",
+  ].join("\n");
+
+  const p = await callAnthropicJSON({
+    prompt,
+    model: ANTHROPIC_MODEL_CLASSIFY,
+    maxTokens: 600,
+  });
+
   return {
-    marcas:   Array.isArray(p.marcas)   ? p.marcas   : [],
-    tipos:    Array.isArray(p.tipos)    ? p.tipos    : [],
-    pesos:    Array.isArray(p.pesos)    ? p.pesos    : [],
-    volumes:  Array.isArray(p.volumes)  ? p.volumes  : [],
-    unidades: Array.isArray(p.unidades) ? p.unidades : ["unidade","pacote","kg"],
+    marcas: Array.isArray(p.marcas) ? p.marcas : [],
+    tipos: Array.isArray(p.tipos) ? p.tipos : [],
+    pesos: Array.isArray(p.pesos) ? p.pesos : [],
+    volumes: Array.isArray(p.volumes) ? p.volumes : [],
+    unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
   };
 }
 
@@ -1259,9 +1290,12 @@ function getProductConfig(name) {
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function parseBRL(str) {
   if (!str && str !== 0) return null;
-  const clean = String(str).replace(/[^\d.,]/g,"").replace(",",".");
+  const clean = String(str)
+    .replace(/[^\d.,]/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
   const val = parseFloat(clean);
-  return isNaN(val) ? null : val;
+  return Number.isNaN(val) ? null : val;
 }
 function fmtBRL(val) {
   if (val == null || isNaN(val)) return "";
@@ -1271,19 +1305,35 @@ function fmtR(val) { return "R$ " + fmtBRL(val); }
 
 // ── AI ─────────────────────────────────────────────────────────────────────
 async function aiOrganize(items, type) {
-  const typeName = TYPE_NAMES[type]||"geral";
-  const list = items.map(i=>`${[i.marca,i.tipo,i.name,i.embalagem||i.peso||i.volume].filter(Boolean).join(" ")} - ${i.qty} ${i.unit}`).join("\n");
-  const prompt = `Organize em categorias para lista de "${typeName}". JSON apenas, sem markdown:\n{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}\n\nITENS:\n${list}\n\nRegras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.`;
-  const res = await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST",
-    headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+  const typeName = TYPE_NAMES[type] || "geral";
+  const list = items
+    .map((i) => `${[i.marca, i.tipo, i.name, i.embalagem || i.peso || i.volume].filter(Boolean).join(" ")} - ${i.qty} ${i.unit}`)
+    .join("\n");
+
+  const prompt = `Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
+{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}
+
+ITENS:
+${list}
+
+Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.`;
+
+  const parsed = await callAnthropicJSON({
+    prompt,
+    model: ANTHROPIC_MODEL_ORGANIZE,
+    maxTokens: 2000,
   });
-  if (!res.ok) throw new Error("API");
-  const data = await res.json();
-  const parsed = JSON.parse(data.content[0].text.trim().replace(/```json|```/g,"").trim());
-  parsed.categories.forEach(c=>c.items.forEach(i=>{i.checked=false;i.price=null;i.notFound=false;}));
-  return parsed.categories;
+
+  const categories = Array.isArray(parsed.categories) ? parsed.categories : [];
+  categories.forEach((c) => {
+    c.items = Array.isArray(c.items) ? c.items : [];
+    c.items.forEach((i) => {
+      i.checked = false;
+      i.price = null;
+      i.notFound = false;
+    });
+  });
+  return categories;
 }
 
 function demoOrganize(items) {
@@ -1402,6 +1452,7 @@ export default function App(){
   const [exPrice,setExPrice]=useState("");
 
   const [shareModal,setShareModal]=useState(false);
+  const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
 
   const showToast=useCallback((msg)=>{
@@ -1416,35 +1467,8 @@ export default function App(){
   // ── Classificação por IA em tempo real ──────────────────────────────
   const [dlgLoading, setDlgLoading] = useState(false);
 
-  const classifyWithAI = async (name) => {
-    const systemPrompt = "Você é especialista em produtos de supermercado brasileiro. Retorne APENAS JSON válido.";
-    const userPrompt = "Classifique o produto para lista de compras: " + name + "\n\nRetorne este JSON preenchido:\n{\"marcas\":[],\"tipos\":[],\"pesos\":[],\"volumes\":[],\"unidades\":[]}\n\nRegras:\n- marcas: 4-8 marcas brasileiras mais vendidas\n- tipos: 3-6 variacoes comuns\n- pesos: tamanhos g/kg se solido, senao []\n- volumes: tamanhos ml/L se liquido, senao []\n- unidades: formas de contar (pacote,kg,fardo,lata etc)";
+  const classifyWithAI = classifyProduct;
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }]
-      })
-    });
-
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    const raw = data.content[0].text.trim();
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("sem JSON");
-    const p = JSON.parse(m[0]);
-    return {
-      marcas:   Array.isArray(p.marcas)   ? p.marcas   : [],
-      tipos:    Array.isArray(p.tipos)    ? p.tipos    : [],
-      pesos:    Array.isArray(p.pesos)    ? p.pesos    : [],
-      volumes:  Array.isArray(p.volumes)  ? p.volumes  : [],
-      unidades: Array.isArray(p.unidades) ? p.unidades : ["unidade","pacote","kg"]
-    };
-  };
 
   const openProductDialog = async (name, existing=null) => {
     if (existing) {
@@ -1610,11 +1634,14 @@ export default function App(){
   };
 
   const toggleCheck=(ci,ii)=>{
-    const l=JSON.parse(JSON.stringify(currentList));
-    l.categories[ci].items[ii].checked=!l.categories[ci].items[ii].checked;
-    updateList(l);
-    const allDone=l.categories.every(c=>c.items.every(i=>i.checked));
-    if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
+    const item=currentList.categories[ci].items[ii];
+    if(item.checked){
+      const l=JSON.parse(JSON.stringify(currentList));
+      l.categories[ci].items[ii].checked=false;
+      l.categories[ci].items[ii].price=null;
+      updateList(l);return;
+    }
+    setCheckPopup({ci,ii});
   };
 
   const openItemModal=(ci,ii)=>{
@@ -1732,7 +1759,7 @@ export default function App(){
   };
 
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
-  const pct=totalItems>0?(checkedItems/totalItems)*100:0;
+  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
 
@@ -1787,38 +1814,16 @@ export default function App(){
       {/* ════════════════════════════════════
           HOME
       ════════════════════════════════════ */}
+      {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 32px",position:"relative",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(145deg,#7C3AED 0%,#6D28D9 50%,#4C1D95 100%)",padding:"52px 24px 36px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(255,255,255,0.07)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(255,255,255,0.05)",borderRadius:"50%"}}/>
-            <div style={{position:"relative"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-                <div style={{width:48,height:48,borderRadius:14,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>🛍️</div>
-                <div>
-                  <div style={{fontWeight:900,fontSize:24,color:"white",letterSpacing:"-0.5px",lineHeight:1}}>Tá na Lista</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:3}}>Compras com inteligência ✨</div>
-                </div>
-              </div>
-              <div style={{color:"rgba(255,255,255,0.85)",fontSize:13,lineHeight:1.6,marginBottom:lists.length>0?16:0}}>
-                Organize, controle o orçamento e compartilhe com quem vai às compras.
-              </div>
-              {lists.length>0&&(
-                <div style={{display:"flex",gap:8}}>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 12px",flex:1,textAlign:"center"}}>
-                    <div style={{fontWeight:900,fontSize:18,color:"white"}}>{lists.length}</div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:600}}>lista{lists.length!==1?"s":""}</div>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 12px",flex:1,textAlign:"center"}}>
-                    <div style={{fontWeight:900,fontSize:18,color:"white"}}>{lists.reduce((s,l)=>s+l.categories.reduce((cs,c)=>cs+c.items.length,0),0)}</div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:600}}>itens</div>
-                  </div>
-                  <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 12px",flex:1,textAlign:"center"}}>
-                    <div style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(lists.reduce((s,l)=>s+(l.total||0),0))}</div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:600}}>gasto</div>
-                  </div>
-                </div>
-              )}
+            <div style={{position:"relative",textAlign:"center"}}>
+              <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,margin:"0 auto 14px"}}>🛍️</div>
+              <div style={{fontWeight:900,fontSize:28,color:"white",letterSpacing:"-0.5px",lineHeight:1,marginBottom:8}}>Tá na Lista</div>
+              <div style={{color:"rgba(255,255,255,0.8)",fontSize:13,lineHeight:1.6}}>Organize, controle o orçamento e compartilhe com quem vai às compras.</div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
@@ -1874,7 +1879,7 @@ export default function App(){
                           <button onClick={e=>{e.stopPropagation();setListMenuId(listMenuId===list.id?null:list.id);}}
                             style={{background:"#F0F2F5",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontWeight:700,fontSize:16,color:"#4A5568",fontFamily:"inherit"}}>⋯</button>
                           {listMenuId===list.id&&(
-                            <div style={{position:"absolute",right:0,bottom:40,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",border:"1px solid #E0E4EA",zIndex:100,minWidth:160,overflow:"hidden"}}>
+                            <div style={{position:"absolute",right:0,top:42,background:"white",borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.22)",border:"1px solid #E0E4EA",zIndex:500,minWidth:210,overflow:"hidden"}}>
                               <button onClick={()=>{setCurrentList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>💬 Compartilhar no WhatsApp</button>
                               <div style={{height:1,background:"#F0F2F5"}}/>
                               <button onClick={()=>{setReuseModal(list);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#1A202C",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔁 Repetir lista</button>
@@ -1890,14 +1895,7 @@ export default function App(){
               </div>
             )}
           </div>
-          <button onClick={()=>setScreen("create")}
-            style={{position:"fixed",bottom:28,right:24,width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontSize:28,cursor:"pointer",boxShadow:"0 6px 24px rgba(124,58,237,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>＋</button>
-          {lists.length>0&&(
-            <button onClick={()=>setReuseModal(lists[0])}
-              style={{position:"fixed",bottom:28,left:24,background:"white",border:"2px solid #E0E4EA",borderRadius:100,padding:"14px 20px",fontWeight:800,fontSize:14,color:"#4A5568",cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.1)",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",zIndex:200,fontFamily:"inherit"}}>
-              🔁 Repetir lista
-            </button>
-          )}
+
         </div>
       )}
 
@@ -1924,7 +1922,7 @@ export default function App(){
           <div style={{background:"white",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E0E4EA",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F0F2F5",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-            <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+            <div style={{fontWeight:800,fontSize:18,color:"#1A202C",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
@@ -1999,8 +1997,8 @@ export default function App(){
               </div>
               <div style={{fontSize:12,color:"#C0C8D4",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
               <button onClick={()=>setShowPasteModal(true)}
-                style={{marginTop:10,width:"100%",padding:"10px 14px",borderRadius:10,background:"#F0F2F5",border:"2px dashed #E0E4EA",color:"#4A5568",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                📋 Colar lista de texto (WhatsApp, notas...)
+                style={{width:"100%",padding:"14px",borderRadius:12,background:"#F5F3FF",border:"2px solid #7C3AED",color:"#5B21B6",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                📋 Cole sua lista aqui
               </button>
             </div>
             {pendingItems.length>0&&(
@@ -2137,25 +2135,27 @@ export default function App(){
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentList.name}</div>
+              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>setShareModal(true)}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 14px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar</button>
+                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:100,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
             </div>
-            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"14px 16px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <span style={{color:"rgba(255,255,255,0.9)",fontSize:13,fontWeight:600}}>{checkedItems} de {totalItems} itens</span>
-                <span style={{fontWeight:900,fontSize:18,color:"white"}}>{fmtR(fullTotal)}</span>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
+                {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
               </div>
-              <div style={{height:6,background:"rgba(255,255,255,0.25)",borderRadius:3,overflow:"hidden"}}>
-                <div style={{height:"100%",background:"white",borderRadius:3,width:pct+"%",transition:"width 0.4s"}}/>
+              <div style={{height:10,background:"rgba(255,255,255,0.2)",borderRadius:5,overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",borderRadius:5,width:pct+"%",transition:"width 0.4s, background 0.6s"}}/>
               </div>
-              {budget>0&&(
-                <div style={{fontSize:12,marginTop:6,color:budgetDiff<0?"#FF8080":budgetDiff<budget*0.15?"#FFE066":"rgba(255,255,255,0.85)"}}>
-                  {budgetDiff<0?`⚠️ Acima do orçamento em ${fmtR(Math.abs(budgetDiff))}`
-                    :budgetDiff<budget*0.15?`⚡ Restam ${fmtR(budgetDiff)} do orçamento`
-                    :`✅ Saldo: ${fmtR(budgetDiff)} de ${fmtR(budget)}`}
-                </div>
-              )}
+              <div style={{textAlign:"center",fontSize:13,fontWeight:700}}>
+                {budget>0?(
+                  <span style={{color:budgetDiff<0?"#FCA5A5":"rgba(255,255,255,0.9)"}}>
+                    {budgetDiff<0?"⚠️ Acima em "+fmtR(Math.abs(budgetDiff)):"Saldo: "+fmtR(budgetDiff)}
+                  </span>
+                ):(
+                  <span style={{color:"rgba(255,255,255,0.75)",fontSize:12}}>{checkedItems}/{totalItems} itens</span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2307,7 +2307,7 @@ export default function App(){
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#1A202C",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>extra</span>}
                                 {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:100,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
@@ -2404,10 +2404,22 @@ export default function App(){
         <ModalSheet onClose={()=>setExtraModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>⭐ Item extra</div>
           <div style={{fontSize:13,color:"#8896A8",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
-          <div style={{marginBottom:12}}>
+          <div style={{marginBottom:10}}>
             <label style={lbl}>Produto</label>
-            <input value={exName} onChange={e=>setExName(e.target.value)} placeholder="Nome do produto..."
-              style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+            <div style={{display:"flex",gap:8}}>
+              <input value={exName} onChange={e=>setExName(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+                placeholder="Nome do produto..."
+                style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E0E4EA"}/>
+              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+                disabled={!exName.trim()}
+                style={{padding:"0 16px",borderRadius:10,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#8896A8",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
+                Inserir IA
+              </button>
+            </div>
+            <div style={{fontSize:12,color:"#E65100",marginTop:6,background:"#FFF3E0",borderRadius:8,padding:"6px 10px"}}>
+              💡 A IA vai sugerir marca, tipo e tamanho antes de adicionar.
+            </div>
           </div>
           <div style={{display:"flex",gap:10,marginBottom:12}}>
             <div style={{flex:1}}>
@@ -2440,18 +2452,85 @@ export default function App(){
       {/* MODAL: SHARE */}
       {shareModal&&(
         <ModalSheet onClose={()=>setShareModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4}}>↗ Compartilhar lista</div>
-          <div style={{fontSize:14,color:"#8896A8",marginBottom:8}}>A lista será enviada formatada com todas as categorias e valores.</div>
-          <div style={{background:"#E8F5E9",borderRadius:10,padding:"12px 14px",marginBottom:20,fontSize:13,color:"#2E7D32",lineHeight:1.6}}>
-            📱 Quem receber o link pelo WhatsApp consegue visualizar a lista completa diretamente na conversa — sem precisar instalar nada.
+          <div style={{fontWeight:900,fontSize:18,color:"#1A202C",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
+          <div style={{fontSize:13,color:"#8896A8",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
+              style={{width:"100%",padding:16,borderRadius:12,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              WhatsApp
+            </button>
+            <button onClick={()=>{
+              setShareModal(false);
+              if(!currentList)return;
+              const{fullTotal,notFoundItems}=getProgress(currentList);
+              const lines=[];
+              lines.push("🛒 *"+currentList.name+"* — Tá na Lista");
+              if(currentList.budget>0)lines.push("💰 Orçamento: "+fmtR(currentList.budget));
+              lines.push("");
+              currentList.categories.forEach(cat=>{
+                const theme=getCatTheme(cat.name);
+                const sub=getCatSubtotal(cat);
+                lines.push(theme.icon+" *"+cat.name+"*"+(sub>0?" — "+fmtR(sub):""));
+                cat.items.forEach(i=>{
+                  const status=i.notFound?"❌":i.checked?"✅":"⬜";
+                  lines.push(status+" "+i.name+(i.detail?" ("+i.detail+")":"")+(i.qty>1?" "+i.qty+"×":"")+(i.price!=null?" — "+fmtR(i.price*i.qty):""));
+                });
+                lines.push("");
+              });
+              lines.push("💰 *Total: "+fmtR(fullTotal)+"*");
+              window.open("https://telegram.me/share/url?text="+encodeURIComponent(lines.join("\n")),"_blank","noopener,noreferrer");
+            }}
+              style={{width:"100%",padding:16,borderRadius:12,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+              Telegram
+            </button>
+            <button onClick={()=>{
+              setShareModal(false);
+              if(!currentList)return;
+              const{fullTotal}=getProgress(currentList);
+              const lines=["🛒 *"+currentList.name+"* — Tá na Lista"];
+              currentList.categories.forEach(cat=>{
+                cat.items.forEach(i=>{lines.push((i.checked?"✅":"⬜")+" "+i.name+(i.price!=null?" "+fmtR(i.price*i.qty):""));});
+              });
+              lines.push("💰 Total: "+fmtR(fullTotal));
+              const text=lines.join("\n");
+              if(navigator.share){navigator.share({title:"Tá na Lista — "+currentList.name,text});}
+              else{navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>showToast("📋 Lista copiada!"));}
+            }}
+              style={{width:"100%",padding:16,borderRadius:12,background:"#7C3AED",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+              🛍️ Outros apps / Copiar
+            </button>
           </div>
-          <button onClick={()=>{setShareModal(false);shareWhatsApp();}}
-            style={{...btnG,background:"#25D366",boxShadow:"0 4px 16px rgba(37,211,102,0.35)"}}>
-            💬 Enviar pelo WhatsApp
-          </button>
         </ModalSheet>
       )}
 
+
+      {checkPopup&&currentList&&(()=>{
+        const item=currentList.categories[checkPopup.ci]?.items[checkPopup.ii];
+        if(!item)return null;
+        return(
+          <div onClick={()=>setCheckPopup(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center"}}>
+              <div style={{fontSize:32,marginBottom:10}}>🛒</div>
+              <div style={{fontWeight:800,fontSize:17,color:"#1A202C",marginBottom:6}}>{item.name}</div>
+              <div style={{fontSize:14,color:"#8896A8",marginBottom:20}}>Deseja inserir o preço deste item?</div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>{
+                  const l=JSON.parse(JSON.stringify(currentList));
+                  l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
+                  updateList(l);setCheckPopup(null);
+                  setTimeout(()=>{if(listRef.current)listRef.current.scrollTo({top:0,behavior:"smooth"});},100);
+                  const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
+                  if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
+                }} style={{flex:1,padding:14,borderRadius:12,background:"#F0F2F5",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
+                <button onClick={()=>{setCheckPopup(null);openItemModal(checkPopup.ci,checkPopup.ii);}}
+                  style={{flex:1,padding:14,borderRadius:12,background:"linear-gradient(135deg,#7C3AED,#6D28D9)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Sim</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODAL: COLAR TEXTO ── */}
       {showPasteModal&&(
