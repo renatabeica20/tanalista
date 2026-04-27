@@ -1682,7 +1682,9 @@ export default function App(){
 
   const [shareModal,setShareModal]=useState(false);
   const [shareTargetList,setShareTargetList]=useState(null);
+  const [senderName,setSenderName]=useState(()=>localStorage.getItem("tnl_sender_name")||"");
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
+  const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
@@ -1904,6 +1906,7 @@ export default function App(){
       }
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      setSharedPreviewExpanded(false);
       setSharedLandingRecord(record);
       try { window.history.replaceState({}, document.title, window.location.origin + "/l/" + encodeURIComponent(sharedId)); } catch {}
     }catch(err){
@@ -2245,9 +2248,24 @@ export default function App(){
 
   const deleteList=(id)=>{saveLists(lists.filter(l=>l.id!==id));setConfirmDelete(null);showToast("🗑 Lista excluída");};
 
+  const getSenderName=()=>{
+    const clean=String(senderName||"").trim();
+    if(clean){
+      localStorage.setItem("tnl_sender_name",clean);
+      return clean;
+    }
+    return localStorage.getItem("tnl_sender_name")||"Usuário do Tá na Lista";
+  };
+
+  const withSender=(list)=>{
+    if(!list)return null;
+    const name=getSenderName();
+    return {...list,remetente:name,ownerName:name};
+  };
+
   // ── Compartilhamento da lista ─────────────────────────────────────────────
   const shareWhatsApp=async(listArg=null)=>{
-    const list=listArg||shareTargetList||currentList;
+    const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
     const preparedWindow=window.open("about:blank","_blank");
     try{
@@ -2264,7 +2282,7 @@ export default function App(){
   };
 
   const shareTelegram=async(listArg=null)=>{
-    const list=listArg||shareTargetList||currentList;
+    const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
     const preparedWindow=window.open("about:blank","_blank");
     try{
@@ -2280,7 +2298,7 @@ export default function App(){
   };
 
   const shareOtherApps=async(listArg=null)=>{
-    const list=listArg||shareTargetList||currentList;
+    const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
     try{
       showToast("🔗 Gerando link da lista...");
@@ -2324,31 +2342,41 @@ export default function App(){
       </div>
 
       {/* LISTA COMPARTILHADA RECEBIDA */}
-      {sharedLandingRecord&&(
+      {sharedLandingRecord&&(()=>{
+        const sharedData=sharedLandingRecord.data||{};
+        const sharedItems=(sharedData.categories||[]).flatMap(c=>(c.items||[]).map(i=>({cat:c.name,item:i})));
+        const visibleItems=sharedPreviewExpanded?sharedItems:sharedItems.slice(0,6);
+        const sharedBudget=Number(sharedData.budget||sharedLandingRecord.budget||0);
+        return(
         <div style={{position:"fixed",inset:0,background:"linear-gradient(180deg,#F5F3FF 0%,#FFFFFF 42%,#F8FAFC 100%)",zIndex:520,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:24,boxShadow:"0 28px 70px rgba(17,24,39,0.18)",border:"1px solid #E9D5FF"}}>
             <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 18px",boxShadow:"0 18px 34px rgba(109,40,217,0.24)"}}>🛒</div>
             <h2 style={{margin:"0 0 8px",fontSize:24,lineHeight:1.15,textAlign:"center",color:"#111827",fontWeight:900}}>Você recebeu uma lista</h2>
             <p style={{margin:"0 0 18px",fontSize:14,color:"#6B7280",textAlign:"center",lineHeight:1.45}}>
-              Enviada por <strong style={{color:"#4C1D95"}}>{sharedLandingRecord.remetente||"Usuário do Tá na Lista"}</strong>
+              Enviada por <strong style={{color:"#4C1D95"}}>{sharedLandingRecord.remetente||sharedData.remetente||"Usuário do Tá na Lista"}</strong>
             </p>
             <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:20,padding:16,marginBottom:18}}>
-              <div style={{fontWeight:900,fontSize:17,color:"#111827",marginBottom:6}}>{sharedLandingRecord.data?.name||sharedLandingRecord.title||"Lista de compras"}</div>
+              <div style={{fontWeight:900,fontSize:17,color:"#111827",marginBottom:6}}>{sharedData.name||sharedLandingRecord.title||"Lista de compras"}</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12,fontWeight:800,color:"#6B7280"}}>
-                <span>📌 {(sharedLandingRecord.data?.categories||[]).reduce((acc,c)=>acc+(c.items?.length||0),0)} itens</span>
-                {Number(sharedLandingRecord.data?.budget||sharedLandingRecord.budget||0)>0&&<span>💰 {fmtR(Number(sharedLandingRecord.data?.budget||sharedLandingRecord.budget||0))}</span>}
+                <span>📌 {sharedItems.length} itens</span>
+                {sharedBudget>0&&<span>💰 Orçamento: {fmtR(sharedBudget)}</span>}
               </div>
-              <div style={{marginTop:12,maxHeight:150,overflow:"auto",display:"flex",flexDirection:"column",gap:8}}>
-                {(sharedLandingRecord.data?.categories||[]).flatMap(c=>(c.items||[]).slice(0,4).map(i=>({cat:c.name,item:i}))).slice(0,7).map((row,idx)=>(
+              <div style={{marginTop:12,maxHeight:sharedPreviewExpanded?260:158,overflow:"auto",display:"flex",flexDirection:"column",gap:8,paddingRight:4}}>
+                {visibleItems.map((row,idx)=>(
                   <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
                     <span style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.item.name}</span>
                     <span style={{color:"#6B7280",whiteSpace:"nowrap"}}>{row.item.qty||1} {row.item.unit||"un."}</span>
                   </div>
                 ))}
               </div>
+              {sharedItems.length>6&&(
+                <button onClick={()=>setSharedPreviewExpanded(v=>!v)} style={{width:"100%",marginTop:12,border:"none",background:"transparent",color:"#6D28D9",fontSize:13,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>
+                  {sharedPreviewExpanded?"Mostrar menos":"Ver lista completa"}
+                </button>
+              )}
             </div>
             <button onClick={()=>importSharedRecordToApp(sharedLandingRecord)} style={{width:"100%",border:"none",borderRadius:18,padding:"15px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 14px 28px rgba(109,40,217,0.24)"}}>
-              Abrir lista no app
+              Importar para minhas listas
             </button>
             <button onClick={()=>importSharedRecordToApp(sharedLandingRecord)} style={{width:"100%",marginTop:10,border:"2px solid #E5E7EB",borderRadius:18,padding:"13px 16px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
               Continuar sem instalar
@@ -2358,7 +2386,8 @@ export default function App(){
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* LISTA FINALIZADA */}
       {showFinished&&(
@@ -3053,6 +3082,11 @@ export default function App(){
         <ModalSheet onClose={()=>{setShareModal(false);setShareTargetList(null);}}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
+          <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:12}}>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome para aparecer para quem recebe</label>
+            <input value={senderName} onChange={e=>{setSenderName(e.target.value);localStorage.setItem("tnl_sender_name",e.target.value);}} placeholder="Ex: Cadu"
+              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"11px 12px",fontSize:14,fontWeight:700,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}/>
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
               style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
