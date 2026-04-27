@@ -1730,6 +1730,7 @@ export default function App(){
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
+  const [sharedUpdateNotice,setSharedUpdateNotice]=useState(null);
   const autoSyncNoticeRef=useRef(0);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
@@ -2272,7 +2273,13 @@ export default function App(){
       const now=Date.now();
       if(now-(autoSyncNoticeRef.current||0)>15000){
         autoSyncNoticeRef.current=now;
+        const remoteProgress=getProgress(remote);
+        setSharedUpdateNotice({
+          msg:"Lista atualizada por outro participante · "+remoteProgress.checkedItems+"/"+remoteProgress.totalItems+" itens concluídos",
+          at:now
+        });
         showToast("🔄 Lista compartilhada atualizada automaticamente",3200);
+        setTimeout(()=>setSharedUpdateNotice(null),6500);
       }
     };
 
@@ -2967,8 +2974,14 @@ export default function App(){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:900,fontSize:13}}>Lista compartilhada</div>
                 <div style={{fontSize:12,fontWeight:700,opacity:0.85}}>
-                  {(currentList.importedFrom||currentList.remetente)?`Recebida de ${currentList.importedFrom||currentList.remetente} · `:""}{checkedItems}/{totalItems} itens marcados
+                  {(currentList.importedFrom||currentList.remetente)?`Recebida de ${currentList.importedFrom||currentList.remetente} · `:""}{checkedItems}/{totalItems} itens concluídos
                 </div>
+                <div style={{height:7,background:"rgba(109,40,217,0.16)",borderRadius:999,overflow:"hidden",marginTop:7}}>
+                  <div style={{height:"100%",width:(totalItems?Math.round((checkedItems/totalItems)*100):0)+"%",background:"linear-gradient(90deg,#7C3AED,#A855F7)",borderRadius:999,transition:"width 0.35s"}}/>
+                </div>
+                {sharedUpdateNotice&&(<div style={{marginTop:7,fontSize:11,fontWeight:900,color:"#047857",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"5px 8px",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <span>🔄</span><span>{sharedUpdateNotice.msg}</span>
+                </div>)}
               </div>
               <button onClick={refreshSharedListFromCloud} disabled={sharedSyncing}
                 style={{border:"none",borderRadius:14,background:"#6D28D9",color:"white",fontSize:12,fontWeight:900,padding:"8px 10px",cursor:sharedSyncing?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
