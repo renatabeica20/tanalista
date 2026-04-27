@@ -1,7 +1,8 @@
 {
   "name": "Tá na Lista",
-  "short_name": "Lista",
+  "short_name": "Tá na Lista",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6D28D9",
