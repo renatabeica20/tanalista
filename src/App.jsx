@@ -102,6 +102,21 @@ async function updateSharedListRecord(id, list) {
   return Array.isArray(data) ? data[0] : data;
 }
 
+function sharedListSignature(list) {
+  try {
+    if (!list) return "";
+    return JSON.stringify({
+      name: list.name || "",
+      type: list.type || "",
+      budget: Number(list.budget || 0),
+      categories: Array.isArray(list.categories) ? list.categories : [],
+      total: Number(list.total || 0),
+    });
+  } catch {
+    return "";
+  }
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim().replace(/```json|```/g, "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
@@ -1715,6 +1730,7 @@ export default function App(){
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
+  const autoSyncNoticeRef=useRef(0);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
@@ -2221,6 +2237,65 @@ export default function App(){
       setSharedSyncing(false);
     }
   },[currentList,showToast]);
+
+  useEffect(()=>{
+    const sharedId=currentList?.sharedId;
+    if(screen!=="list" || !sharedId || !currentList)return;
+
+    let cancelled=false;
+
+    const applyRemoteList=(record)=>{
+      if(cancelled || !record?.data)return;
+      const remote={
+        ...record.data,
+        id:currentList.id,
+        sharedId,
+        isShared:true,
+        imported:currentList.imported,
+        importedFrom:record?.remetente || currentList.importedFrom || currentList.remetente || "Não informado",
+        remetente:record?.remetente || currentList.remetente || "Não informado",
+        sharedOwner:record?.remetente || currentList.sharedOwner || "Não informado",
+        lastSyncedAt:new Date().toISOString(),
+      };
+
+      const remoteSig=sharedListSignature(remote);
+      const localSig=sharedListSignature(currentList);
+      if(!remoteSig || remoteSig===localSig)return;
+
+      setCurrentList(remote);
+      setLists(prev=>{
+        const nl=(prev||[]).map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?remote:l);
+        try{localStorage.setItem("tnl_lists",JSON.stringify(nl));}catch{}
+        return nl;
+      });
+
+      const now=Date.now();
+      if(now-(autoSyncNoticeRef.current||0)>15000){
+        autoSyncNoticeRef.current=now;
+        showToast("🔄 Lista compartilhada atualizada automaticamente",3200);
+      }
+    };
+
+    const syncNow=async()=>{
+      if(cancelled || sharedSyncing || document.hidden)return;
+      try{
+        const record=await getSharedListRecord(sharedId);
+        applyRemoteList(record);
+      }catch(err){
+        console.warn("Falha na sincronização automática",err);
+      }
+    };
+
+    const interval=setInterval(syncNow,10000);
+    const onFocus=()=>syncNow();
+    window.addEventListener("focus",onFocus);
+
+    return()=>{
+      cancelled=true;
+      clearInterval(interval);
+      window.removeEventListener("focus",onFocus);
+    };
+  },[currentList,screen,sharedSyncing,showToast]);
 
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.price!=null?i.price*i.qty:0),0);
 
