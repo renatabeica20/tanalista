@@ -1874,8 +1874,11 @@ export default function App(){
       id:baseData.id||("shared-"+(sharedId||Date.now())),
       sharedId:sharedId||baseData.sharedId,
       isShared:true,
+      imported:true,
+      importedFrom:record?.remetente || baseData.remetente || "Não informado",
       remetente:record?.remetente || baseData.remetente || "Não informado",
       receivedAt:new Date().toISOString(),
+      importedAt:new Date().toISOString(),
     };
 
     const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
@@ -2274,6 +2277,7 @@ export default function App(){
       const text=buildShareInviteText(published,link);
       const url="https://api.whatsapp.com/send?text="+encodeURIComponent(text);
       openShareWindow(url,preparedWindow);
+      showToast("✅ Link da lista pronto para envio pelo WhatsApp!");
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
       console.error("Erro ao compartilhar no WhatsApp:",err);
@@ -2350,7 +2354,7 @@ export default function App(){
         return(
         <div style={{position:"fixed",inset:0,background:"linear-gradient(180deg,#F5F3FF 0%,#FFFFFF 42%,#F8FAFC 100%)",zIndex:520,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:24,boxShadow:"0 28px 70px rgba(17,24,39,0.18)",border:"1px solid #E9D5FF"}}>
-            <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 18px",boxShadow:"0 18px 34px rgba(109,40,217,0.24)"}}>🛒</div>
+            <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 18px",boxShadow:"0 18px 34px rgba(109,40,217,0.24)",position:"relative"}}><span>🛒</span><span style={{position:"absolute",right:10,bottom:10,width:24,height:24,borderRadius:"50%",background:"#10B981",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,border:"3px solid white"}}>✓</span></div>
             <h2 style={{margin:"0 0 8px",fontSize:24,lineHeight:1.15,textAlign:"center",color:"#111827",fontWeight:900}}>Você recebeu uma lista</h2>
             <p style={{margin:"0 0 18px",fontSize:14,color:"#6B7280",textAlign:"center",lineHeight:1.45}}>
               Enviada por <strong style={{color:"#4C1D95"}}>{sharedLandingRecord.remetente||sharedData.remetente||"Usuário do Tá na Lista"}</strong>
@@ -2376,7 +2380,7 @@ export default function App(){
               )}
             </div>
             <button onClick={()=>importSharedRecordToApp(sharedLandingRecord)} style={{width:"100%",border:"none",borderRadius:18,padding:"15px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 14px 28px rgba(109,40,217,0.24)"}}>
-              Importar para minhas listas
+              Adicionar à minha lista
             </button>
             <button onClick={()=>importSharedRecordToApp(sharedLandingRecord)} style={{width:"100%",marginTop:10,border:"2px solid #E5E7EB",borderRadius:18,padding:"13px 16px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
               Continuar sem instalar
@@ -3081,28 +3085,18 @@ export default function App(){
       {shareModal&&(
         <ModalSheet onClose={()=>{setShareModal(false);setShareTargetList(null);}}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Escolha como enviar</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Envio disponível pelo WhatsApp</div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:12}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome para aparecer para quem recebe</label>
             <input value={senderName} onChange={e=>{setSenderName(e.target.value);localStorage.setItem("tnl_sender_name",e.target.value);}} placeholder="Ex: Cadu"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"11px 12px",fontSize:14,fontWeight:700,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}/>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
+            <button onClick={()=>{const saved=localStorage.getItem("tnl_sender_name")||"";if(!String(senderName||saved).trim()){showToast("⚠️ Informe seu nome antes de enviar a lista.");return;}const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
               style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               WhatsApp
-            </button>
-            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareTelegram(l);}}
-              style={{width:"100%",padding:16,borderRadius:20,background:"#0088CC",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-              Telegram
-            </button>
-            <button onClick={()=>{const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareOtherApps(l);}}
-              style={{width:"100%",padding:16,borderRadius:20,background:"#6D28D9",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              🛍️ Outros apps / Copiar
-            </button>
-          </div>
+            </button>          </div>
         </ModalSheet>
       )}
 
