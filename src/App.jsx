@@ -1927,14 +1927,14 @@ export default function App(){
 
   const getPublicAppUrl=()=>{
     const origin=window.location?.origin;
-    const path=window.location?.pathname || "/";
-    if(origin && origin!=="null") return `${origin}${path}`.replace(/\/index\.html$/,"/");
-    return String(window.location?.href || "").split("#")[0];
+    if(origin && origin!=="null") return origin;
+    const href=String(window.location?.href || "").split("#")[0].split("?")[0];
+    return href.replace(/\/l\/.*$/,"/").replace(/\/lista\/.*$/,"/").replace(/\/index\.html$/,"/").replace(/\/$/,"");
   };
 
   const shareAppWhatsApp=()=>{
     const appUrl=getPublicAppUrl();
-    const text=`Conheça o app Tá na Lista:\n${appUrl}`;
+    const text=`Estou usando o Tá na Lista para organizar compras, compartilhar listas e controlar o orçamento. Conheça o app:\n${appUrl}`;
     const encoded=encodeURIComponent(text);
     const whatsappUrl=`https://api.whatsapp.com/send?text=${encoded}`;
     const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");
@@ -2139,6 +2139,9 @@ export default function App(){
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
       setSharedPreviewExpanded(false);
       setSharedLandingRecord(record);
+      if(!getAppUserName()){
+        setUserNameModal(true);
+      }
       try { window.history.replaceState({}, document.title, window.location.origin + "/l/" + encodeURIComponent(sharedId)); } catch {}
     }catch(err){
       showToast("⚠️ Não foi possível abrir a lista: "+(err?.message||"erro"),5200);
@@ -2778,7 +2781,8 @@ export default function App(){
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(139,92,246,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:14}}>Tá na Lista</div>
+              <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:6}}>Tá na Lista</div>
+              {getAppUserName()&&(<div style={{fontSize:14,color:"#4C1D95",fontWeight:900,marginBottom:12}}>Olá, {getAppUserName()} 👋</div>)}
               <div style={{width:74,height:74,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"1px solid rgba(109,40,217,0.20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 18px 40px rgba(109,40,217,0.26)"}}>🛍️</div>
               <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
             </div>
@@ -3460,8 +3464,8 @@ export default function App(){
         <ModalSheet onClose={()=>setUserNameModal(false)}>
           <div style={{textAlign:"center",marginBottom:16}}>
             <div style={{fontSize:34,marginBottom:8}}>👋</div>
-            <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:6}}>Bem-vindo ao Tá na Lista</div>
-            <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45}}>Informe seu nome para identificar suas listas compartilhadas e ajudar a mensurar os usuários do app.</div>
+            <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:6}}>{sharedLandingRecord?"Identifique-se para acessar a lista":"Bem-vindo ao Tá na Lista"}</div>
+            <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45}}>{sharedLandingRecord?"Informe seu nome para abrir a lista recebida e registrar seu acesso ao app.":"Informe seu nome para identificar suas listas compartilhadas e ajudar a mensurar os usuários do app."}</div>
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
@@ -3474,10 +3478,10 @@ export default function App(){
             style={{width:"100%",padding:16,borderRadius:20,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
             Continuar
           </button>
-          <button onClick={()=>setUserNameModal(false)}
+          {!sharedLandingRecord&&(<button onClick={()=>setUserNameModal(false)}
             style={{width:"100%",padding:12,borderRadius:18,background:"transparent",border:"none",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
             Agora não
-          </button>
+          </button>)}
         </ModalSheet>
       )}
 
