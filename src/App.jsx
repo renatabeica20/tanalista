@@ -2780,11 +2780,13 @@ export default function App(){
           <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"48px 24px 34px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-30,left:-30,width:160,height:160,background:"rgba(139,92,246,0.08)",borderRadius:"50%"}}/>
-            <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:6}}>Tá na Lista</div>
-              {getAppUserName()&&(<div style={{fontSize:14,color:"#4C1D95",fontWeight:900,marginBottom:12}}>Olá, {getAppUserName()} 👋</div>)}
-              <div style={{width:74,height:74,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"1px solid rgba(109,40,217,0.20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 18px 40px rgba(109,40,217,0.26)"}}>🛍️</div>
-              <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600}}>Organize, Compartilhe sua lista e Controle o orçamento</div>
+            <div style={{position:"relative"}}>
+              {getAppUserName()&&(<div style={{fontSize:14,color:"#4C1D95",fontWeight:900,marginBottom:10,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
+              <div style={{textAlign:"center"}}>
+                <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:6}}>Tá na Lista</div>
+                <div style={{width:74,height:74,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"1px solid rgba(109,40,217,0.20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 18px 40px rgba(109,40,217,0.26)"}}>🛍️</div>
+                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600}}>Organize, compartilhe sua lista e controle o orçamento</div>
+              </div>
             </div>
           </div>
           <div style={{padding:24,flex:1,paddingBottom:100}}>
@@ -2865,12 +2867,9 @@ export default function App(){
             <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
                           <button onClick={shareAppWhatsApp}
                             style={{width:"100%",padding:"13px 16px",borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 14px rgba(37,211,102,0.25)"}}>
-                            💬 Link do app
+                            💬 Compartilhar App
                           </button>
-                          <button onClick={installApp}
-                            style={{width:"100%",padding:"13px 16px",borderRadius:18,background:"#FFFFFF",border:"1px solid #D9DDE6",color:"#4C1D95",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-                            📲 Adicionar à Tela de Início
-                          </button>
+
                         </div>
           </div>
 
@@ -2900,7 +2899,10 @@ export default function App(){
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-            <div style={{fontWeight:800,fontSize:18,color:"#111827",flex:1,textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+            <div style={{flex:1,minWidth:0}}>
+              {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()} 👋</div>)}
+              <div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+            </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
@@ -2979,8 +2981,8 @@ export default function App(){
                   style={{width:"100%",padding:"14px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                   📋 Colar lista
                 </button>
-                <button onClick={()=>setShowPhotoModal(true)}
-                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#ECFDF5",border:"2px solid #16A34A",color:"#15803D",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                <button disabled title="Função temporariamente desativada"
+                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#F3F4F6",border:"2px solid #D1D5DB",color:"#9CA3AF",fontWeight:800,fontSize:14,cursor:"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,opacity:0.75}}>
                   📷 Ler foto
                 </button>
               </div>
@@ -3116,16 +3118,14 @@ export default function App(){
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"linear-gradient(135deg,#5B21B6,#7C3AED)",padding:"22px 20px 26px",boxShadow:"0 18px 42px rgba(91,33,182,0.22)"}}>
+            {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:10,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <button onClick={()=>setScreen("home")}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
               <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
-              {currentList.sharedId&&(
-                <button onClick={refreshSharedListFromCloud} disabled={sharedSyncing}
-                  style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 10px",color:"white",fontSize:13,fontWeight:800,cursor:sharedSyncing?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap",opacity:sharedSyncing?0.7:1}}>{sharedSyncing?"⏳":"🔄"}</button>
-              )}
+
             </div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:18,padding:"12px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -3137,7 +3137,7 @@ export default function App(){
               </div>
               <div style={{textAlign:"center",fontSize:13,fontWeight:700}}>
                 {budget>0?(
-                  <span style={{color:budgetDiff<0?"#FCA5A5":"rgba(255,255,255,0.9)"}}>
+                  <span style={{color:budgetDiff<0?"#EF4444":"#22C55E"}}>
                     {budgetDiff<0?"⚠️ Acima em "+fmtR(Math.abs(budgetDiff)):"Saldo: "+fmtR(budgetDiff)}
                   </span>
                 ):(
@@ -3162,10 +3162,7 @@ export default function App(){
                   <span>🔄</span><span>{sharedUpdateNotice.msg}</span>
                 </div>)}
               </div>
-              <button onClick={refreshSharedListFromCloud} disabled={sharedSyncing}
-                style={{border:"none",borderRadius:14,background:"#6D28D9",color:"white",fontSize:12,fontWeight:900,padding:"8px 10px",cursor:sharedSyncing?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                {sharedSyncing?"Sincronizando...":"Atualizar"}
-              </button>
+
             </div>
           )}
 
@@ -3262,6 +3259,12 @@ export default function App(){
               const isCollapsed=collapsedCats[ci];
               const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
               if(search&&filtered.length===0)return null;
+              const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
+                const aDone=!!(a.checked||a.notFound);
+                const bDone=!!(b.checked||b.notFound);
+                if(aDone===bDone)return cat.items.indexOf(a)-cat.items.indexOf(b);
+                return aDone?1:-1;
+              });
 
               return(
                 <div key={ci} style={{marginBottom:12,borderRadius:18,overflow:"hidden",border:`2px solid ${allDone?"#6D28D9":theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
@@ -3281,11 +3284,11 @@ export default function App(){
                   {/* Itens da categoria */}
                   {!isCollapsed&&(
                     <div style={{background:allDone?"#F9FFF9":"white",display:"flex",flexDirection:"column"}}>
-                      {(search?filtered:cat.items).map((item,ii)=>{
+                      {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
                         const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
                         const realII=search?cat.items.findIndex(it=>it===item):ii;
-                        const isLast=(search?filtered:cat.items).length-1===ii;
+                        const isLast=displayItems.length-1===ii;
 
                         // Monta descrição e linha de preço
                         const descLine=[item.name,item.detail].filter(Boolean).join(" ");
@@ -3491,9 +3494,10 @@ export default function App(){
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Envio disponível pelo WhatsApp</div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:12}}>
-            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome para aparecer para quem recebe</label>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome</label>
             <input value={senderName} onChange={e=>{setSenderName(e.target.value);setUserNameInput(e.target.value);saveAppUserName(e.target.value);}} placeholder="Ex: Cadu"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"11px 12px",fontSize:14,fontWeight:700,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}/>
+            <div style={{fontSize:12,color:"#6B7280",fontStyle:"italic",marginTop:7}}>Quem receberá a lista verá seu nome</div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button onClick={async()=>{const saved=getAppUserName();const clean=saveAppUserName(senderName||saved);if(!clean){showToast("⚠️ Informe seu nome antes de enviar a lista.");return;}await registerAppUser(clean);const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
