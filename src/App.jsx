@@ -100,6 +100,51 @@ async function findAppUserByDeviceId(deviceId) {
   }
 }
 
+async function findAppUserByName(name) {
+  const clean = String(name || "").trim();
+  if (!clean || !hasSupabaseConfig()) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?nome=eq.${encodeURIComponent(clean)}&select=id,nome,device_id&limit=1`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getSharedListsByUserId(userId) {
+  if (!userId || !hasSupabaseConfig()) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function sharedRecordToLocalList(record) {
+  const base = record?.data || {};
+  return {
+    ...base,
+    id: base.id || `shared-${record?.id || Date.now()}`,
+    sharedId: record?.id || base.sharedId || null,
+    userId: record?.user_id || base.userId || null,
+    ownerName: record?.remetente || base.ownerName || base.remetente || getAppUserName() || "Usuario do Ta na Lista",
+    remetente: record?.remetente || base.remetente || base.ownerName || getAppUserName() || "Usuario do Ta na Lista",
+    restoredFromCloud: true,
+    restoredAt: new Date().toISOString(),
+  };
+}
+
 async function registerAppUser(name, { force = false } = {}) {
   const clean = String(name || getAppUserName() || "").trim();
   if (!clean || !hasSupabaseConfig()) return false;
@@ -116,6 +161,16 @@ async function registerAppUser(name, { force = false } = {}) {
       setStoredValue(APP_USER_REGISTERED_KEY, device_id);
       if (found.nome) saveAppUserName(found.nome);
       return found.id;
+    }
+
+    // Se o armazenamento local foi perdido, tenta recuperar pelo nome
+    // antes de criar um novo cadastro.
+    const foundByName = await findAppUserByName(clean);
+    if (foundByName?.id) {
+      saveAppUserId(foundByName.id);
+      setStoredValue(APP_USER_REGISTERED_KEY, device_id);
+      if (foundByName.nome) saveAppUserName(foundByName.nome);
+      return foundByName.id;
     }
 
     const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
@@ -1928,22 +1983,56 @@ export default function App(){
 
   const saveLists=(nl)=>{setLists(nl);localStorage.setItem("tnl_lists",JSON.stringify(nl));};
 
+  const restoreUserListsFromCloud=useCallback(async(userId,{silent=false}={})=>{
+    if(!userId)return;
+    try{
+      const records=await getSharedListsByUserId(userId);
+      if(!records.length)return;
+      setLists(prev=>{
+        const current=Array.isArray(prev)?prev:[];
+        const known=new Set(current.map(l=>l.sharedId||l.id));
+        const restored=[];
+        for(const record of records){
+          const local=sharedRecordToLocalList(record);
+          const key=local.sharedId||local.id;
+          if(key && !known.has(key)){
+            restored.push(local);
+            known.add(key);
+          }
+        }
+        if(!restored.length)return current;
+        const merged=[...restored,...current];
+        try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
+        if(!silent)showToast(`${restored.length} lista(s) recuperada(s)`);
+        return merged;
+      });
+    }catch(err){
+      console.warn("Nao foi possivel recuperar listas do usuario:",err);
+    }
+  },[showToast]);
+
   useEffect(()=>{
     const existingName=getAppUserName();
     if(existingName){
       setSenderName(prev=>prev||existingName);
       setUserNameInput(existingName);
-      registerAppUser(existingName);
+      registerAppUser(existingName).then(userId=>{
+        if(userId)restoreUserListsFromCloud(userId,{silent:true});
+      });
+    }else{
+      const existingUserId=getAppUserId();
+      if(existingUserId)restoreUserListsFromCloud(existingUserId,{silent:true});
     }
-  },[]);
+  },[restoreUserListsFromCloud]);
 
   const confirmAppUserName=async()=>{
     const clean=saveAppUserName(userNameInput);
-    if(!clean){showToast("⚠️ Informe seu nome para continuar.");return;}
+    if(!clean){showToast("Informe seu nome para continuar.");return;}
     setSenderName(clean);
     setUserNameModal(false);
-    const ok=await registerAppUser(clean,{force:true});
-    showToast(ok?"✅ Usuário registrado!":"⚠️ Nome salvo neste aparelho; verifique as permissões do Supabase.", ok?2200:4200);
+    const userId=await registerAppUser(clean,{force:true});
+    if(userId)await restoreUserListsFromCloud(userId);
+    showToast(userId?"Usuario reconhecido!":"Nome salvo neste aparelho; verifique as permissoes do Supabase.", userId?2200:4200);
   };
 
   const scrollToListTop=useCallback(()=>{
