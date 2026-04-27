@@ -32,6 +32,7 @@ function supabaseHeaders(extra = {}) {
 const APP_USER_NAME_KEY = "tnl_user_name";
 const APP_DEVICE_ID_KEY = "tnl_device_id";
 const APP_USER_REGISTERED_KEY = "tnl_user_registered_device_id";
+const APP_USER_ID_KEY = "tnl_user_id";
 
 function getStoredValue(key) {
   try {
@@ -76,18 +77,50 @@ function saveAppUserName(name) {
   return clean;
 }
 
+function getAppUserId() {
+  return getStoredValue(APP_USER_ID_KEY);
+}
+
+function saveAppUserId(id) {
+  if (id) setStoredValue(APP_USER_ID_KEY, id);
+}
+
+async function findAppUserByDeviceId(deviceId) {
+  if (!deviceId || !hasSupabaseConfig()) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?device_id=eq.${encodeURIComponent(deviceId)}&select=id,nome,device_id&limit=1`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 async function registerAppUser(name, { force = false } = {}) {
   const clean = String(name || getAppUserName() || "").trim();
   if (!clean || !hasSupabaseConfig()) return false;
 
   const device_id = getAppDeviceId();
+  const existingUserId = getAppUserId();
   const alreadyRegistered = getStoredValue(APP_USER_REGISTERED_KEY);
-  if (!force && alreadyRegistered === device_id) return true;
+  if (!force && alreadyRegistered === device_id && existingUserId) return existingUserId;
 
   try {
+    const found = await findAppUserByDeviceId(device_id);
+    if (found?.id) {
+      saveAppUserId(found.id);
+      setStoredValue(APP_USER_REGISTERED_KEY, device_id);
+      if (found.nome) saveAppUserName(found.nome);
+      return found.id;
+    }
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
       method: "POST",
-      headers: supabaseHeaders({ Prefer: "return=minimal" }),
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
       body: JSON.stringify({
         nome: clean,
         device_id,
@@ -100,8 +133,11 @@ async function registerAppUser(name, { force = false } = {}) {
       return false;
     }
 
+    const data = await res.json().catch(() => []);
+    const created = Array.isArray(data) ? data[0] : data;
+    if (created?.id) saveAppUserId(created.id);
     setStoredValue(APP_USER_REGISTERED_KEY, device_id);
-    return true;
+    return created?.id || true;
   } catch (err) {
     console.warn("Erro ao registrar usuário:", err);
     return false;
@@ -113,23 +149,44 @@ async function createSharedListRecord(list) {
     throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.");
   }
 
+  const ownerName = list?.remetente || list?.ownerName || getAppUserName() || "Usuário do Tá na Lista";
+  const userId = await registerAppUser(ownerName).catch(() => getAppUserId());
+
   const payload = {
     title: list?.name || "Lista de compras",
     list_type: list?.type || "geral",
     budget: Number(list?.budget || 0),
-    data: list,
-    remetente: list?.remetente || list?.ownerName || getAppUserName() || "Usuário do Tá na Lista",
+    data: {
+      ...list,
+      ownerName,
+      userId: userId || getAppUserId() || null,
+    },
+    remetente: ownerName,
+    user_id: userId || getAppUserId() || null,
   };
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
+  const postSharedList = async (bodyPayload) => fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
     method: "POST",
     headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(bodyPayload),
   });
+
+  let res = await postSharedList(payload);
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Erro ao salvar lista compartilhada (${res.status}) ${text}`.trim());
+    // Compatibilidade: se a coluna user_id ainda não existir no Supabase, salva a lista sem quebrar o compartilhamento.
+    if (/user_id|column/i.test(text)) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.user_id;
+      res = await postSharedList(fallbackPayload);
+      if (!res.ok) {
+        const retryText = await res.text().catch(() => "");
+        throw new Error(`Erro ao salvar lista compartilhada (${res.status}) ${retryText}`.trim());
+      }
+    } else {
+      throw new Error(`Erro ao salvar lista compartilhada (${res.status}) ${text}`.trim());
+    }
   }
 
   const data = await res.json();
@@ -158,26 +215,41 @@ async function getSharedListRecord(id) {
 async function updateSharedListRecord(id, list) {
   if (!id || !hasSupabaseConfig()) return null;
 
+  const userId = list?.userId || getAppUserId() || null;
   const payload = {
     title: list?.name || "Lista de compras",
     list_type: list?.type || "geral",
     budget: Number(list?.budget || 0),
     data: {
       ...list,
+      userId,
       sharedId: id,
       lastSyncedAt: new Date().toISOString(),
     },
+    user_id: userId,
   };
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+  const patchSharedList = async (bodyPayload) => fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(bodyPayload),
   });
+
+  let res = await patchSharedList(payload);
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${text}`.trim());
+    if (/user_id|column/i.test(text)) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.user_id;
+      res = await patchSharedList(fallbackPayload);
+      if (!res.ok) {
+        const retryText = await res.text().catch(() => "");
+        throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${retryText}`.trim());
+      }
+    } else {
+      throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${text}`.trim());
+    }
   }
 
   const data = await res.json();
@@ -2010,7 +2082,7 @@ export default function App(){
     const record=await createSharedListRecord(list);
     if(!record?.id)throw new Error("Não foi possível gerar o link curto da lista no Supabase.");
 
-    const updated={...list,sharedId:record.id,sharedAt:new Date().toISOString()};
+    const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString()};
     setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
     saveLists(lists.map(l=>l.id===list.id?updated:l));
     return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
@@ -2025,6 +2097,7 @@ export default function App(){
       ...baseData,
       id:baseData.id||("shared-"+(sharedId||Date.now())),
       sharedId:sharedId||baseData.sharedId,
+      userId: baseData.userId || record?.user_id || null,
       isShared:true,
       imported:true,
       importedFrom:record?.remetente || baseData.remetente || "Não informado",
