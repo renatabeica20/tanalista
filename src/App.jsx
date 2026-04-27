@@ -463,6 +463,33 @@ function getCatTheme(name) {
   return CAT_THEME[name] || { bg:"#FAFAFA", border:"#BDBDBD", header:"#424242", icon:"📦" };
 }
 
+function AppLogo({ size = 48, radius = 16, shadow = true }) {
+  return (
+    <img
+      src="/icon-192.png"
+      alt="Tá na Lista"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        objectFit: "cover",
+        display: "block",
+        boxShadow: shadow ? "0 14px 30px rgba(109,40,217,0.24)" : "none",
+        border: "1px solid rgba(255,255,255,0.28)",
+      }}
+    />
+  );
+}
+
+function BrandWordmark({ compact = false, color = "#111827" }) {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:compact?8:12,justifyContent:"center"}}>
+      <AppLogo size={compact?42:64} radius={compact?14:20} />
+      <div style={{fontWeight:900,fontSize:compact?22:34,color,letterSpacing:"-1px",lineHeight:1}}>Tá na Lista</div>
+    </div>
+  );
+}
+
 const LIST_TYPES = [
   {id:"mercado",   label:"🛒 Supermercado"},
   {id:"festa",     label:"🎉 Festa/Churrasco"},
@@ -2702,7 +2729,7 @@ export default function App(){
         return(
         <div style={{position:"fixed",inset:0,background:"linear-gradient(180deg,#F5F3FF 0%,#FFFFFF 42%,#F8FAFC 100%)",zIndex:520,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:24,boxShadow:"0 28px 70px rgba(17,24,39,0.18)",border:"1px solid #E9D5FF"}}>
-            <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 18px",boxShadow:"0 18px 34px rgba(109,40,217,0.24)",position:"relative"}}><span>🛒</span><span style={{position:"absolute",right:10,bottom:10,width:24,height:24,borderRadius:"50%",background:"#10B981",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,border:"3px solid white"}}>✓</span></div>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:18}}><AppLogo size={86} radius={26} /></div>
             <h2 style={{margin:"0 0 8px",fontSize:24,lineHeight:1.15,textAlign:"center",color:"#111827",fontWeight:900}}>Você recebeu uma lista</h2>
             <p style={{margin:"0 0 18px",fontSize:14,color:"#6B7280",textAlign:"center",lineHeight:1.45}}>
               Enviada por <strong style={{color:"#4C1D95"}}>{sharedLandingRecord.remetente||sharedData.remetente||"Usuário do Tá na Lista"}</strong>
@@ -2746,7 +2773,7 @@ export default function App(){
         <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.56)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
           <div style={{background:"#FFFFFF",borderRadius:24,padding:32,textAlign:"center",maxWidth:360,width:"100%"}}>
             <div style={{width:86,height:86,borderRadius:"50%",margin:"0 auto 14px",background:"linear-gradient(135deg,#EEF2FF,#ECFDF5)",border:"2px solid #D1FAE5",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:"0 14px 32px rgba(16,185,129,0.16)"}}>
-              <span style={{fontSize:46,lineHeight:1}}>🛒</span>
+              <AppLogo size={58} radius={18} shadow={false} />
               <span style={{position:"absolute",right:8,bottom:8,width:30,height:30,borderRadius:"50%",background:"#10B981",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,border:"3px solid white"}}>✓</span>
             </div>
             <div style={{fontWeight:900,fontSize:22,color:"#111827",marginBottom:8}}>Lista finalizada!</div>
@@ -2783,9 +2810,8 @@ export default function App(){
             <div style={{position:"relative"}}>
               {getAppUserName()&&(<div style={{fontSize:14,color:"#4C1D95",fontWeight:900,marginBottom:10,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
               <div style={{textAlign:"center"}}>
-                <div style={{fontWeight:900,fontSize:34,color:"#111827",letterSpacing:"-1px",lineHeight:1,marginBottom:6}}>Tá na Lista</div>
-                <div style={{width:74,height:74,borderRadius:24,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"1px solid rgba(109,40,217,0.20)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,margin:"0 auto 14px",boxShadow:"0 18px 40px rgba(109,40,217,0.26)"}}>🛍️</div>
-                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600}}>Organize, compartilhe sua lista e controle o orçamento</div>
+                <BrandWordmark />
+                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.4,fontStyle:"italic",fontWeight:600,marginTop:12}}>Organize, compartilhe sua lista e controle o orçamento</div>
               </div>
             </div>
           </div>
@@ -2793,7 +2819,7 @@ export default function App(){
             <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
-                {icon:"🛒",name:"Compras",desc:"Lista inteligente",active:true},
+                {icon:"__APP_LOGO__",name:"Compras",desc:"Lista inteligente",active:true},
                 {icon:"🎉",name:"Festa",  desc:"Churrasco e eventos",active:false},
                 {icon:"🍕",name:"Conta",  desc:"Dividir no restaurante",active:false},
                 {icon:"💊",name:"Saúde",  desc:"Receitas e remédios",active:false},
@@ -2803,7 +2829,7 @@ export default function App(){
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
                   style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
-                  <div style={{fontSize:30,marginBottom:10}}>{m.icon}</div>
+                  <div style={{fontSize:30,marginBottom:10}}>{m.icon==="__APP_LOGO__"?<AppLogo size={34} radius={10} shadow={false} />:m.icon}</div>
                   <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
                   <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
                 </div>
@@ -2812,7 +2838,7 @@ export default function App(){
             <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Listas recentes</div>
             {lists.length===0?(
               <div style={{textAlign:"center",padding:"32px 20px",color:"#6B7280"}}>
-                <div style={{fontSize:48,marginBottom:12}}>🛒</div>
+                <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><AppLogo size={56} radius={18} shadow={false} /></div>
                 <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no <strong>+</strong> para criar!</p>
               </div>
             ):(
@@ -2901,7 +2927,7 @@ export default function App(){
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
               {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()} 👋</div>)}
-              <div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div></div>
             </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
