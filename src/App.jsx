@@ -73,6 +73,35 @@ async function getSharedListRecord(id) {
   return Array.isArray(data) ? data[0] : null;
 }
 
+async function updateSharedListRecord(id, list) {
+  if (!id || !hasSupabaseConfig()) return null;
+
+  const payload = {
+    title: list?.name || "Lista de compras",
+    list_type: list?.type || "geral",
+    budget: Number(list?.budget || 0),
+    data: {
+      ...list,
+      sharedId: id,
+      lastSyncedAt: new Date().toISOString(),
+    },
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${text}`.trim());
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim().replace(/```json|```/g, "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
@@ -1685,6 +1714,7 @@ export default function App(){
   const [senderName,setSenderName]=useState(()=>localStorage.getItem("tnl_sender_name")||"");
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
+  const [sharedSyncing,setSharedSyncing]=useState(false);
   const [checkPopup,setCheckPopup]=useState(null);
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
@@ -1853,7 +1883,10 @@ export default function App(){
 
   const publishSharedList=async(list)=>{
     if(!list)throw new Error("Lista não encontrada.");
-    if(list.sharedId)return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
+    if(list.sharedId){
+      syncSharedListToCloud(list,{silent:true});
+      return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
+    }
 
     const record=await createSharedListRecord(list);
     if(!record?.id)throw new Error("Não foi possível gerar o link curto da lista no Supabase.");
@@ -1877,8 +1910,11 @@ export default function App(){
       imported:true,
       importedFrom:record?.remetente || baseData.remetente || "Não informado",
       remetente:record?.remetente || baseData.remetente || "Não informado",
+      sharedOwner:record?.remetente || baseData.remetente || "Não informado",
+      sharedMode:"manual-sync",
       receivedAt:new Date().toISOString(),
       importedAt:new Date().toISOString(),
+      lastSyncedAt:new Date().toISOString(),
     };
 
     const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
@@ -2138,12 +2174,64 @@ export default function App(){
     setCollapsedCats({});
   };
 
+  const syncSharedListToCloud=useCallback(async(list,{silent=true}={})=>{
+    const sharedId=list?.sharedId;
+    if(!sharedId)return null;
+    try{
+      if(!silent)setSharedSyncing(true);
+      const record=await updateSharedListRecord(sharedId,list);
+      if(!silent)showToast("🔄 Lista compartilhada sincronizada");
+      return record;
+    }catch(err){
+      console.warn("Falha ao sincronizar lista compartilhada",err);
+      if(!silent)showToast("⚠️ Não foi possível sincronizar. Verifique a política UPDATE no Supabase.",5200);
+      return null;
+    }finally{
+      if(!silent)setSharedSyncing(false);
+    }
+  },[showToast]);
+
+  const refreshSharedListFromCloud=useCallback(async()=>{
+    const sharedId=currentList?.sharedId;
+    if(!sharedId)return;
+    setSharedSyncing(true);
+    try{
+      const record=await getSharedListRecord(sharedId);
+      if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      const refreshed={
+        ...record.data,
+        id:currentList.id,
+        sharedId,
+        isShared:true,
+        imported:currentList.imported,
+        importedFrom:record?.remetente || currentList.importedFrom || currentList.remetente || "Não informado",
+        remetente:record?.remetente || currentList.remetente || "Não informado",
+        sharedOwner:record?.remetente || currentList.sharedOwner || "Não informado",
+        lastSyncedAt:new Date().toISOString(),
+      };
+      setCurrentList(refreshed);
+      const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+      const nl=existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l);
+      setLists(nl);
+      localStorage.setItem("tnl_lists",JSON.stringify(nl));
+      showToast("🔄 Lista atualizada");
+    }catch(err){
+      showToast("⚠️ Não foi possível atualizar a lista compartilhada",5200);
+    }finally{
+      setSharedSyncing(false);
+    }
+  },[currentList,showToast]);
+
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.price!=null?i.price*i.qty:0),0);
 
   const updateList=(ul)=>{
     const{fullTotal}=getProgress(ul);ul.total=fullTotal;
-    setCurrentList({...ul});
-    saveLists(lists.map(l=>l.id===ul.id?ul:l));
+    const updated={...ul,lastLocalUpdateAt:new Date().toISOString()};
+    setCurrentList(updated);
+    saveLists(lists.map(l=>l.id===updated.id?updated:l));
+    if(updated.sharedId){
+      syncSharedListToCloud(updated,{silent:true});
+    }
   };
 
   const toggleCheck=(ci,ii)=>{
@@ -2484,6 +2572,9 @@ export default function App(){
                           {budgetSummary&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,padding:"5px 9px",borderRadius:999,background:budgetSummary.bg,border:"1px solid "+budgetSummary.border,color:budgetSummary.color,fontSize:11,fontWeight:900}}>
                             <span>{budgetSummary.icon}</span><span>{budgetSummary.text}</span>
                           </div>)}
+                          {list.importedFrom&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,marginLeft:budgetSummary?6:0,padding:"5px 9px",borderRadius:999,background:"#EEF2FF",border:"1px solid #C4B5FD",color:"#4C1D95",fontSize:11,fontWeight:900}}>
+                            <span>📥</span><span>Recebida de {list.importedFrom}</span>
+                          </div>)}
                         </div>
                         <div style={{color:"#9CA3AF",fontSize:18,flexShrink:0}}>›</div>
                       </div>
@@ -2770,6 +2861,10 @@ export default function App(){
               <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
               <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
                 style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
+              {currentList.sharedId&&(
+                <button onClick={refreshSharedListFromCloud} disabled={sharedSyncing}
+                  style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 10px",color:"white",fontSize:13,fontWeight:800,cursor:sharedSyncing?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap",opacity:sharedSyncing?0.7:1}}>{sharedSyncing?"⏳":"🔄"}</button>
+              )}
             </div>
             <div style={{background:"rgba(255,255,255,0.15)",borderRadius:18,padding:"12px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -2790,6 +2885,22 @@ export default function App(){
               </div>
             </div>
           </div>
+
+          {currentList.sharedId&&(
+            <div style={{margin:"10px 20px 0",background:"#EEF2FF",border:"1px solid #C4B5FD",borderRadius:18,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,color:"#4C1D95"}}>
+              <span style={{fontSize:18}}>🤝</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:900,fontSize:13}}>Lista compartilhada</div>
+                <div style={{fontSize:12,fontWeight:700,opacity:0.85}}>
+                  {(currentList.importedFrom||currentList.remetente)?`Recebida de ${currentList.importedFrom||currentList.remetente} · `:""}{checkedItems}/{totalItems} itens marcados
+                </div>
+              </div>
+              <button onClick={refreshSharedListFromCloud} disabled={sharedSyncing}
+                style={{border:"none",borderRadius:14,background:"#6D28D9",color:"white",fontSize:12,fontWeight:900,padding:"8px 10px",cursor:sharedSyncing?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                {sharedSyncing?"Sincronizando...":"Atualizar"}
+              </button>
+            </div>
+          )}
 
           {/* Painel orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(
