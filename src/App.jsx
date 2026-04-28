@@ -1964,7 +1964,7 @@ function singularizePortugueseWord(word) {
 function normalizeProductName(value) {
   const clean = String(value || "")
     .replace(/\s+/g, " ")
-    .replace(/\s+(de|do|da|dos|das)\s*$/i, "")
+    .replace(/\b(de|do|da|dos|das)\s*$/i, "")
     .trim();
   if (!clean) return "";
 
@@ -2890,6 +2890,7 @@ export default function App(){
 
   // Product dialog
   const [itemDialog,setItemDialog]=useState(null);
+  const [itemDialogMode,setItemDialogMode]=useState("pending");
   const [dlgMarca,setDlgMarca]=useState("");
   const [dlgTipo,setDlgTipo]=useState("");
   const [dlgPeso,setDlgPeso]=useState("");
@@ -2898,7 +2899,6 @@ export default function App(){
   const [dlgUnit,setDlgUnit]=useState("unidade");
   const [dlgConfig,setDlgConfig]=useState(null);
   const [editPendingIdx,setEditPendingIdx]=useState(null);
-  const [itemDialogMode,setItemDialogMode]=useState("pending");
   const [listNameConfirmed,setListNameConfirmed]=useState(false);
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
   const [budgetSavedPulse,setBudgetSavedPulse]=useState(false);
@@ -3388,6 +3388,7 @@ export default function App(){
   const [dlgLoading, setDlgLoading] = useState(false);
 
   const openProductDialog = async (name, existing=null, options={}) => {
+    const mode = options?.mode || "pending";
     if (existing) {
       const cfg = getProductConfig(name);
       setDlgConfig(cfg);
@@ -3397,8 +3398,8 @@ export default function App(){
       setDlgVolume(existing.volume||"");
       setDlgQty(existing.qty||1);
       setDlgUnit(existing.unit||cfg.unidades?.[0]||"unidade");
+      setItemDialogMode(mode);
       setItemDialog({name});
-      setItemDialogMode("pending");
       return;
     }
     // Novo item manual: abre diálogo simples e rápido, sem marca/tipo.
@@ -3411,8 +3412,8 @@ export default function App(){
     setDlgQty(1);
     setDlgPeso(cfg.pesos?.[0] || "");
     setDlgVolume(!cfg.pesos?.length ? (cfg.volumes?.[0] || "") : "");
+    setItemDialogMode(mode);
     setItemDialog({name});
-    setItemDialogMode(options?.mode || "pending");
   };
 
   const handleAddItem = async () => {
@@ -3449,23 +3450,21 @@ export default function App(){
     } catch {}
     if (itemDialogMode === "extra" && currentList) {
       const l = JSON.parse(JSON.stringify(currentList));
-      const preferredCat = inferPreferredCategoryForItem(newItem) || "Itens Extras";
-      let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText(preferredCat));
+      let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText("Itens Extras"));
       if (!cat) {
-        cat = { name: preferredCat, items: [] };
+        cat = { name: "Itens Extras", items: [] };
         l.categories.push(cat);
       }
-      cat.items.push({ ...newItem, extra: true });
+      cat.items.push({ ...newItem, extra: true, checked: false, notFound: false });
       l.categories = sanitizeCategories(l.categories);
       updateList(l);
       setItemDialog(null);
       setItemDialogMode("pending");
       setCurrentInput("");
       setExName(""); setExQty(1); setExUnit("unidade"); setExPrice("");
-      showToast("⭐ Item extra adicionado!");
+      showToast("⭐ Item extra adicionado em seção própria!");
       return;
     }
-
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -4085,12 +4084,10 @@ export default function App(){
   const addExtra=()=>{
     if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
     const l=JSON.parse(JSON.stringify(currentList));
-    const item=normalizeListItem({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false,extra:true});
-    const preferredCat=inferPreferredCategoryForItem(item)||"Itens Extras";
-    let cat=l.categories.find(c=>normalizePlainText(c.name)===normalizePlainText(preferredCat));
-    if(!cat){cat={name:preferredCat,items:[]};l.categories.push(cat);}
-    cat.items.push(item);
-    l.categories=sanitizeCategories(l.categories);
+    let cat=l.categories.find(c=>c.name==="Itens Extras");
+    if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
+    cat.items.push({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false,notFound:false,extra:true});
+    l.categories = sanitizeCategories(l.categories);
     updateList(l);setExtraModal(false);
     setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
     showToast("⭐ Item extra adicionado!");
@@ -4588,11 +4585,11 @@ export default function App(){
 
           </>)}
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>{setItemDialog(null);setItemDialogMode("pending");setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
+            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
             {!dlgLoading&&(
               <button onClick={confirmDialog}
                 style={{flex:2,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
-                {itemDialogMode==="extra"?"Adicionar à lista ✓":editPendingIdx!=null?"Atualizar ✓":"Confirmar ✓"}
+                {itemDialogMode==="extra"?"Adicionar à seção Extras ✓":editPendingIdx!=null?"Atualizar ✓":"Confirmar ✓"}
               </button>
             )}
           </div>
