@@ -2025,6 +2025,10 @@ export default function App(){
   const [editPendingIdx,setEditPendingIdx]=useState(null);
   const [listNameConfirmed,setListNameConfirmed]=useState(false);
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
+  const [budgetSavedPulse,setBudgetSavedPulse]=useState(false);
+  const [listNameSavedPulse,setListNameSavedPulse]=useState(false);
+  const budgetSavedTimer=useRef(null);
+  const listNameSavedTimer=useRef(null);
   const [showPasteModal,setShowPasteModal]=useState(false);
   const [pasteText,setPasteText]=useState("");
   const [showPhotoModal,setShowPhotoModal]=useState(false);
@@ -2035,6 +2039,18 @@ export default function App(){
   const [reuseModal,setReuseModal]=useState(null);
   const [listMenuId,setListMenuId]=useState(null);
   const [mNotFound,setMNotFound]=useState(false);
+
+  const triggerBudgetSavedPulse=useCallback(()=>{
+    setBudgetSavedPulse(true);
+    if(budgetSavedTimer.current) clearTimeout(budgetSavedTimer.current);
+    budgetSavedTimer.current=setTimeout(()=>setBudgetSavedPulse(false),900);
+  },[]);
+
+  const triggerListNameSavedPulse=useCallback(()=>{
+    setListNameSavedPulse(true);
+    if(listNameSavedTimer.current) clearTimeout(listNameSavedTimer.current);
+    listNameSavedTimer.current=setTimeout(()=>setListNameSavedPulse(false),900);
+  },[]);
 
   // List screen
   const [search,setSearch]=useState("");
@@ -3121,34 +3137,34 @@ export default function App(){
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
-            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
               <label style={lbl}>💰 Orçamento</label>
               <div>
                 <div style={{position:"relative"}}>
                   <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:15,pointerEvents:"none"}}>R$</span>
-                  <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true);}}
+                  <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true); triggerBudgetSavedPulse();}}
                     placeholder="0,00" inputMode="numeric"
-                    style={inp({paddingLeft:44,width:"100%",height:58})}
-                    onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+                    style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetSavedPulse||budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.12)":"none",fontWeight:budgetText?800:500,transition:"border-color .25s ease, box-shadow .25s ease, color .25s ease"})}
+                    onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=budgetText?"#6D28D9":"#E5E7EB"}/>
                 </div>
-                <div style={{fontSize:12,color:budgetText?"#16A34A":"#9CA3AF",marginTop:7,fontWeight:budgetText?700:500}}>
-                  {budgetText ? "Limite definido automaticamente" : "Deixe em branco para não definir limite"}
+                <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:budgetText?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
+                  {budgetText ? "Orçamento salvo automaticamente" : "Deixe em branco para não definir limite"}
                 </div>
               </div>
             </div>
             {/* NOME DA LISTA */}
-            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
               <label style={lbl}>📝 Nome da lista</label>
-              <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true);}}
+              <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
                 placeholder="Ex: Compras da semana..."
-                style={inp({width:"100%",height:58})}
-                onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-              <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:listName?700:500}}>
+                style={inp({width:"100%",height:58,borderColor:listNameSavedPulse||listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.12)":"none",fontWeight:listName?900:500,transition:"border-color .25s ease, box-shadow .25s ease, font-weight .25s ease"})}
+                onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=listName?"#6D28D9":"#E5E7EB"}/>
+              <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:listName?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
                 {listName ? "Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
               </div>
             </div>
             {/* TIPO DE LISTA */}
-            <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
               <label style={lbl}>🏷️ Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -3158,7 +3174,7 @@ export default function App(){
                 <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
-            <div>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease"}}>
               <label style={lbl}>Adicionar itens</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
