@@ -3141,10 +3141,10 @@ export default function App(){
               <label style={lbl}>💰 Orçamento</label>
               <div>
                 <div style={{position:"relative"}}>
-                  <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:15,pointerEvents:"none"}}>R$</span>
+                  <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#6B7280",fontSize:15,pointerEvents:"none",transition:"color .25s ease, font-weight .25s ease"}}>R$</span>
                   <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true); triggerBudgetSavedPulse();}}
                     placeholder="0,00" inputMode="numeric"
-                    style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetSavedPulse||budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.12)":"none",fontWeight:budgetText?800:500,transition:"border-color .25s ease, box-shadow .25s ease, color .25s ease"})}
+                    style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.14)":"none",fontWeight:budgetText?900:500,color:budgetText?"#6D28D9":"#111827",transition:"border-color .25s ease, box-shadow .25s ease, color .25s ease, font-weight .25s ease"})}
                     onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=budgetText?"#6D28D9":"#E5E7EB"}/>
                 </div>
                 <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:budgetText?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
@@ -3157,7 +3157,7 @@ export default function App(){
               <label style={lbl}>📝 Nome da lista</label>
               <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
                 placeholder="Ex: Compras da semana..."
-                style={inp({width:"100%",height:58,borderColor:listNameSavedPulse||listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.12)":"none",fontWeight:listName?900:500,transition:"border-color .25s ease, box-shadow .25s ease, font-weight .25s ease"})}
+                style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.14)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827",transition:"border-color .25s ease, box-shadow .25s ease, font-weight .25s ease, color .25s ease"})}
                 onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=listName?"#6D28D9":"#E5E7EB"}/>
               <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:listName?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
                 {listName ? "Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
