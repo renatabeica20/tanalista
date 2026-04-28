@@ -1874,7 +1874,7 @@ async function aiOrganize(items, type) {
 ITENS:
 ${list}
 
-Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.`;
+Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -1891,7 +1891,7 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
       i.notFound = false;
     });
   });
-  return sanitizeCategories(categories);
+  return enforceKnownCategoryRules(sanitizeCategories(categories));
 }
 
 
@@ -2079,7 +2079,7 @@ function sanitizeCategories(categories) {
     .map((cat) => {
       const items = (Array.isArray(cat?.items) ? cat.items : [])
         .map(normalizeListItem)
-        .filter(item => item.name)
+        .filter(item => item.name && !isQuantityOnlyItemName(item.name))
         .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR"));
       return { ...cat, name: cat?.name || "Outros", items };
     })
@@ -2141,10 +2141,12 @@ function applyUserMemoryToItems(items) {
 function numberFromPortuguese(value) {
   const raw = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const map = {
-    "um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
+    "meio":0.5,"meia":0.5,"um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
     "onze":11,"doze":12,"treze":13,"quatorze":14,"catorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20
   };
-  if(map[raw]) return map[raw];
+  if (/^(um|uma)\s+e\s+mei[ao]$/.test(raw)) return 1.5;
+  if (/^(dois|duas)\s+e\s+mei[ao]$/.test(raw)) return 2.5;
+  if(map[raw] !== undefined) return map[raw];
   const n = Number(raw.replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
@@ -2168,7 +2170,7 @@ function splitContinuousVoiceIntoChunks(text) {
   const qtyStartWords = "(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
   const productWords = [
-    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
+    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","manga","pera","pêra","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
   ];
   const normalizedProducts = productWords
     .map(w => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
@@ -2177,6 +2179,9 @@ function splitContinuousVoiceIntoChunks(text) {
   const productAlternation = normalizedProducts.map(escapeRegExp).join("|");
 
   let raw = String(text || "")
+    .replace(/(\d+)\s*,\s*(\d+)/g, "$1§DEC§$2")
+    .replace(/\b(um|uma|dois|duas)\s+e\s+mei[ao]\b/gi, (m) => m.toLowerCase().startsWith("do") ? "2§DEC§5" : "1§DEC§5")
+    .replace(/\bcom\s+((?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+))\s+(unidades?|un|latas?|garrafas?|long\s+necks?)\b/gi, (m, n, u) => `com ${n}§JOIN§${u}`)
     .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
     .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
     .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
@@ -2219,7 +2224,10 @@ function splitContinuousVoiceIntoChunks(text) {
     return parts;
   };
 
-  return explicit.flatMap(splitOne).map(v => v.trim()).filter(v => v.length > 1);
+  return explicit
+    .flatMap(splitOne)
+    .map(v => v.replace(/§DEC§/g, ",").replace(/§JOIN§/g, " ").trim())
+    .filter(v => v.length > 1);
 }
 
 function parseSpokenShoppingItems(text) {
@@ -2275,8 +2283,16 @@ function parseSpokenShoppingItems(text) {
       }
     }
 
+    const packMatch = c.match(/\bcom\s+((?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+))\s+(unidades?|un|latas?|garrafas?|long\s+necks?)\b/i);
+    if (packMatch) {
+      const packQty = numberFromPortuguese(packMatch[1]) || Number(packMatch[1]) || 1;
+      const packUnit = normalizeUnitValue(packMatch[2]);
+      embalagem = [embalagem, `com ${packQty} ${formatUnitForQuantity(Number(packQty) || 2, packUnit)}`].filter(Boolean).join(" ");
+      c = c.replace(packMatch[0], "").trim();
+    }
+
     c = c
-      .replace(/\b(de|do|da|dos|das)\s*$/i, "")
+      .replace(/\b(de|do|da|dos|das|com)\s*$/i, "")
       .replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi, "")
       .trim();
 
@@ -2307,8 +2323,11 @@ async function aiParseShoppingText(text, type = "mercado") {
     "- Quando houver sequência como 'dois pacotes de arroz de cinco quilos, três caixas de leite de um litro e uma lata de óleo 900 ml', gere três objetos separados;",
     "- Interprete números por extenso: um=1, dois=2, três=3, quatro=4, cinco=5, dez=10 etc.;",
     "- Exemplo: 'dois pacotes de arroz de cinco quilos' => name 'Arroz', qty 2, unit 'pacote', peso '5kg', embalagem '5kg';",
+    "- Exemplo: 'um quilo e meio de carne' ou '1,5 kg de carne' => name 'Carne', qty 1.5, unit 'kg'; nunca transforme 1,5 em 5;",
     "- Exemplo: 'três caixas de leite de um litro' => name 'Leite', qty 3, unit 'caixa', volume '1L', embalagem '1L';",
     "- Exemplo: 'um fardo de cerveja lata 350 ml' => name 'Cerveja', qty 1, unit 'fardo', volume '350ml', embalagem 'lata 350ml';",
+    "- Exemplo: 'dois fardos de cerveja Heineken long neck com 24 unidades' => name 'Cerveja', marca 'Heineken', tipo 'Long neck', qty 2, unit 'fardo', embalagem 'com 24 unidades'; não crie item separado para 24 unidades;",
+    "- Manga, pera, maçã, banana, tomate e similares são Hortifruti quando a lista for organizada por categoria;",
     "- name deve conter apenas o produto principal, sem quantidade, sem unidade e sem peso/volume;",
     "- unit deve representar a quantidade comprada: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
     "- peso use apenas g/kg quando houver tamanho/peso da embalagem;",
@@ -2362,13 +2381,47 @@ async function aiParseShoppingText(text, type = "mercado") {
     .filter(Boolean);
 }
 
+function isQuantityOnlyItemName(name) {
+  const plain = normalizePlainText(name);
+  if (!plain) return true;
+  return /^(com\s+)?\d+(?:[,.]\d+)?\s*(unidade|unidades|un|pacote|pacotes|caixa|caixas|fardo|fardos|lata|latas|garrafa|garrafas)?$/.test(plain);
+}
+
+function inferPreferredCategoryForItem(item) {
+  const n = normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "));
+  const rules = [
+    { cat: "Hortifruti", keys: ["manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","tomate","alface","cebola","alho","batata","cenoura","melancia","abacate","brocolis","brócolis","verdura","legume","fruta"] },
+    { cat: "Carnes e Aves", keys: ["carne","frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra"] },
+    { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná"] },
+    { cat: "Limpeza", keys: ["detergente","sabao","sabão","desinfetante","amaciante","agua sanitaria","água sanitária","limpador","vassoura","esponja"] },
+    { cat: "Higiene e Perfumaria", keys: ["sabonete","shampoo","condicionador","desodorante","creme dental","escova","fio dental","absorvente"] },
+  ];
+  for (const rule of rules) {
+    if (rule.keys.some(k => n.includes(normalizePlainText(k)))) return rule.cat;
+  }
+  return "";
+}
+
+function enforceKnownCategoryRules(categories) {
+  const buckets = {};
+  (Array.isArray(categories) ? categories : []).forEach((cat) => {
+    (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
+      if (isQuantityOnlyItemName(item.name)) return;
+      const preferred = inferPreferredCategoryForItem(item) || cat.name || "Outros";
+      if (!buckets[preferred]) buckets[preferred] = [];
+      buckets[preferred].push(item);
+    });
+  });
+  return sanitizeCategories(Object.entries(buckets).map(([name, items]) => ({ name, items })));
+}
+
 function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão
   const map = [
     [["arroz","feijão","macarrão","farinha","açúcar","sal","azeite","óleo","molho","vinagre","extrato","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
     [["carne","frango","peixe","linguiça","bacon","costela","picanha","bife","filé","salsicha","hambúrguer"],"Carnes e Aves"],
     [["leite","iogurte","queijo","manteiga","requeijão","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru"],"Frios e Laticínios"],
-    [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis"],"Hortifruti"],
+    [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis","manga","pera","pêra"],"Hortifruti"],
     [["pão de queijo","lasanha","pizza","sorvete","batata frita"],"Congelados"],
     [["detergente","sabão","desinfetante","vassoura","esponja","limpador","água sanitária","amaciante","palha","multiuso","rodo"],"Limpeza"],
     [["shampoo","sabonete","creme dental","escova","fio dental","desodorante","condicionador","absorvente","fralda","papel higiênico"],"Higiene e Perfumaria"],
