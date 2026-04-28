@@ -3116,68 +3116,46 @@ export default function App(){
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
               {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()} 👋</div>)}
-              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listNameConfirmed&&listName?listName:"Nova lista"}</div></div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
             </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
             <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>💰 Orçamento</label>
-              {budgetConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
-                  <div>
-                    <div style={{fontSize:11,color:"#6D28D9",fontWeight:600}}>Limite definido</div>
-                    <div style={{fontSize:20,fontWeight:900,color:"#6D28D9"}}>{fmtR(parseBRL(budgetText)||0)}</div>
-                  </div>
-                  <button onClick={()=>setBudgetConfirmed(false)} style={{background:"none",border:"none",color:"#6D28D9",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
+              <div>
+                <div style={{position:"relative"}}>
+                  <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:15,pointerEvents:"none"}}>R$</span>
+                  <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true);}}
+                    placeholder="0,00" inputMode="numeric"
+                    style={inp({paddingLeft:44,width:"100%",height:58})}
+                    onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 </div>
-              ):(
-                <div>
-                  <div style={{display:"flex",gap:8}}>
-                    <div style={{position:"relative",flex:1}}>
-                      <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:15,pointerEvents:"none"}}>R$</span>
-                      <input value={budgetText} onChange={e=>setBudgetText(maskBRLInput(e.target.value))}
-                        onKeyDown={e=>e.key==="Enter"&&budgetText&&setBudgetConfirmed(true)}
-                        placeholder="0,00" inputMode="numeric"
-                        style={inp({paddingLeft:44})}
-                        onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-                    </div>
-                    <button onClick={()=>{if(budgetText)setBudgetConfirmed(true);}}
-                      style={{padding:"0 18px",borderRadius:18,background:budgetText?"#6D28D9":"#F0F2F5",border:"none",color:budgetText?"white":"#6B7280",fontWeight:700,fontSize:14,cursor:budgetText?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap"}}>OK</button>
-                  </div>
-                  <div style={{fontSize:12,color:"#9CA3AF",marginTop:6}}>Deixe em branco para não definir limite</div>
+                <div style={{fontSize:12,color:budgetText?"#16A34A":"#9CA3AF",marginTop:7,fontWeight:budgetText?700:500}}>
+                  {budgetText ? "Limite definido automaticamente" : "Deixe em branco para não definir limite"}
                 </div>
-              )}
+              </div>
             </div>
             {/* NOME DA LISTA */}
             <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>📝 Nome da lista</label>
-              {listNameConfirmed?(
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F5F3FF",borderRadius:18,padding:"10px 14px"}}>
-                  <div style={{fontWeight:800,fontSize:15,color:"#6D28D9"}}>{listName||"Minha lista"}</div>
-                  <button onClick={()=>setListNameConfirmed(false)} style={{background:"none",border:"none",color:"#6D28D9",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
-                </div>
-              ):(
-                <div style={{display:"flex",gap:8}}>
-                  <input value={listName} onChange={e=>setListName(e.target.value)}
-                    onKeyDown={e=>e.key==="Enter"&&setListNameConfirmed(true)}
-                    placeholder="Ex: Compras da semana..."
-                    style={inp({flex:1})}
-                    onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-                  <button onClick={()=>setListNameConfirmed(true)}
-                    style={{padding:"0 18px",borderRadius:18,background:"#6D28D9",border:"none",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>OK</button>
-                </div>
-              )}
+              <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true);}}
+                placeholder="Ex: Compras da semana..."
+                style={inp({width:"100%",height:58})}
+                onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+              <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:listName?700:500}}>
+                {listName ? "Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
+              </div>
             </div>
             {/* TIPO DE LISTA */}
             <div style={{background:"rgba(255,255,255,0.96)",borderRadius:22,padding:18,border:"1px solid #E9D5FF",boxShadow:"0 12px 30px rgba(109,40,217,0.08)"}}>
               <label style={lbl}>🏷️ Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
-                  style={{...inp(),appearance:"none",cursor:"pointer",paddingRight:36}}>
+                  style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",cursor:"pointer",paddingRight:42}}>
                   {LIST_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
-                <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:12}}>▼</span>
+                <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
             <div>
@@ -3185,20 +3163,16 @@ export default function App(){
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
-                  placeholder="Nome do produto..."
-                  style={inp()} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+                  placeholder="Digite um item da lista"
+                  style={inp({height:56})} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 <button onClick={handleAddItem}
-                  style={{padding:"0 20px",height:52,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:800,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>Inserir</button>
+                  style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>＋ Inserir</button>
               </div>
-              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Para cada produto o app pergunta tipo, tamanho e quantidade.</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Digite um item, cole sua lista ou organize tudo com IA.</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>setShowPasteModal(true)}
-                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                  style={{width:"100%",padding:"15px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(109,40,217,0.08)"}}>
                   📋 Colar lista
-                </button>
-                <button disabled title="Função temporariamente desativada"
-                  style={{width:"100%",padding:"14px",borderRadius:20,background:"#F3F4F6",border:"2px solid #D1D5DB",color:"#9CA3AF",fontWeight:800,fontSize:14,cursor:"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,opacity:0.75}}>
-                  📷 Ler foto
                 </button>
               </div>
             </div>
@@ -3228,7 +3202,7 @@ export default function App(){
               </div>
             )}
             <button onClick={organizeList} disabled={loading||pendingItems.length===0}
-              style={{...btnG,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+              style={{...btnG,padding:18,borderRadius:22,fontSize:17,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 32px rgba(109,40,217,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
               ✨ Organizar com IA {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
