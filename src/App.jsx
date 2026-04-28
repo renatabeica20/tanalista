@@ -2521,19 +2521,52 @@ function decimalToBrazilianString(n) {
   return Number.isInteger(num) ? String(num) : String(num).replace(".", ",");
 }
 
+function normalizeSpokenDecimalPhrases(value) {
+  const qtyWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|\d+)";
+  const decimalWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|\d+)";
+  return String(value || "")
+    .replace(new RegExp(`\b(${qtyWord})\s*(?:v[ií]rgula|ponto)\s*(${decimalWord})\b`, "gi"), (full, a, b) => {
+      const left = numberFromPortuguese(a);
+      const right = numberFromPortuguese(b);
+      if ((!left && left !== 0) || (!right && right !== 0)) return full;
+      return `${left},${String(right).replace(/^0+/, "") || "0"}`;
+    })
+    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/gi, "1,5 kg")
+    .replace(/\b(dois|duas)\s+quilos\s+e\s+mei[ao]\b/gi, "2,5 kg")
+    .replace(/\b(tr[eê]s)\s+quilos\s+e\s+mei[ao]\b/gi, "3,5 kg")
+    .replace(/\b(um|uma)\s+litro\s+e\s+mei[ao]\b/gi, "1,5 L")
+    .replace(/\b(dois|duas)\s+litros\s+e\s+mei[ao]\b/gi, "2,5 L")
+    .replace(/\bmei[ao]\s+quilo\b/gi, "0,5 kg")
+    .replace(/\bmei[ao]\s+litro\b/gi, "0,5 L")
+    .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2");
+}
+
+function dedupeMeasureText(value) {
+  const raw = String(value || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  const seen = new Set();
+  return raw
+    .split(/\s+/)
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (/^\d+(?:[,.]\d+)?(?:kg|g|l|ml)$/i.test(key)) {
+        if (seen.has(key)) return false;
+        seen.add(key);
+      }
+      return true;
+    })
+    .join(" ")
+    .trim();
+}
+
 function normalizeMeasureToken(value) {
-  let raw = String(value || "")
+  let raw = normalizeSpokenDecimalPhrases(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
-  raw = raw
-    .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2")
-    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/g, "1,5 kg")
-    .replace(/\b(um|uma)\s+litro\s+e\s+mei[ao]\b/g, "1,5 L")
-    .replace(/\bmei[ao]\s+quilo\b/g, "0,5 kg")
-    .replace(/\bmei[ao]\s+litro\b/g, "0,5 L");
+  raw = raw.replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2");
   const qty = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|\\d+[,\\.]?\\d*|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte)";
   const unit = "(?:kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml|mililitro|mililitros)";
   const m = raw.match(new RegExp(`^(${qty})\\s*(${unit})$`, "i"));
@@ -2622,6 +2655,7 @@ function repairAndNormalizeVoiceItems(items) {
     };
     if (nameFixes[plain]) name = nameFixes[plain];
 
+    embalagem = dedupeMeasureText(embalagem);
     item = normalizeListItem({ ...item, name, embalagem: embalagem.trim(), detail: embalagem.trim() });
     repaired.push(item);
   }
@@ -2631,10 +2665,8 @@ function repairAndNormalizeVoiceItems(items) {
 function parseSpokenShoppingItemsProfessional(text) {
   const qtyWords = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,\\.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
-  let raw = String(text || "")
+  let raw = normalizeSpokenDecimalPhrases(text)
     .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2")
-    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/gi, "1,5 kg")
-    .replace(/\bmei[ao]\s+quilo\b/gi, "0,5 kg")
     .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
     .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
     .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
@@ -2668,8 +2700,14 @@ function parseSpokenShoppingItemsProfessional(text) {
 }
 
 async function aiParseShoppingTextProfessional(text, type = "mercado") {
-  const cleanText = String(text || "").trim();
+  const cleanText = normalizeSpokenDecimalPhrases(String(text || "")).trim();
   if (!cleanText) return [];
+
+  // Entrada por voz: parser determinístico primeiro para preservar decimais.
+  // Evita que IA/transcrição transforme 1,5 kg ou 2,5 kg em 5 kg.
+  const localItems = parseSpokenShoppingItemsProfessional(cleanText);
+  if (localItems.length) return localItems;
+
   const typeName = TYPE_NAMES[type] || "geral";
   const prompt = [
     "Você é um parser profissional de listas de compras ditadas em português do Brasil.",
