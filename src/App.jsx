@@ -3131,12 +3131,7 @@ export default function App(){
   const shareAppWhatsApp=()=>{
     const appUrl=getPublicAppUrl();
     const text=`Estou usando o Tá na Lista para organizar compras, compartilhar listas e controlar o orçamento. Conheça o app:\n${appUrl}`;
-    const encoded=encodeURIComponent(text);
-    const whatsappUrl=`https://api.whatsapp.com/send?text=${encoded}`;
-    const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");
-    if(!opened){
-      window.location.href=whatsappUrl;
-    }
+    openWhatsAppShare(text);
   };
 
   useEffect(()=>{
@@ -3254,6 +3249,50 @@ export default function App(){
     lines.push("");
     lines.push("Se ainda não usa o Tá na Lista, abra o link e toque em ‘Adicionar à Tela de Início’. ");
     return lines.join("\n");
+  };
+
+  const isMobileDevice=()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+
+  const buildWhatsAppUrl=(text,{fallback=false}={})=>{
+    const encoded=encodeURIComponent(text||"");
+    if(isMobileDevice()&&!fallback){
+      return `whatsapp://send?text=${encoded}`;
+    }
+    if(!isMobileDevice()&&!fallback){
+      return `https://web.whatsapp.com/send?text=${encoded}`;
+    }
+    return `https://wa.me/?text=${encoded}`;
+  };
+
+  const openWhatsAppShare=(text,preparedWindow=null)=>{
+    const primaryUrl=buildWhatsAppUrl(text);
+
+    // No celular/PWA, usar o esquema nativo abre o aplicativo do WhatsApp direto,
+    // evitando a tela intermediária do api.whatsapp.com.
+    if(isMobileDevice()){
+      if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
+      window.location.href=primaryUrl;
+
+      // Fallback: se o app não estiver instalado ou o esquema nativo falhar,
+      // abre o fluxo web padrão como alternativa.
+      setTimeout(()=>{
+        if(!document.hidden){
+          window.location.href=buildWhatsAppUrl(text,{fallback:true});
+        }
+      },1200);
+      return;
+    }
+
+    if(preparedWindow&&!preparedWindow.closed){
+      preparedWindow.location.href=primaryUrl;
+      preparedWindow.focus?.();
+      return;
+    }
+
+    const opened=window.open(primaryUrl,"_blank","noopener,noreferrer");
+    if(!opened){
+      window.location.href=buildWhatsAppUrl(text,{fallback:true});
+    }
   };
 
   const openShareWindow=(url,preparedWindow=null)=>{
@@ -4091,13 +4130,12 @@ export default function App(){
   const shareWhatsApp=async(listArg=null)=>{
     const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
-    const preparedWindow=window.open("about:blank","_blank");
+    const preparedWindow=isMobileDevice()?null:window.open("about:blank","_blank");
     try{
       showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
       const text=buildShareInviteText(published,link);
-      const url="https://api.whatsapp.com/send?text="+encodeURIComponent(text);
-      openShareWindow(url,preparedWindow);
+      openWhatsAppShare(text,preparedWindow);
       showToast("✅ Link da lista pronto para envio pelo WhatsApp!");
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
