@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     formData.append("response_format", "json");
     formData.append(
       "prompt",
-      "Lista de compras em português do Brasil. Preserve quantidades, unidades, embalagens, pesos e volumes."
+      "Lista de compras em português do Brasil. Preserve quantidades decimais como 1,5 kg, unidades, marcas, embalagens, pesos e volumes. Não transforme 1,5 em 5. Preserve expressões como fardo com 24 unidades."
     );
 
     const openaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
