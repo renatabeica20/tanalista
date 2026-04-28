@@ -2169,6 +2169,7 @@ function normalizeSizeSpoken(num, measure) {
 function splitContinuousVoiceIntoChunks(text) {
   const qtyStartWords = "(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
+  const sizeWords = "(?:quilos?|kg|gramas?|g|litros?|l|ml|mililitros?)";
   const productWords = [
     "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","manga","pera","pêra","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
   ];
@@ -2224,10 +2225,35 @@ function splitContinuousVoiceIntoChunks(text) {
     return parts;
   };
 
-  return explicit
+  const fragments = explicit
     .flatMap(splitOne)
     .map(v => v.replace(/§DEC§/g, ",").replace(/§JOIN§/g, " ").trim())
     .filter(v => v.length > 1);
+
+  // Correção crítica: o transcritor às vezes separa o tamanho da embalagem
+  // como se fosse um item próprio. Ex.: "1 pacote arroz, 5 kg".
+  // Esses fragmentos de medida devem ser anexados ao item anterior.
+  const merged = [];
+  const measureOnlyRe = new RegExp("^(" + qtyStartWords + ")\\s*(" + sizeWords + ")$", "i");
+  const looseMeasureStartRe = new RegExp("^(" + qtyStartWords + ")\\s*(" + sizeWords + ")\\b", "i");
+  const fullItemStartRe = new RegExp("^(" + qtyStartWords + ")\\s+(" + unitWords + ")\\b", "i");
+
+  for (const frag of fragments) {
+    const cleanFrag = frag.trim();
+    if (measureOnlyRe.test(cleanFrag) && merged.length) {
+      merged[merged.length - 1] = (merged[merged.length - 1] + " de " + cleanFrag).trim();
+      continue;
+    }
+
+    if (looseMeasureStartRe.test(cleanFrag) && merged.length && !fullItemStartRe.test(cleanFrag)) {
+      merged[merged.length - 1] = (merged[merged.length - 1] + " de " + cleanFrag).trim();
+      continue;
+    }
+
+    merged.push(cleanFrag);
+  }
+
+  return merged;
 }
 
 function parseSpokenShoppingItems(text) {
@@ -2384,7 +2410,8 @@ async function aiParseShoppingText(text, type = "mercado") {
 function isQuantityOnlyItemName(name) {
   const plain = normalizePlainText(name);
   if (!plain) return true;
-  return /^(com\s+)?\d+(?:[,.]\d+)?\s*(unidade|unidades|un|pacote|pacotes|caixa|caixas|fardo|fardos|lata|latas|garrafa|garrafas)?$/.test(plain);
+  if (/^(kg|g|l|ml|quilo|quilos|grama|gramas|litro|litros|mililitro|mililitros)$/.test(plain)) return true;
+  return /^(com\s+)?\d+(?:[,.]\d+)?\s*(unidade|unidades|un|pacote|pacotes|caixa|caixas|fardo|fardos|lata|latas|garrafa|garrafas|kg|g|l|ml)?$/.test(plain);
 }
 
 function inferPreferredCategoryForItem(item) {
