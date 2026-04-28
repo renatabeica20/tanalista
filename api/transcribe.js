@@ -1,45 +1,64 @@
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 export default async function handler(req, res) {
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Método não permitido" });
+  }
+
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Método não permitido" });
-    }
-
     const apiKey = process.env.OPENAI_API_KEY;
-
     if (!apiKey) {
       return res.status(500).json({ error: "OPENAI_API_KEY não configurada" });
     }
 
     const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
 
-    req.on("data", chunk => chunks.push(chunk));
+    const buffer = Buffer.concat(chunks);
+    if (!buffer.length) {
+      return res.status(400).json({ error: "Áudio vazio" });
+    }
 
-    req.on("end", async () => {
-      try {
-        const buffer = Buffer.concat(chunks);
+    const contentType = req.headers["content-type"] || "audio/webm";
+    const blob = new Blob([buffer], { type: contentType });
 
-        const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`
-          },
-          body: buffer
-        });
+    const formData = new FormData();
+    formData.append("file", blob, "audio.webm");
+    formData.append("model", "gpt-4o-mini-transcribe");
+    formData.append("language", "pt");
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          return res.status(500).json({ error: data });
-        }
-
-        return res.status(200).json({ text: data.text || "" });
-
-      } catch (err) {
-        return res.status(500).json({ error: err.message });
-      }
+    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: formData,
     });
 
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Falha na transcrição",
+        details: data,
+      });
+    }
+
+    return res.status(200).json({
+      text: data.text || "",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Erro interno na transcrição",
+      details: error.message,
+    });
   }
 }
