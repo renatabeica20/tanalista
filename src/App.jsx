@@ -1886,6 +1886,109 @@ function capitalizeProductName(value) {
     .join(" ");
 }
 
+
+function numberFromPortuguese(value) {
+  const raw = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const map = {
+    "um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
+    "onze":11,"doze":12,"treze":13,"quatorze":14,"catorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20
+  };
+  if(map[raw]) return map[raw];
+  const n = Number(raw.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeUnitSpoken(unit) {
+  const raw = String(unit || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if(/^pacote/.test(raw)) return "pacote";
+  if(/^caixa/.test(raw)) return "caixa";
+  if(/^fardo/.test(raw)) return "fardo";
+  if(/^lata/.test(raw)) return "lata";
+  if(/^garrafa/.test(raw)) return "garrafa";
+  if(/^quilo|^kg$/.test(raw)) return "kg";
+  if(/^grama|^g$/.test(raw)) return "g";
+  if(/^litro|^l$/.test(raw)) return "L";
+  if(/^mililitro|^ml$/.test(raw)) return "ml";
+  if(/^duzia/.test(raw)) return "dúzia";
+  if(/^peca/.test(raw)) return "peça";
+  if(/^par/.test(raw)) return "par";
+  if(/^unidade|^un$/.test(raw)) return "unidade";
+  return unit || "unidade";
+}
+
+function normalizeSizeSpoken(num, measure) {
+  const n = numberFromPortuguese(num);
+  if(!n) return "";
+  const raw = String(measure || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if(/^quilo|^kg/.test(raw)) return `${n}kg`;
+  if(/^grama|^g/.test(raw)) return `${n}g`;
+  if(/^litro|^l$/.test(raw)) return `${n}L`;
+  if(/^mililitro|^ml/.test(raw)) return `${n}ml`;
+  return "";
+}
+
+function parseSpokenShoppingItems(text) {
+  const normalized = String(text || "")
+    .replace(/\bmais\b/gi, ",")
+    .replace(/\btamb[eé]m\b/gi, ",")
+    .replace(/\ba[ií]\b/gi, ",")
+    .replace(/\bdepois\b/gi, ",")
+    .replace(/\s+e\s+(?=(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
+    .replace(/[.;\n]+/g, ",");
+  const qtyWords = "(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,.]?\\d*)";
+  const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
+  const sizeWords = "(?:quilos?|kg|gramas?|g|litros?|l|ml|mililitros?)";
+  const chunks = normalized
+    .split(/\s*,\s*/g)
+    .map(v=>v.trim())
+    .filter(v=>v.length>1);
+
+  const items = [];
+  for(const chunk of chunks){
+    let c = chunk.replace(/^(quero|preciso|comprar|coloca|coloque|adiciona|adicione)\s+/i,"").trim();
+    let qty = 1, unit = "unidade", peso = "", volume = "", embalagem = "";
+
+    const re = new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+?)(?:\\s+de\\s+(${qtyWords})\\s*(${sizeWords}))?$`, "i");
+    let m = c.match(re);
+    if(m){
+      qty = numberFromPortuguese(m[1]) || 1;
+      unit = normalizeUnitSpoken(m[2]);
+      c = m[3].trim();
+      if(m[4] && m[5]){
+        const size = normalizeSizeSpoken(m[4],m[5]);
+        if(/kg|g$/i.test(size)) peso=size;
+        if(/ml|L$/i.test(size)) volume=size;
+        embalagem=size;
+      }
+    }else{
+      const re2 = new RegExp(`^(.+?)\\s+de\\s+(${qtyWords})\\s*(${sizeWords})$`, "i");
+      m = c.match(re2);
+      if(m){
+        c = m[1].trim();
+        const size = normalizeSizeSpoken(m[2],m[3]);
+        if(/kg|g$/i.test(size)) peso=size;
+        if(/ml|L$/i.test(size)) volume=size;
+        embalagem=size;
+      }else{
+        const re3 = new RegExp(`^(${qtyWords})\\s+(.+)$`, "i");
+        m = c.match(re3);
+        if(m){
+          qty = numberFromPortuguese(m[1]) || 1;
+          c = m[2].trim();
+        }
+      }
+    }
+
+    c = c.replace(/\b(de|com)\s*$/i,"").trim();
+    c = c.replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi,"").trim();
+    const name = capitalizeProductName(c);
+    if(name){
+      items.push({name,marca:"",tipo:"",embalagem,peso,volume,qty,unit,price:null,checked:false,notFound:false});
+    }
+  }
+  return items;
+}
+
 async function aiParseShoppingText(text, type = "mercado") {
   const cleanText = String(text || "").trim();
   if (!cleanText) return [];
@@ -1899,7 +2002,9 @@ async function aiParseShoppingText(text, type = "mercado") {
     '{"items":[{"name":"Arroz","qty":2,"unit":"pacote","marca":"","tipo":"","peso":"5kg","volume":"","embalagem":"5kg"}]}',
     "Regras obrigatórias:",
     "- Separe corretamente TODOS os itens ditados em sequência, mesmo quando não houver vírgula;",
+    "- Trate ponto, vírgula, pausa de fala, 'mais', 'também', 'e' e 'aí' como possíveis separadores de itens;",
     "- Entenda fala contínua: 'arroz feijão leite detergente' deve virar 4 itens;",
+    "- Quando houver sequência como 'dois pacotes de arroz de cinco quilos, três caixas de leite de um litro e uma lata de óleo 900 ml', gere três objetos separados;",
     "- Interprete números por extenso: um=1, dois=2, três=3, quatro=4, cinco=5, dez=10 etc.;",
     "- Exemplo: 'dois pacotes de arroz de cinco quilos' => name 'Arroz', qty 2, unit 'pacote', peso '5kg', embalagem '5kg';",
     "- Exemplo: 'três caixas de leite de um litro' => name 'Leite', qty 3, unit 'caixa', volume '1L', embalagem '1L';",
@@ -1923,6 +2028,10 @@ async function aiParseShoppingText(text, type = "mercado") {
   });
 
   const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+  const deterministicItems = parseSpokenShoppingItems(cleanText);
+  if (deterministicItems.length > rawItems.length && /\b(um|uma|dois|duas|tr[eê]s|quatro|cinco|pacote|pacotes|caixa|caixas|fardo|lata|garrafa|quilo|litro|ml|kg)\b|[,.;\n]/i.test(cleanText)) {
+    return deterministicItems;
+  }
   return rawItems
     .map((item) => {
       const name = capitalizeProductName(item?.name || item?.nome || "");
@@ -2187,6 +2296,9 @@ export default function App(){
   const [voiceProcessing,setVoiceProcessing]=useState(false);
   const voiceRecognitionRef=useRef(null);
   const voiceTranscriptRef=useRef("");
+  const voiceSessionTextRef=useRef("");
+  const voiceFinalizingRef=useRef(false);
+  const voiceRestartingRef=useRef(false);
   const voiceSilenceTimerRef=useRef(null);
   const voiceManualStopRef=useRef(false);
 
@@ -2730,11 +2842,117 @@ export default function App(){
   const scheduleVoiceAutoStop=()=>{
     stopVoiceSilenceTimer();
     voiceSilenceTimerRef.current=setTimeout(()=>{
+      voiceFinalizingRef.current=true;
       if(voiceRecognitionRef.current){
-        voiceManualStopRef.current=false;
         try{voiceRecognitionRef.current.stop();}catch{}
       }
-    },3800);
+    },4200);
+  };
+
+  const normalizeVoiceText=(value)=>String(value||"")
+    .replace(/\s+/g," ")
+    .replace(/\s+([,.!?;:])/g,"$1")
+    .trim();
+
+  const appendVoiceText=(text)=>{
+    const clean=normalizeVoiceText(text);
+    if(!clean)return;
+    const previous=normalizeVoiceText(voiceSessionTextRef.current);
+    const lowerPrevious=previous.toLowerCase();
+    const lowerClean=clean.toLowerCase();
+    if(lowerPrevious.endsWith(lowerClean))return;
+    voiceSessionTextRef.current=normalizeVoiceText(previous ? previous+". "+clean : clean);
+  };
+
+  const finalizeVoiceInput=()=>{
+    stopVoiceSilenceTimer();
+    setVoiceListening(false);
+    const text=normalizeVoiceText(voiceSessionTextRef.current||voiceTranscriptRef.current);
+    voiceRecognitionRef.current=null;
+    voiceTranscriptRef.current="";
+    voiceSessionTextRef.current="";
+    voiceFinalizingRef.current=false;
+    voiceRestartingRef.current=false;
+    if(text){
+      setPasteText(text);
+      importTextAsPendingItemsWithAI(text,{source:"voz"});
+    }else if(!voiceManualStopRef.current){
+      showToast("⚠️ Nenhum item foi identificado pela fala.",2600);
+    }
+  };
+
+  const createVoiceRecognition=()=>{
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const recognition=new SpeechRecognition();
+    recognition.lang="pt-BR";
+    recognition.interimResults=true;
+    recognition.continuous=true;
+    recognition.maxAlternatives=1;
+    let finalTranscript="";
+
+    recognition.onstart=()=>{
+      setVoiceListening(true);
+      if(!voiceRestartingRef.current){
+        setPasteText("");
+        showToast("🎤 Ouvindo... fale todos os itens em sequência",2600);
+      }
+      voiceRestartingRef.current=false;
+      scheduleVoiceAutoStop();
+    };
+
+    recognition.onresult=(event)=>{
+      let interim="";
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const transcript=(event.results[i][0]?.transcript||"").trim();
+        if(!transcript)continue;
+        if(event.results[i].isFinal){
+          finalTranscript=normalizeVoiceText(finalTranscript+". "+transcript);
+          appendVoiceText(transcript);
+        }else{
+          interim=normalizeVoiceText(interim+" "+transcript);
+        }
+      }
+      const preview=normalizeVoiceText((voiceSessionTextRef.current||finalTranscript)+" "+interim);
+      voiceTranscriptRef.current=preview;
+      if(preview) setPasteText(preview);
+      scheduleVoiceAutoStop();
+    };
+
+    recognition.onerror=(event)=>{
+      console.warn("Erro no reconhecimento de voz:",event);
+      if(event?.error==="not-allowed"){
+        stopVoiceSilenceTimer();
+        voiceFinalizingRef.current=true;
+        setVoiceListening(false);
+        showToast("⚠️ Permita o uso do microfone para ditar a lista.",4200);
+        return;
+      }
+      if(event?.error!=="no-speech" && event?.error!=="aborted"){
+        showToast("⚠️ Não consegui ouvir com clareza. Continue falando ou tente novamente.",3200);
+      }
+    };
+
+    recognition.onend=()=>{
+      const partial=normalizeVoiceText(voiceTranscriptRef.current||finalTranscript);
+      if(partial)appendVoiceText(partial);
+      voiceRecognitionRef.current=null;
+
+      if(!voiceManualStopRef.current && !voiceFinalizingRef.current){
+        voiceRestartingRef.current=true;
+        try{
+          const next=createVoiceRecognition();
+          voiceRecognitionRef.current=next;
+          setTimeout(()=>{try{next.start();}catch(err){console.warn(err);finalizeVoiceInput();}},120);
+          return;
+        }catch(err){
+          console.warn("Não foi possível reiniciar o reconhecimento de voz:",err);
+        }
+      }
+
+      finalizeVoiceInput();
+    };
+
+    return recognition;
   };
 
   const startVoiceInput=()=>{
@@ -2745,61 +2963,20 @@ export default function App(){
     }
     if(voiceListening){
       voiceManualStopRef.current=true;
+      voiceFinalizingRef.current=true;
       stopVoiceSilenceTimer();
       try{voiceRecognitionRef.current?.stop?.();}catch{}
       setVoiceListening(false);
       return;
     }
 
-    const recognition=new SpeechRecognition();
-    recognition.lang="pt-BR";
-    recognition.interimResults=true;
-    recognition.continuous=true;
-    recognition.maxAlternatives=1;
-    let finalTranscript="";
     voiceTranscriptRef.current="";
+    voiceSessionTextRef.current="";
     voiceManualStopRef.current=false;
+    voiceFinalizingRef.current=false;
+    voiceRestartingRef.current=false;
 
-    recognition.onstart=()=>{
-      setVoiceListening(true);
-      setPasteText("");
-      showToast("🎤 Ouvindo... fale todos os itens em sequência",2600);
-      scheduleVoiceAutoStop();
-    };
-
-    recognition.onresult=(event)=>{
-      let interim="";
-      for(let i=event.resultIndex;i<event.results.length;i++){
-        const transcript=event.results[i][0]?.transcript||"";
-        if(event.results[i].isFinal) finalTranscript+=transcript.trim()+". ";
-        else interim+=transcript;
-      }
-      const preview=(finalTranscript+" "+interim).replace(/\s+/g," ").trim();
-      voiceTranscriptRef.current=preview;
-      if(preview) setPasteText(preview);
-      scheduleVoiceAutoStop();
-    };
-
-    recognition.onerror=(event)=>{
-      console.warn("Erro no reconhecimento de voz:",event);
-      stopVoiceSilenceTimer();
-      setVoiceListening(false);
-      if(event?.error==="not-allowed")showToast("⚠️ Permita o uso do microfone para ditar a lista.",4200);
-      else if(event?.error!=="no-speech")showToast("⚠️ Não consegui ouvir com clareza. Tente novamente.",3200);
-    };
-
-    recognition.onend=()=>{
-      stopVoiceSilenceTimer();
-      setVoiceListening(false);
-      const text=(voiceTranscriptRef.current||finalTranscript||"").trim();
-      voiceRecognitionRef.current=null;
-      if(text){
-        importTextAsPendingItemsWithAI(text,{source:"voz"});
-      }else if(!voiceManualStopRef.current){
-        showToast("⚠️ Nenhum item foi identificado pela fala.",2600);
-      }
-    };
-
+    const recognition=createVoiceRecognition();
     voiceRecognitionRef.current=recognition;
     try{recognition.start();}catch(err){console.warn(err);stopVoiceSilenceTimer();setVoiceListening(false);}
   };
