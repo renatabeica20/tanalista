@@ -545,25 +545,6 @@ function BrandWordmark({ compact = false, color = "#111827" }) {
   );
 }
 
-function ModuleIcon({ src, alt, active = true }) {
-  return (
-    <div style={{
-      width: 44,
-      height: 44,
-      borderRadius: 15,
-      background: "linear-gradient(135deg,#6D28D9,#8B5CF6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: active ? "0 12px 24px rgba(109,40,217,0.22)" : "none",
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.35)",
-    }}>
-      <img src={src} alt={alt} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} />
-    </div>
-  );
-}
-
 const LIST_TYPES = [
   {id:"mercado",   label:"🛒 Supermercado"},
   {id:"festa",     label:"🎉 Festa/Churrasco"},
@@ -2927,17 +2908,19 @@ export default function App(){
             <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
-                {icon:"/module-icons/compras.svg",name:"Compras",desc:"Lista inteligente",active:true},
-                {icon:"/module-icons/festa.svg",name:"Festa",  desc:"Churrasco e eventos",active:false},
-                {icon:"/module-icons/conta.svg",name:"Conta",  desc:"Dividir no restaurante",active:false},
-                {icon:"/module-icons/saude.svg",name:"Saúde",  desc:"Receitas e remédios",active:false},
-                {icon:"/module-icons/eventos.svg",name:"Eventos",desc:"Convites e QR Code",active:false},
-                {icon:"/module-icons/condominio.svg",name:"Condomínio",desc:"Gestão e aprovações",active:false},
+                {iconSrc:"/compras.svg",name:"Compras",desc:"Lista inteligente",active:true},
+                {iconSrc:"/festa.svg",name:"Festa",desc:"Churrasco e eventos",active:false},
+                {iconSrc:"/conta.svg",name:"Conta",desc:"Dividir no restaurante",active:false},
+                {iconSrc:"/saude.svg",name:"Saúde",desc:"Receitas e remédios",active:false},
+                {iconSrc:"/eventos.svg",name:"Eventos",desc:"Convites e QR Code",active:false},
+                {iconSrc:"/condominio.svg",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
-                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
+                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.65,position:"relative",overflow:"hidden"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
-                  <div style={{marginBottom:10}}><ModuleIcon src={m.icon} alt={m.name} active={m.active} /></div>
+                  <div style={{width:56,height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:"0 12px 24px rgba(109,40,217,0.20)",border:"1px solid rgba(255,255,255,0.55)"}}>
+                    <img src={m.iconSrc} alt={m.name} style={{width:38,height:38,objectFit:"contain",display:"block"}} />
+                  </div>
                   <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
                   <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
                 </div>
