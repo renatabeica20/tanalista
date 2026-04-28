@@ -58,12 +58,12 @@ export default async function handler(req, res) {
     const formData = new FormData();
     const blob = new Blob([buffer], { type: contentType });
     formData.append("file", blob, filename);
-    formData.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1");
+    formData.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe");
     formData.append("language", req.headers["x-audio-language"] || "pt");
     formData.append("response_format", "json");
     formData.append(
       "prompt",
-      "Lista de compras em português do Brasil. Preserve quantidades decimais como 1,5 kg, unidades, marcas, embalagens, pesos e volumes. Não transforme 1,5 em 5. Preserve expressões como fardo com 24 unidades."
+      "Lista de compras em português do Brasil. Preserve quantidades decimais como 1,5 kg, 2,5 kg, 0,5 kg. Quando o usuário disser vírgula, ponto ou meio, transcreva como decimal brasileiro. Não transforme 1,5 em 5. Preserve unidades, marcas, embalagens, pesos, volumes e expressões como fardo com 24 unidades."
     );
 
     const openaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
