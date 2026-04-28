@@ -1873,6 +1873,19 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
 }
 
 
+function capitalizeProductName(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+  return clean
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word, index) => {
+      if (index > 0 && ["de", "da", "do", "das", "dos", "e"].includes(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
 async function aiParseShoppingText(text, type = "mercado") {
   const cleanText = String(text || "").trim();
   if (!cleanText) return [];
@@ -1883,14 +1896,20 @@ async function aiParseShoppingText(text, type = "mercado") {
     "Transforme o texto em itens estruturados para uma lista do tipo: " + typeName + ".",
     "O texto pode vir como fala contínua, com vírgulas, pausas, 'e', quantidades ou unidades misturadas.",
     "Retorne APENAS JSON válido, sem markdown, sem explicação, neste formato:",
-    '{"items":[{"name":"arroz","qty":2,"unit":"pacote","marca":"","tipo":"","peso":"","volume":"","embalagem":""}]}',
-    "Regras:",
-    "- Separe corretamente itens ditados em sequência, como: 'arroz feijão leite detergente';",
-    "- Preserve quantidades quando existirem: '2 arroz' => qty 2;",
-    "- Interprete unidades comuns: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
-    "- Se a unidade não estiver clara, use 'unidade';",
-    "- name deve conter apenas o produto principal, sem quantidade;",
-    "- marca, tipo, peso, volume e embalagem podem ficar vazios quando não forem citados;",
+    '{"items":[{"name":"Arroz","qty":2,"unit":"pacote","marca":"","tipo":"","peso":"5kg","volume":"","embalagem":"5kg"}]}',
+    "Regras obrigatórias:",
+    "- Separe corretamente TODOS os itens ditados em sequência, mesmo quando não houver vírgula;",
+    "- Entenda fala contínua: 'arroz feijão leite detergente' deve virar 4 itens;",
+    "- Interprete números por extenso: um=1, dois=2, três=3, quatro=4, cinco=5, dez=10 etc.;",
+    "- Exemplo: 'dois pacotes de arroz de cinco quilos' => name 'Arroz', qty 2, unit 'pacote', peso '5kg', embalagem '5kg';",
+    "- Exemplo: 'três caixas de leite de um litro' => name 'Leite', qty 3, unit 'caixa', volume '1L', embalagem '1L';",
+    "- Exemplo: 'um fardo de cerveja lata 350 ml' => name 'Cerveja', qty 1, unit 'fardo', volume '350ml', embalagem 'lata 350ml';",
+    "- name deve conter apenas o produto principal, sem quantidade, sem unidade e sem peso/volume;",
+    "- unit deve representar a quantidade comprada: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
+    "- peso use apenas g/kg quando houver tamanho/peso da embalagem;",
+    "- volume use apenas ml/L quando houver tamanho/volume da embalagem;",
+    "- embalagem pode combinar forma e tamanho, como 'pacote 5kg', 'lata 350ml' ou apenas '5kg';",
+    "- marca e tipo só devem ser preenchidos quando forem expressamente citados pelo usuário;",
     "- Não invente itens não mencionados.",
     "",
     "TEXTO:",
@@ -1906,7 +1925,7 @@ async function aiParseShoppingText(text, type = "mercado") {
   const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
   return rawItems
     .map((item) => {
-      const name = String(item?.name || item?.nome || "").trim();
+      const name = capitalizeProductName(item?.name || item?.nome || "");
       if (!name) return null;
       const qty = Number(String(item?.qty || item?.quantidade || 1).replace(",", "."));
       const unit = String(item?.unit || item?.unidade || "unidade").trim() || "unidade";
@@ -2019,7 +2038,7 @@ function photoItemsToText(items) {
     .map((item) => {
       const qty = item?.qty || item?.quantidade || 1;
       const unit = item?.unit || item?.unidade || "unidade";
-      const name = String(item?.name || item?.nome || "").trim();
+      const name = capitalizeProductName(item?.name || item?.nome || "");
       if (!name) return "";
       return `${qty} ${unit} ${name}`.trim();
     })
@@ -2167,6 +2186,9 @@ export default function App(){
   const [voiceListening,setVoiceListening]=useState(false);
   const [voiceProcessing,setVoiceProcessing]=useState(false);
   const voiceRecognitionRef=useRef(null);
+  const voiceTranscriptRef=useRef("");
+  const voiceSilenceTimerRef=useRef(null);
+  const voiceManualStopRef=useRef(false);
 
   const triggerBudgetSavedPulse=useCallback(()=>{
     setBudgetSavedPulse(true);
@@ -2698,6 +2720,23 @@ export default function App(){
 
   const parsePastedText=()=>importTextAsPendingItemsWithAI(pasteText,{closePaste:true,source:"texto"});
 
+  const stopVoiceSilenceTimer=()=>{
+    if(voiceSilenceTimerRef.current){
+      clearTimeout(voiceSilenceTimerRef.current);
+      voiceSilenceTimerRef.current=null;
+    }
+  };
+
+  const scheduleVoiceAutoStop=()=>{
+    stopVoiceSilenceTimer();
+    voiceSilenceTimerRef.current=setTimeout(()=>{
+      if(voiceRecognitionRef.current){
+        voiceManualStopRef.current=false;
+        try{voiceRecognitionRef.current.stop();}catch{}
+      }
+    },3800);
+  };
+
   const startVoiceInput=()=>{
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SpeechRecognition){
@@ -2705,6 +2744,8 @@ export default function App(){
       return;
     }
     if(voiceListening){
+      voiceManualStopRef.current=true;
+      stopVoiceSilenceTimer();
       try{voiceRecognitionRef.current?.stop?.();}catch{}
       setVoiceListening(false);
       return;
@@ -2713,34 +2754,54 @@ export default function App(){
     const recognition=new SpeechRecognition();
     recognition.lang="pt-BR";
     recognition.interimResults=true;
-    recognition.continuous=false;
+    recognition.continuous=true;
+    recognition.maxAlternatives=1;
     let finalTranscript="";
+    voiceTranscriptRef.current="";
+    voiceManualStopRef.current=false;
 
-    recognition.onstart=()=>{setVoiceListening(true);showToast("🎤 Ouvindo... fale os itens da lista",2200);};
+    recognition.onstart=()=>{
+      setVoiceListening(true);
+      setPasteText("");
+      showToast("🎤 Ouvindo... fale todos os itens em sequência",2600);
+      scheduleVoiceAutoStop();
+    };
+
     recognition.onresult=(event)=>{
       let interim="";
       for(let i=event.resultIndex;i<event.results.length;i++){
         const transcript=event.results[i][0]?.transcript||"";
-        if(event.results[i].isFinal)finalTranscript+=transcript+" ";
+        if(event.results[i].isFinal) finalTranscript+=transcript.trim()+". ";
         else interim+=transcript;
       }
-      const preview=(finalTranscript+" "+interim).trim();
-      if(preview)setPasteText(preview);
+      const preview=(finalTranscript+" "+interim).replace(/\s+/g," ").trim();
+      voiceTranscriptRef.current=preview;
+      if(preview) setPasteText(preview);
+      scheduleVoiceAutoStop();
     };
+
     recognition.onerror=(event)=>{
       console.warn("Erro no reconhecimento de voz:",event);
+      stopVoiceSilenceTimer();
       setVoiceListening(false);
       if(event?.error==="not-allowed")showToast("⚠️ Permita o uso do microfone para ditar a lista.",4200);
-      else showToast("⚠️ Não consegui ouvir com clareza. Tente novamente.",3200);
+      else if(event?.error!=="no-speech")showToast("⚠️ Não consegui ouvir com clareza. Tente novamente.",3200);
     };
+
     recognition.onend=()=>{
+      stopVoiceSilenceTimer();
       setVoiceListening(false);
-      const text=(finalTranscript||pasteText||"").trim();
-      if(text)importTextAsPendingItemsWithAI(text,{source:"voz"});
+      const text=(voiceTranscriptRef.current||finalTranscript||"").trim();
+      voiceRecognitionRef.current=null;
+      if(text){
+        importTextAsPendingItemsWithAI(text,{source:"voz"});
+      }else if(!voiceManualStopRef.current){
+        showToast("⚠️ Nenhum item foi identificado pela fala.",2600);
+      }
     };
 
     voiceRecognitionRef.current=recognition;
-    try{recognition.start();}catch(err){console.warn(err);setVoiceListening(false);}
+    try{recognition.start();}catch(err){console.warn(err);stopVoiceSilenceTimer();setVoiceListening(false);}
   };
 
   const handlePhotoListFile=async(e)=>{
@@ -3428,7 +3489,7 @@ export default function App(){
                 </button>
                 <button onClick={startVoiceInput} disabled={voiceProcessing}
                   style={{width:"100%",padding:"15px",borderRadius:20,background:voiceListening?"#FEF2F2":"#ECFDF5",border:`2px solid ${voiceListening?"#DC2626":"#16A34A"}`,color:voiceListening?"#DC2626":"#15803D",fontWeight:900,fontSize:15,cursor:voiceProcessing?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(22,163,74,0.08)",opacity:voiceProcessing?0.65:1}}>
-                  {voiceListening?"⏹️ Parar":voiceProcessing?"⏳ IA...":"🎤 Falar lista"}
+                  {voiceListening?"⏹️ Parar fala":voiceProcessing?"⏳ IA organizando...":"🎤 Falar lista"}
                 </button>
               </div>
             </div>
