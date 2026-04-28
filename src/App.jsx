@@ -371,6 +371,26 @@ async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
   return extractJsonObject(data?.text || "");
 }
 
+async function transcribeVoiceAudio(file) {
+  if (!file) throw new Error("Áudio não informado.");
+  const formData = new FormData();
+  formData.append("audio", file, file.name || "lista-voz.webm");
+  formData.append("language", "pt");
+  formData.append("context", "Lista de compras em português do Brasil. Preserve quantidades, unidades, embalagens, pesos e volumes.");
+
+  const res = await fetch("/api/transcribe", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || `Erro ao transcrever áudio (${res.status})`);
+  }
+
+  return String(data?.text || "").trim();
+}
+
 
 // ── CACHE LOCAL DE CLASSIFICAÇÃO ───────────────────────────────────────────
 // Evita repetir chamadas à IA para produtos já classificados neste navegador.
@@ -2353,13 +2373,15 @@ export default function App(){
   const [mNotFound,setMNotFound]=useState(false);
   const [voiceListening,setVoiceListening]=useState(false);
   const [voiceProcessing,setVoiceProcessing]=useState(false);
-  const voiceRecognitionRef=useRef(null);
-  const voiceTranscriptRef=useRef("");
-  const voiceSessionTextRef=useRef("");
-  const voiceFinalizingRef=useRef(false);
-  const voiceRestartingRef=useRef(false);
+  const voiceMediaRecorderRef=useRef(null);
+  const voiceAudioChunksRef=useRef([]);
+  const voiceMediaStreamRef=useRef(null);
+  const voiceAudioContextRef=useRef(null);
+  const voiceAnalyserRef=useRef(null);
   const voiceSilenceTimerRef=useRef(null);
-  const voiceManualStopRef=useRef(false);
+  const voiceVolumeMonitorRef=useRef(null);
+  const voiceRecordingStartedAtRef=useRef(0);
+  const voiceHasSoundRef=useRef(false);
 
   const triggerBudgetSavedPulse=useCallback(()=>{
     setBudgetSavedPulse(true);
@@ -2898,148 +2920,195 @@ export default function App(){
     }
   };
 
+  const stopVoiceVolumeMonitor=()=>{
+    if(voiceVolumeMonitorRef.current){
+      cancelAnimationFrame(voiceVolumeMonitorRef.current);
+      voiceVolumeMonitorRef.current=null;
+    }
+  };
+
+  const releaseVoiceResources=()=>{
+    stopVoiceSilenceTimer();
+    stopVoiceVolumeMonitor();
+    try{voiceMediaStreamRef.current?.getTracks?.().forEach(track=>track.stop());}catch{}
+    try{voiceAudioContextRef.current?.close?.();}catch{}
+    voiceMediaStreamRef.current=null;
+    voiceAudioContextRef.current=null;
+    voiceAnalyserRef.current=null;
+  };
+
+  const getPreferredVoiceMimeType=()=>{
+    if(typeof MediaRecorder==="undefined")return "";
+    const candidates=[
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/aac",
+      "audio/wav"
+    ];
+    return candidates.find(type=>MediaRecorder.isTypeSupported?.(type))||"";
+  };
+
+  const getVoiceFileExtension=(mimeType)=>{
+    const type=String(mimeType||"").toLowerCase();
+    if(type.includes("mp4"))return "m4a";
+    if(type.includes("aac"))return "aac";
+    if(type.includes("wav"))return "wav";
+    return "webm";
+  };
+
+  const finalizeRecordedVoice=async(blob)=>{
+    releaseVoiceResources();
+    setVoiceListening(false);
+    if(!blob || blob.size<1200){
+      showToast("⚠️ Nenhum áudio útil foi capturado. Tente falar mais próximo ao microfone.",4200);
+      return;
+    }
+
+    const mimeType=blob.type||"audio/webm";
+    const ext=getVoiceFileExtension(mimeType);
+    const file=new File([blob],`lista-voz-${Date.now()}.${ext}`,{type:mimeType});
+
+    setVoiceProcessing(true);
+    setLoading(true);
+    try{
+      showToast("🎧 Transcrevendo sua fala...",2200);
+      const transcript=await transcribeVoiceAudio(file);
+      if(!transcript){
+        showToast("⚠️ Não consegui identificar fala no áudio.",3600);
+        return;
+      }
+      setPasteText(transcript);
+      await importTextAsPendingItemsWithAI(transcript,{source:"voz"});
+    }catch(err){
+      console.error("Erro na transcrição por áudio:",err);
+      showToast("⚠️ Não foi possível transcrever o áudio. Verifique o arquivo /api/transcribe e a chave OPENAI_API_KEY no Vercel.",6500);
+    }finally{
+      setVoiceProcessing(false);
+      setLoading(false);
+    }
+  };
+
+  const stopVoiceRecording=()=>{
+    stopVoiceSilenceTimer();
+    stopVoiceVolumeMonitor();
+    const recorder=voiceMediaRecorderRef.current;
+    if(recorder && recorder.state!=="inactive"){
+      try{recorder.stop();}catch(err){console.warn("Erro ao parar gravação de voz:",err);releaseVoiceResources();setVoiceListening(false);}
+    }else{
+      releaseVoiceResources();
+      setVoiceListening(false);
+    }
+  };
+
   const scheduleVoiceAutoStop=()=>{
     stopVoiceSilenceTimer();
     voiceSilenceTimerRef.current=setTimeout(()=>{
-      voiceFinalizingRef.current=true;
-      if(voiceRecognitionRef.current){
-        try{voiceRecognitionRef.current.stop();}catch{}
+      if(voiceListening || voiceMediaRecorderRef.current){
+        showToast("⏹️ Pausa detectada. Organizando o que foi falado...",2400);
+        stopVoiceRecording();
       }
-    },6500);
+    },5200);
   };
 
-  const normalizeVoiceText=(value)=>String(value||"")
-    .replace(/\s+/g," ")
-    .replace(/\s+([,.!?;:])/g,"$1")
-    .trim();
-
-  const appendVoiceText=(text)=>{
-    const clean=normalizeVoiceText(text);
-    if(!clean)return;
-    const previous=normalizeVoiceText(voiceSessionTextRef.current);
-    const lowerPrevious=previous.toLowerCase();
-    const lowerClean=clean.toLowerCase();
-    if(lowerPrevious && (lowerPrevious.endsWith(lowerClean) || lowerClean.includes(lowerPrevious))) {
-      voiceSessionTextRef.current=clean.length>previous.length ? clean : previous;
-      return;
-    }
-    voiceSessionTextRef.current=normalizeVoiceText(previous ? previous+", "+clean : clean);
-  };
-
-  const finalizeVoiceInput=()=>{
-    stopVoiceSilenceTimer();
-    setVoiceListening(false);
-    const text=normalizeVoiceText(voiceSessionTextRef.current||voiceTranscriptRef.current);
-    voiceRecognitionRef.current=null;
-    voiceTranscriptRef.current="";
-    voiceSessionTextRef.current="";
-    voiceFinalizingRef.current=false;
-    voiceRestartingRef.current=false;
-    if(text){
-      setPasteText(text);
-      importTextAsPendingItemsWithAI(text,{source:"voz"});
-    }else if(!voiceManualStopRef.current){
-      showToast("⚠️ Nenhum item foi identificado pela fala.",2600);
-    }
-  };
-
-  const createVoiceRecognition=()=>{
-    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    const recognition=new SpeechRecognition();
-    recognition.lang="pt-BR";
-    recognition.interimResults=true;
-    recognition.continuous=true;
-    recognition.maxAlternatives=1;
-    let finalTranscript="";
-
-    recognition.onstart=()=>{
-      setVoiceListening(true);
-      if(!voiceRestartingRef.current){
-        showToast("🎤 Ouvindo... fale todos os itens em sequência",2600);
-      }
-      voiceRestartingRef.current=false;
-      scheduleVoiceAutoStop();
-    };
-
-    recognition.onresult=(event)=>{
-      let interim="";
-      for(let i=event.resultIndex;i<event.results.length;i++){
-        const transcript=(event.results[i][0]?.transcript||"").trim();
-        if(!transcript)continue;
-        if(event.results[i].isFinal){
-          finalTranscript=normalizeVoiceText(finalTranscript+". "+transcript);
-          appendVoiceText(transcript);
-        }else{
-          interim=normalizeVoiceText(interim+" "+transcript);
-        }
-      }
-      const preview=normalizeVoiceText((voiceSessionTextRef.current||finalTranscript)+" "+interim);
-      voiceTranscriptRef.current=preview;
-      if(preview) setPasteText(preview);
-      scheduleVoiceAutoStop();
-    };
-
-    recognition.onerror=(event)=>{
-      console.warn("Erro no reconhecimento de voz:",event);
-      if(event?.error==="not-allowed"){
-        stopVoiceSilenceTimer();
-        voiceFinalizingRef.current=true;
-        setVoiceListening(false);
-        showToast("⚠️ Permita o uso do microfone para ditar a lista.",4200);
+  const startVoiceSilenceDetection=(stream)=>{
+    try{
+      const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+      if(!AudioContextClass){
+        scheduleVoiceAutoStop();
         return;
       }
-      if(event?.error!=="no-speech" && event?.error!=="aborted"){
-        showToast("⚠️ Não consegui ouvir com clareza. Continue falando ou tente novamente.",3200);
-      }
-    };
+      const audioContext=new AudioContextClass();
+      const source=audioContext.createMediaStreamSource(stream);
+      const analyser=audioContext.createAnalyser();
+      analyser.fftSize=2048;
+      analyser.smoothingTimeConstant=0.82;
+      source.connect(analyser);
+      voiceAudioContextRef.current=audioContext;
+      voiceAnalyserRef.current=analyser;
 
-    recognition.onend=()=>{
-      const partial=normalizeVoiceText(voiceTranscriptRef.current||finalTranscript);
-      if(partial)appendVoiceText(partial);
-      voiceRecognitionRef.current=null;
-
-      if(!voiceManualStopRef.current && !voiceFinalizingRef.current){
-        voiceRestartingRef.current=true;
-        try{
-          const next=createVoiceRecognition();
-          voiceRecognitionRef.current=next;
-          setTimeout(()=>{try{next.start();}catch(err){console.warn(err);finalizeVoiceInput();}},120);
-          return;
-        }catch(err){
-          console.warn("Não foi possível reiniciar o reconhecimento de voz:",err);
+      const data=new Uint8Array(analyser.fftSize);
+      const monitor=()=>{
+        const recorder=voiceMediaRecorderRef.current;
+        if(!recorder || recorder.state==="inactive")return;
+        analyser.getByteTimeDomainData(data);
+        let sum=0;
+        for(let i=0;i<data.length;i++){
+          const value=(data[i]-128)/128;
+          sum+=value*value;
         }
-      }
-
-      finalizeVoiceInput();
-    };
-
-    return recognition;
+        const rms=Math.sqrt(sum/data.length);
+        const elapsed=Date.now()-(voiceRecordingStartedAtRef.current||Date.now());
+        if(rms>0.018){
+          voiceHasSoundRef.current=true;
+          scheduleVoiceAutoStop();
+        }else if(elapsed<2200 && !voiceHasSoundRef.current){
+          scheduleVoiceAutoStop();
+        }
+        voiceVolumeMonitorRef.current=requestAnimationFrame(monitor);
+      };
+      scheduleVoiceAutoStop();
+      monitor();
+    }catch(err){
+      console.warn("Monitoramento de silêncio indisponível:",err);
+      scheduleVoiceAutoStop();
+    }
   };
 
-  const startVoiceInput=()=>{
-    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SpeechRecognition){
-      showToast("⚠️ Reconhecimento de voz indisponível neste navegador. Tente pelo Chrome no Android.",5200);
-      return;
-    }
+  const startVoiceInput=async()=>{
+    if(voiceProcessing)return;
+
     if(voiceListening){
-      voiceManualStopRef.current=true;
-      voiceFinalizingRef.current=true;
-      stopVoiceSilenceTimer();
-      try{voiceRecognitionRef.current?.stop?.();}catch{}
-      setVoiceListening(false);
+      stopVoiceRecording();
       return;
     }
 
-    voiceTranscriptRef.current="";
-    voiceSessionTextRef.current="";
-    voiceManualStopRef.current=false;
-    voiceFinalizingRef.current=false;
-    voiceRestartingRef.current=false;
+    if(typeof navigator==="undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder==="undefined"){
+      showToast("⚠️ Gravação de áudio indisponível neste navegador. Atualize o iOS/Safari ou tente pelo Chrome.",5600);
+      return;
+    }
 
-    const recognition=createVoiceRecognition();
-    voiceRecognitionRef.current=recognition;
-    try{recognition.start();}catch(err){console.warn(err);stopVoiceSilenceTimer();setVoiceListening(false);}
+    try{
+      voiceAudioChunksRef.current=[];
+      voiceHasSoundRef.current=false;
+      voiceRecordingStartedAtRef.current=Date.now();
+
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      voiceMediaStreamRef.current=stream;
+      const mimeType=getPreferredVoiceMimeType();
+      const recorder=mimeType ? new MediaRecorder(stream,{mimeType}) : new MediaRecorder(stream);
+      voiceMediaRecorderRef.current=recorder;
+
+      recorder.ondataavailable=(event)=>{
+        if(event.data && event.data.size>0)voiceAudioChunksRef.current.push(event.data);
+      };
+
+      recorder.onerror=(event)=>{
+        console.warn("Erro no MediaRecorder:",event);
+        showToast("⚠️ Houve erro ao gravar a fala.",3600);
+        releaseVoiceResources();
+        setVoiceListening(false);
+      };
+
+      recorder.onstop=()=>{
+        const chunks=voiceAudioChunksRef.current||[];
+        const type=recorder.mimeType||mimeType||"audio/webm";
+        const blob=new Blob(chunks,{type});
+        voiceAudioChunksRef.current=[];
+        voiceMediaRecorderRef.current=null;
+        finalizeRecordedVoice(blob);
+      };
+
+      recorder.start(500);
+      setVoiceListening(true);
+      showToast("🎤 Gravando. Fale vários itens em sequência; eu paro após alguns segundos de silêncio.",4200);
+      startVoiceSilenceDetection(stream);
+    }catch(err){
+      console.error("Erro ao iniciar gravação de voz:",err);
+      releaseVoiceResources();
+      setVoiceListening(false);
+      showToast("⚠️ Permita o uso do microfone para ditar a lista.",5200);
+    }
   };
 
   const handlePhotoListFile=async(e)=>{
