@@ -2513,6 +2513,200 @@ function fileToDataUrl(file) {
   });
 }
 
+// ── PARSER PROFISSIONAL DE VOZ ───────────────────────────────────────────
+// Normaliza a fala antes de salvar: impede medidas soltas como "5 kg" de virarem itens.
+function decimalToBrazilianString(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "";
+  return Number.isInteger(num) ? String(num) : String(num).replace(".", ",");
+}
+
+function normalizeMeasureToken(value) {
+  let raw = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  raw = raw
+    .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2")
+    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/g, "1,5 kg")
+    .replace(/\b(um|uma)\s+litro\s+e\s+mei[ao]\b/g, "1,5 L")
+    .replace(/\bmei[ao]\s+quilo\b/g, "0,5 kg")
+    .replace(/\bmei[ao]\s+litro\b/g, "0,5 L");
+  const qty = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|\\d+[,\\.]?\\d*|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte)";
+  const unit = "(?:kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml|mililitro|mililitros)";
+  const m = raw.match(new RegExp(`^(${qty})\\s*(${unit})$`, "i"));
+  if (!m) return "";
+  const n = numberFromPortuguese(m[1]);
+  const u = normalizeUnitValue(m[2]);
+  if (!n || !u) return "";
+  return `${decimalToBrazilianString(n)}${u}`;
+}
+
+function isMeasureOnlyText(value) {
+  return Boolean(normalizeMeasureToken(value));
+}
+
+function extractMeasureFromText(value) {
+  const original = String(value || "").trim();
+  if (!original) return { text:"", measure:"" };
+  const qty = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|\\d+[,\\.]?\\d*|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte)";
+  const unit = "(?:kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml|mililitro|mililitros)";
+  const re = new RegExp(`(?:\\bde\\s+)?(${qty})\\s*(${unit})\\b`, "i");
+  const m = original.match(re);
+  if (!m) return { text: original, measure:"" };
+  const measure = normalizeMeasureToken(`${m[1]} ${m[2]}`);
+  const text = original.replace(m[0], " ").replace(/\s+/g," ").replace(/\b(de|do|da|com)\s*$/i, "").trim();
+  return { text, measure };
+}
+
+function extractPackInfoFromText(value) {
+  const original = String(value || "").trim();
+  const re = /\bcom\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\s+(unidades?|un|latas?|garrafas?|long\s+necks?)\b/i;
+  const m = original.match(re);
+  if (!m) return { text: original, pack:"" };
+  const n = numberFromPortuguese(m[1]) || Number(m[1]) || 1;
+  const u = normalizeUnitValue(m[2]);
+  return {
+    text: original.replace(m[0], " ").replace(/\s+/g," ").trim(),
+    pack: `com ${decimalToBrazilianString(n)} ${formatUnitForQuantity(n, u)}`,
+  };
+}
+
+function repairAndNormalizeVoiceItems(items) {
+  const repaired = [];
+  for (const raw of Array.isArray(items) ? items : []) {
+    if (!raw) continue;
+    let item = normalizeListItem(raw);
+    let name = String(item.name || "").trim();
+    let detail = String(item.detail || item.embalagem || "").trim();
+    let embalagem = String(item.embalagem || detail || "").trim();
+
+    // Corrige o bug: "5 unidades · Kg" ou "1 unidade · Kg" não é item, é medida do anterior.
+    if (isQuantityOnlyItemName(name) || isMeasureOnlyText(name)) {
+      const measure = normalizeMeasureToken(`${item.qty || ""} ${name}`) || normalizeMeasureToken(name);
+      if (measure && repaired.length) {
+        const prev = repaired[repaired.length - 1];
+        prev.embalagem = [prev.embalagem, measure].filter(Boolean).join(" ").trim();
+        prev.detail = prev.embalagem;
+      }
+      continue;
+    }
+
+    // Se veio como "Arroz 5kg", move 5kg para embalagem.
+    const measureResult = extractMeasureFromText(name);
+    if (measureResult.measure) {
+      name = measureResult.text || name;
+      embalagem = [embalagem, measureResult.measure].filter(Boolean).join(" ").trim();
+    }
+
+    const detailMeasure = normalizeMeasureToken(detail);
+    if (detailMeasure) embalagem = [embalagem, detailMeasure].filter(Boolean).join(" ").trim();
+
+    const packFromName = extractPackInfoFromText(name);
+    if (packFromName.pack) {
+      name = packFromName.text || name;
+      embalagem = [embalagem, packFromName.pack].filter(Boolean).join(" ").trim();
+    }
+    const packFromDetail = extractPackInfoFromText(detail);
+    if (packFromDetail.pack) embalagem = [embalagem, packFromDetail.pack].filter(Boolean).join(" ").trim();
+
+    const plain = normalizePlainText(name);
+    const nameFixes = {
+      "carne moi":"carne moída",
+      "manga tome":"manga tommy",
+      "manga tomi":"manga tommy",
+      "tomate elefante":"tomate",
+      "molho":"molho de tomate",
+    };
+    if (nameFixes[plain]) name = nameFixes[plain];
+
+    item = normalizeListItem({ ...item, name, embalagem: embalagem.trim(), detail: embalagem.trim() });
+    repaired.push(item);
+  }
+  return repaired;
+}
+
+function parseSpokenShoppingItemsProfessional(text) {
+  const qtyWords = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,\\.]?\\d*)";
+  const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
+  let raw = String(text || "")
+    .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2")
+    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/gi, "1,5 kg")
+    .replace(/\bmei[ao]\s+quilo\b/gi, "0,5 kg")
+    .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
+    .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
+    .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
+    .replace(/[.;\n]+/g, ",")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Quebra apenas antes de uma nova quantidade + unidade + produto, preservando "arroz 5kg" no item anterior.
+  raw = raw.replace(new RegExp(`\\s+(${qtyWords})\\s+(${unitWords})\\s+(?=[a-záéíóúãõç])`, "gi"), ", $1 $2 ");
+  const chunks = raw.split(/\s*,\s*/).map(v=>v.trim()).filter(Boolean);
+  const items = [];
+  for (let c of chunks) {
+    let qty = 1, unit = "unidade", embalagem = "", marca = "", tipo = "";
+    let m = c.match(new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+)$`, "i"));
+    if (m) {
+      qty = numberFromPortuguese(m[1]) || 1;
+      unit = normalizeUnitValue(m[2]);
+      c = m[3].trim();
+    } else if ((m = c.match(new RegExp(`^(${qtyWords})\\s+(.+)$`, "i")))) {
+      qty = numberFromPortuguese(m[1]) || 1;
+      c = m[2].trim();
+    }
+    const pack = extractPackInfoFromText(c); c = pack.text; if (pack.pack) embalagem = pack.pack;
+    const measure = extractMeasureFromText(c); c = measure.text || c; if (measure.measure) embalagem = [embalagem, measure.measure].filter(Boolean).join(" ");
+    if (/\bheineken\b/i.test(c)) { marca = "Heineken"; c = c.replace(/\bheineken\b/ig, " "); }
+    if (/\blong\s+neck\b/i.test(c)) { tipo = "Long neck"; c = c.replace(/\blong\s+neck\b/ig, " "); }
+    const name = normalizeProductName(c.replace(/\s+/g," ").trim());
+    if (name && !isQuantityOnlyItemName(name)) items.push(normalizeListItem({ name, marca, tipo, embalagem, detail:embalagem, qty, unit, price:null, checked:false, notFound:false }));
+  }
+  return repairAndNormalizeVoiceItems(items);
+}
+
+async function aiParseShoppingTextProfessional(text, type = "mercado") {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) return [];
+  const typeName = TYPE_NAMES[type] || "geral";
+  const prompt = [
+    "Você é um parser profissional de listas de compras ditadas em português do Brasil.",
+    "Retorne APENAS JSON válido, sem markdown, no formato:",
+    '{"items":[{"name":"Arroz","qty":1,"unit":"pacote","marca":"","tipo":"","peso":"5kg","volume":"","embalagem":"5kg"}]}',
+    "Regras rígidas:",
+    "- Cada produto citado deve virar um item. Não crie item para kg, ml, litros, unidades ou 'com 24 unidades'.",
+    "- '1,5 kg de carne' => qty 1.5, unit 'kg', name 'Carne'. Nunca transforme 1,5 em 5.",
+    "- '1 pacote arroz 5kg' => name 'Arroz', qty 1, unit 'pacote', embalagem '5kg'.",
+    "- '2 fardos cerveja Heineken long neck com 24 unidades' => name 'Cerveja', qty 2, unit 'fardo', marca 'Heineken', tipo 'Long neck', embalagem 'com 24 unidades'.",
+    "- Manga, pera, maçã, banana, tomate, batata, cenoura e similares são produtos de hortifruti na categorização.",
+    "- name não deve conter quantidade, unidade, kg, g, L, ml, pacote, caixa ou fardo.",
+    "- Não invente sugestões; use apenas itens citados.",
+    `Tipo de lista: ${typeName}`,
+    "TEXTO:", cleanText,
+  ].join("\n");
+  try {
+    const parsed = await callAnthropicJSON({ prompt, model: ANTHROPIC_MODEL_ORGANIZE, maxTokens: 1600 });
+    const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+    const cleaned = repairAndNormalizeVoiceItems(rawItems.map((item) => normalizeListItem({
+      name: item?.name || item?.nome || "",
+      marca: String(item?.marca || "").trim(),
+      tipo: String(item?.tipo || "").trim(),
+      embalagem: String(item?.embalagem || item?.peso || item?.volume || "").trim(),
+      detail: String(item?.embalagem || item?.peso || item?.volume || "").trim(),
+      qty: Number(String(item?.qty || item?.quantidade || 1).replace(",", ".")) || 1,
+      unit: item?.unit || item?.unidade || "unidade",
+      price:null, checked:false, notFound:false,
+    }))).filter(item => item.name && !isQuantityOnlyItemName(item.name));
+    if (cleaned.length) return cleaned;
+  } catch (err) {
+    console.warn("Parser IA falhou; usando parser local profissional.", err);
+  }
+  return parseSpokenShoppingItemsProfessional(cleanText);
+}
+
+
 function normalizeOcrText(text) {
   return String(text || "")
     .replace(/[|]/g, "I")
@@ -3203,18 +3397,24 @@ export default function App(){
     setLoading(true);
     try{
       let items=[];
-      const voiceParsed = source==="voz" ? parseSpokenShoppingItems(clean) : [];
-      if(source==="voz" && voiceParsed.length){
-        items=voiceParsed;
+      if(source==="voz"){
+        try{
+          items=await aiParseShoppingTextProfessional(clean,listType);
+        }catch(err){
+          console.warn("IA indisponível para interpretar voz; usando parser local profissional.",err);
+          items=parseSpokenShoppingItemsProfessional(clean);
+          showToast("⚠️ IA indisponível — parser local aplicado",3200);
+        }
       }else{
         try{
-          items=await aiParseShoppingText(clean,listType);
+          items=await aiParseShoppingTextProfessional(clean,listType);
         }catch(err){
           console.warn("IA indisponível para interpretar texto; usando importação simples.",err);
           items=parseListTextToItems(clean);
           showToast("⚠️ IA indisponível — importação simples aplicada",3200);
         }
       }
+      items=repairAndNormalizeVoiceItems(items).map(normalizeListItem);
       items=applyUserMemoryToItems(items).map(normalizeListItem);
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
       setPendingItems(prev=>[...prev,...items]);
