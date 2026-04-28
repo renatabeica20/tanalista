@@ -373,19 +373,21 @@ async function callAnthropicJSON({ prompt, system, maxTokens = 800, model }) {
 
 async function transcribeVoiceAudio(file) {
   if (!file) throw new Error("Áudio não informado.");
-  const formData = new FormData();
-  formData.append("audio", file, file.name || "lista-voz.webm");
-  formData.append("language", "pt");
-  formData.append("context", "Lista de compras em português do Brasil. Preserve quantidades, unidades, embalagens, pesos e volumes.");
 
+  // Envio binário direto. Isso evita falhas de multipart/form-data no Vercel/iPhone.
   const res = await fetch("/api/transcribe", {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": file.type || "audio/webm",
+      "X-Audio-Filename": encodeURIComponent(file.name || "lista-voz.webm"),
+      "X-Audio-Language": "pt",
+    },
+    body: file,
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.error || `Erro ao transcrever áudio (${res.status})`);
+    throw new Error(data?.error || data?.details?.error?.message || `Erro ao transcrever áudio (${res.status})`);
   }
 
   return String(data?.text || "").trim();
