@@ -1927,65 +1927,120 @@ function normalizeSizeSpoken(num, measure) {
   return "";
 }
 
+function splitContinuousVoiceIntoChunks(text) {
+  const raw = String(text || "")
+    .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
+    .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
+    .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
+    .replace(/[.;\n]+/g, ",")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const explicit = raw.split(/\s*,\s*/g).map(v => v.trim()).filter(v => v.length > 1);
+  const productWords = [
+    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","sabonete","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
+  ];
+  const normalizedProducts = productWords
+    .map(w => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+    .sort((a,b)=>b.length-a.length);
+
+  const splitOne = (chunk) => {
+    const normalized = chunk.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const matches = [];
+    for (const product of normalizedProducts) {
+      const escaped = product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g");
+      let m;
+      while ((m = re.exec(normalized)) !== null) {
+        const idx = m.index + (m[1] ? m[1].length : 0);
+        matches.push({ idx, product });
+      }
+    }
+    const unique = [];
+    for (const m of matches.sort((a,b)=>a.idx-b.idx || b.product.length-a.product.length)) {
+      if (!unique.some(u => Math.abs(u.idx - m.idx) < 2)) unique.push(m);
+    }
+    if (unique.length <= 1) return [chunk];
+
+    const parts = [];
+    for (let i=0;i<unique.length;i++) {
+      const start = unique[i].idx;
+      const end = i + 1 < unique.length ? unique[i+1].idx : chunk.length;
+      const prefix = i === 0 ? chunk.slice(0, start).trim() : "";
+      const core = chunk.slice(start, end).trim();
+      const part = `${prefix} ${core}`.trim();
+      if (part) parts.push(part);
+    }
+    return parts;
+  };
+
+  return explicit.flatMap(splitOne).map(v => v.trim()).filter(v => v.length > 1);
+}
+
 function parseSpokenShoppingItems(text) {
-  const normalized = String(text || "")
-    .replace(/\bmais\b/gi, ",")
-    .replace(/\btamb[eé]m\b/gi, ",")
-    .replace(/\ba[ií]\b/gi, ",")
-    .replace(/\bdepois\b/gi, ",")
-    .replace(/\s+e\s+(?=(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
-    .replace(/[.;\n]+/g, ",");
   const qtyWords = "(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
   const sizeWords = "(?:quilos?|kg|gramas?|g|litros?|l|ml|mililitros?)";
-  const chunks = normalized
-    .split(/\s*,\s*/g)
-    .map(v=>v.trim())
-    .filter(v=>v.length>1);
-
+  const chunks = splitContinuousVoiceIntoChunks(text);
   const items = [];
-  for(const chunk of chunks){
-    let c = chunk.replace(/^(quero|preciso|comprar|coloca|coloque|adiciona|adicione)\s+/i,"").trim();
-    let qty = 1, unit = "unidade", peso = "", volume = "", embalagem = "";
 
-    const re = new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+?)(?:\\s+de\\s+(${qtyWords})\\s*(${sizeWords}))?$`, "i");
-    let m = c.match(re);
-    if(m){
+  for (const chunk of chunks) {
+    let c = chunk.replace(/^(quero|preciso|comprar|coloca|coloque|adiciona|adicione)\s+/i, "").trim();
+    let qty = 1;
+    let unit = "unidade";
+    let peso = "";
+    let volume = "";
+    let embalagem = "";
+
+    let m = c.match(new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+?)(?:\\s+de\\s+(${qtyWords})\\s*(${sizeWords}))?$`, "i"));
+    if (m) {
       qty = numberFromPortuguese(m[1]) || 1;
       unit = normalizeUnitSpoken(m[2]);
       c = m[3].trim();
-      if(m[4] && m[5]){
-        const size = normalizeSizeSpoken(m[4],m[5]);
-        if(/kg|g$/i.test(size)) peso=size;
-        if(/ml|L$/i.test(size)) volume=size;
-        embalagem=size;
+      if (m[4] && m[5]) {
+        const size = normalizeSizeSpoken(m[4], m[5]);
+        if (/kg|g$/i.test(size)) peso = size;
+        if (/ml|L$/i.test(size)) volume = size;
+        embalagem = size;
       }
-    }else{
-      const re2 = new RegExp(`^(.+?)\\s+de\\s+(${qtyWords})\\s*(${sizeWords})$`, "i");
-      m = c.match(re2);
-      if(m){
-        c = m[1].trim();
-        const size = normalizeSizeSpoken(m[2],m[3]);
-        if(/kg|g$/i.test(size)) peso=size;
-        if(/ml|L$/i.test(size)) volume=size;
-        embalagem=size;
-      }else{
-        const re3 = new RegExp(`^(${qtyWords})\\s+(.+)$`, "i");
-        m = c.match(re3);
-        if(m){
-          qty = numberFromPortuguese(m[1]) || 1;
-          c = m[2].trim();
+    } else {
+      m = c.match(new RegExp(`^(${qtyWords})\\s+(.+?)\\s+de\\s+(${qtyWords})\\s*(${sizeWords})$`, "i"));
+      if (m) {
+        qty = numberFromPortuguese(m[1]) || 1;
+        c = m[2].trim();
+        const size = normalizeSizeSpoken(m[3], m[4]);
+        if (/kg|g$/i.test(size)) peso = size;
+        if (/ml|L$/i.test(size)) volume = size;
+        embalagem = size;
+      } else {
+        m = c.match(new RegExp(`^(.+?)\\s+de\\s+(${qtyWords})\\s*(${sizeWords})$`, "i"));
+        if (m) {
+          c = m[1].trim();
+          const size = normalizeSizeSpoken(m[2], m[3]);
+          if (/kg|g$/i.test(size)) peso = size;
+          if (/ml|L$/i.test(size)) volume = size;
+          embalagem = size;
+        } else {
+          m = c.match(new RegExp(`^(${qtyWords})\\s+(.+)$`, "i"));
+          if (m) {
+            qty = numberFromPortuguese(m[1]) || 1;
+            c = m[2].trim();
+          }
         }
       }
     }
 
-    c = c.replace(/\b(de|com)\s*$/i,"").trim();
-    c = c.replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi,"").trim();
+    c = c
+      .replace(/\b(de|do|da|dos|das)\s*$/i, "")
+      .replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi, "")
+      .trim();
+
     const name = capitalizeProductName(c);
-    if(name){
-      items.push({name,marca:"",tipo:"",embalagem,peso,volume,qty,unit,price:null,checked:false,notFound:false});
+    if (name) {
+      items.push({ name, marca:"", tipo:"", embalagem, peso, volume, qty, unit, price:null, checked:false, notFound:false });
     }
   }
+
   return items;
 }
 
@@ -2029,7 +2084,11 @@ async function aiParseShoppingText(text, type = "mercado") {
 
   const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
   const deterministicItems = parseSpokenShoppingItems(cleanText);
-  if (deterministicItems.length > rawItems.length && /\b(um|uma|dois|duas|tr[eê]s|quatro|cinco|pacote|pacotes|caixa|caixas|fardo|lata|garrafa|quilo|litro|ml|kg)\b|[,.;\n]/i.test(cleanText)) {
+  const looksLikeVoice = /\b(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|pacote|pacotes|caixa|caixas|fardo|lata|garrafa|quilo|quilos|litro|litros|ml|kg|mais|tamb[eé]m|a[ií])\b|[,.;\n]/i.test(cleanText);
+  if (looksLikeVoice && deterministicItems.length >= rawItems.length) {
+    return deterministicItems;
+  }
+  if (deterministicItems.length >= 2 && rawItems.length <= 1) {
     return deterministicItems;
   }
   return rawItems
@@ -2846,7 +2905,7 @@ export default function App(){
       if(voiceRecognitionRef.current){
         try{voiceRecognitionRef.current.stop();}catch{}
       }
-    },4200);
+    },6500);
   };
 
   const normalizeVoiceText=(value)=>String(value||"")
@@ -2860,8 +2919,11 @@ export default function App(){
     const previous=normalizeVoiceText(voiceSessionTextRef.current);
     const lowerPrevious=previous.toLowerCase();
     const lowerClean=clean.toLowerCase();
-    if(lowerPrevious.endsWith(lowerClean))return;
-    voiceSessionTextRef.current=normalizeVoiceText(previous ? previous+". "+clean : clean);
+    if(lowerPrevious && (lowerPrevious.endsWith(lowerClean) || lowerClean.includes(lowerPrevious))) {
+      voiceSessionTextRef.current=clean.length>previous.length ? clean : previous;
+      return;
+    }
+    voiceSessionTextRef.current=normalizeVoiceText(previous ? previous+", "+clean : clean);
   };
 
   const finalizeVoiceInput=()=>{
@@ -2893,7 +2955,6 @@ export default function App(){
     recognition.onstart=()=>{
       setVoiceListening(true);
       if(!voiceRestartingRef.current){
-        setPasteText("");
         showToast("🎤 Ouvindo... fale todos os itens em sequência",2600);
       }
       voiceRestartingRef.current=false;
