@@ -546,10 +546,74 @@ function BrandWordmark({ compact = false, color = "#111827" }) {
 }
 
 function ModuleIcon({ type="compras", size=38, active=false }) {
-  if (type === "compras") return <AppLogo size={size} radius={Math.round(size*0.28)} shadow={false} />;
-  const labels = { festa:"★", conta:"R$", saude:"+", eventos:"QR", condominio:"ED" };
-  const label = labels[type] || "•";
-  return <div style={{width:size,height:size,borderRadius:Math.round(size*0.28),background:"linear-gradient(135deg,#4C1D95,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",color:"#FFFFFF",fontWeight:900,fontSize:type==="condominio"||type==="eventos"?12:18,boxShadow:active?"0 14px 28px rgba(109,40,217,0.24)":"0 10px 22px rgba(109,40,217,0.16)",border:"1px solid rgba(255,255,255,0.35)",position:"relative",overflow:"hidden"}}><span style={{position:"absolute",right:6,top:6,width:8,height:8,borderRadius:"50%",background:"#22C55E"}}/><span>{label}</span></div>;
+  const iconMap = {
+    compras: "/compras.svg",
+    festa: "/festa.svg",
+    conta: "/conta.svg",
+    saude: "/saude.svg",
+    eventos: "/eventos.svg",
+    condominio: "/condominio.svg",
+  };
+
+  const fallbackMap = {
+    compras: "🛒",
+    festa: "🎉",
+    conta: "💳",
+    saude: "💊",
+    eventos: "🎟️",
+    condominio: "🏢",
+  };
+
+  const src = iconMap[type] || iconMap.compras;
+  const fallback = fallbackMap[type] || "•";
+
+  return (
+    <div
+      style={{
+        width:size,
+        height:size,
+        borderRadius:Math.round(size*0.28),
+        background:"linear-gradient(135deg,#4C1D95,#7C3AED)",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        boxShadow:active?"0 14px 28px rgba(109,40,217,0.24)":"0 10px 22px rgba(109,40,217,0.16)",
+        border:"1px solid rgba(255,255,255,0.35)",
+        position:"relative",
+        overflow:"hidden",
+      }}
+    >
+      <img
+        src={src}
+        alt={type}
+        style={{
+          width:Math.round(size*0.72),
+          height:Math.round(size*0.72),
+          objectFit:"contain",
+          display:"block",
+        }}
+        onError={(e)=>{
+          e.currentTarget.style.display="none";
+          const fallbackNode = e.currentTarget.nextSibling;
+          if (fallbackNode) fallbackNode.style.display="flex";
+        }}
+      />
+      <span
+        style={{
+          display:"none",
+          width:"100%",
+          height:"100%",
+          alignItems:"center",
+          justifyContent:"center",
+          color:"#FFFFFF",
+          fontSize:Math.round(size*0.52),
+          fontWeight:900,
+        }}
+      >
+        {fallback}
+      </span>
+    </div>
+  );
 }
 function getListOriginMeta(list) {
   if (!list) return null;
