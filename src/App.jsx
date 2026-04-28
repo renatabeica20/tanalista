@@ -2083,7 +2083,7 @@ export default function App(){
   const [installPrompt,setInstallPrompt]=useState(null);
   const [installAvailable,setInstallAvailable]=useState(false);
 
-  const showToast=useCallback((msg,duration=2800)=>{
+  const showToast=useCallback((msg,duration=1000)=>{
     clearTimeout(toastTimer.current);
     setToast({show:true,msg});
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
@@ -3042,9 +3042,8 @@ export default function App(){
             </div>
             <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Listas recentes</div>
             {lists.length===0?(
-              <div style={{textAlign:"center",padding:"32px 20px",color:"#6B7280"}}>
-                <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><AppLogo size={56} radius={18} shadow={false} /></div>
-                <p style={{fontSize:14,lineHeight:1.6}}>Nenhuma lista ainda.<br/>Toque no <strong>+</strong> para criar!</p>
+              <div style={{textAlign:"center",padding:"24px 20px",color:"#6B7280"}}>
+                <p style={{fontSize:14,lineHeight:1.6,fontWeight:700,margin:0}}>Nenhuma lista ainda</p>
               </div>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
