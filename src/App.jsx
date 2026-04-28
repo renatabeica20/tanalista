@@ -1891,7 +1891,7 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
       i.notFound = false;
     });
   });
-  return categories;
+  return sanitizeCategories(categories);
 }
 
 
@@ -1909,6 +1909,235 @@ function capitalizeProductName(value) {
 }
 
 
+function normalizePlainText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function singularizePortugueseWord(word) {
+  const original = String(word || "").trim();
+  if (!original) return "";
+  const lower = original.toLowerCase();
+  const plain = normalizePlainText(lower);
+
+  const irregular = {
+    "ovos":"ovo",
+    "paes":"pão",
+    "pães":"pão",
+    "pasteis":"pastel",
+    "papéis":"papel",
+    "papeis":"papel",
+    "detergentes":"detergente",
+    "sabonetes":"sabonete",
+    "tomates":"tomate",
+    "batatas":"batata",
+    "cebolas":"cebola",
+    "cenouras":"cenoura",
+    "bananas":"banana",
+    "laranjas":"laranja",
+    "macas":"maçã",
+    "maçãs":"maçã",
+    "garrafas":"garrafa",
+    "caixas":"caixa",
+    "pacotes":"pacote",
+    "latas":"lata",
+    "unidades":"unidade",
+    "fardos":"fardo"
+  };
+  if (irregular[lower]) return irregular[lower];
+  if (irregular[plain]) return irregular[plain];
+
+  if (["arroz", "feijao", "feijão", "macarrao", "macarrão", "leite", "oleo", "óleo", "cafe", "café", "sal", "acucar", "açúcar"].includes(plain)) return lower;
+
+  if (plain.endsWith("oes") && lower.length > 5) return lower.replace(/ões$/i, "ão").replace(/oes$/i, "ão");
+  if (plain.endsWith("aes") && lower.length > 5) return lower.replace(/ães$/i, "ão").replace(/aes$/i, "ão");
+  if (plain.endsWith("res") && lower.length > 5) return lower.slice(0, -2);
+  if (plain.endsWith("les") && lower.length > 5) return lower.slice(0, -2);
+  if (plain.endsWith("es") && lower.length > 5) return lower.slice(0, -1);
+  if (plain.endsWith("s") && lower.length > 4) return lower.slice(0, -1);
+  return lower;
+}
+
+function normalizeProductName(value) {
+  const clean = String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/\b(de|do|da|dos|das)\s*$/i, "")
+    .trim();
+  if (!clean) return "";
+
+  const keepLower = new Set(["de", "da", "do", "das", "dos", "e"]);
+  const normalized = clean
+    .split(/\s+/)
+    .map((word, index) => {
+      const lower = word.toLowerCase();
+      if (index > 0 && keepLower.has(lower)) return lower;
+      return singularizePortugueseWord(lower);
+    })
+    .join(" ");
+
+  return capitalizeProductName(normalized);
+}
+
+function normalizeUnitValue(unit) {
+  const raw = normalizePlainText(unit || "unidade");
+  if (/^pacote/.test(raw)) return "pacote";
+  if (/^caixa/.test(raw)) return "caixa";
+  if (/^fardo/.test(raw)) return "fardo";
+  if (/^lata/.test(raw)) return "lata";
+  if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^quilo|^kg$/.test(raw)) return "kg";
+  if (/^grama|^g$/.test(raw)) return "g";
+  if (/^litro|^l$/.test(raw)) return "L";
+  if (/^mililitro|^ml$/.test(raw)) return "ml";
+  if (/^duzia/.test(raw)) return "dúzia";
+  if (/^peca|^peça/.test(raw)) return "peça";
+  if (/^par/.test(raw)) return "par";
+  if (/^unidade|^un$/.test(raw)) return "unidade";
+  return String(unit || "unidade").trim() || "unidade";
+}
+
+function formatUnitForQuantity(qty, unit) {
+  const n = Number(qty || 1);
+  const u = normalizeUnitValue(unit);
+  const plural = {
+    "pacote":"pacotes",
+    "caixa":"caixas",
+    "fardo":"fardos",
+    "lata":"latas",
+    "garrafa":"garrafas",
+    "unidade":"unidades",
+    "dúzia":"dúzias",
+    "peça":"peças",
+    "par":"pares"
+  };
+  if (["kg", "g", "L", "ml"].includes(u)) return u;
+  return n > 1 ? (plural[u] || u) : u;
+}
+
+function formatQtyUnit(qty, unit) {
+  const n = Number(qty || 1);
+  return `${Number.isInteger(n) ? n : String(n).replace(".", ",")} ${formatUnitForQuantity(n, unit)}`;
+}
+
+const CATEGORY_CORRIDOR_ORDER = [
+  "Hortifruti",
+  "Padaria e Matinais",
+  "Padaria e Cereais",
+  "Cafés e Chás",
+  "Mercearia",
+  "Frios e Laticínios",
+  "Frios e Embutidos",
+  "Laticínios",
+  "Carnes e Aves",
+  "Congelados",
+  "Bebidas",
+  "Cervejas",
+  "Bebidas Alcoólicas",
+  "Vinhos e Destilados",
+  "Snacks e Doces",
+  "Snacks",
+  "Chocolates e Doces",
+  "Temperos e Condimentos",
+  "Temperos",
+  "Limpeza",
+  "Higiene e Perfumaria",
+  "Higiene e Beleza",
+  "Bebês",
+  "Descartáveis e Embalagens",
+  "Descartáveis",
+  "Utilidades Domésticas",
+  "Itens Extras",
+  "Outros"
+];
+
+function categoryOrderIndex(name) {
+  const idx = CATEGORY_CORRIDOR_ORDER.findIndex(c => normalizePlainText(c) === normalizePlainText(name));
+  return idx >= 0 ? idx : 999;
+}
+
+function normalizeListItem(item) {
+  const qty = Number(String(item?.qty ?? item?.quantidade ?? 1).replace(",", "."));
+  const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
+  const name = normalizeProductName(item?.name || item?.nome || "");
+  return {
+    ...item,
+    name,
+    qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    unit,
+    detail: String(item?.detail || item?.tipo || item?.embalagem || item?.peso || item?.volume || "").trim(),
+    price: item?.price ?? null,
+    checked: Boolean(item?.checked),
+    notFound: Boolean(item?.notFound),
+  };
+}
+
+function sanitizeCategories(categories) {
+  return (Array.isArray(categories) ? categories : [])
+    .map((cat) => {
+      const items = (Array.isArray(cat?.items) ? cat.items : [])
+        .map(normalizeListItem)
+        .filter(item => item.name)
+        .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR"));
+      return { ...cat, name: cat?.name || "Outros", items };
+    })
+    .filter(cat => cat.items.length > 0)
+    .sort((a, b) => {
+      const oa = categoryOrderIndex(a.name);
+      const ob = categoryOrderIndex(b.name);
+      if (oa !== ob) return oa - ob;
+      return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR");
+    });
+}
+
+function loadUserItemMemory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("tnl_item_memory") || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUserItemMemoryFromCategories(categories) {
+  try {
+    const memory = loadUserItemMemory();
+    (Array.isArray(categories) ? categories : []).forEach((cat) => {
+      (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
+        const key = normalizePlainText(item.name);
+        if (!key) return;
+        memory[key] = {
+          name: item.name,
+          category: cat.name,
+          unit: normalizeUnitValue(item.unit || "unidade"),
+          detail: item.detail || "",
+          updatedAt: new Date().toISOString(),
+        };
+      });
+    });
+    localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
+  } catch {
+    // Mantém o app funcionando mesmo se o navegador bloquear armazenamento local.
+  }
+}
+
+function applyUserMemoryToItems(items) {
+  const memory = loadUserItemMemory();
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const normalized = normalizeListItem(item);
+    const remembered = memory[normalizePlainText(normalized.name)];
+    if (!remembered) return normalized;
+    return {
+      ...normalized,
+      name: remembered.name || normalized.name,
+      unit: normalizeUnitValue(normalized.unit || remembered.unit || "unidade"),
+    };
+  });
+}
+
+
 function numberFromPortuguese(value) {
   const raw = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const map = {
@@ -1921,21 +2150,7 @@ function numberFromPortuguese(value) {
 }
 
 function normalizeUnitSpoken(unit) {
-  const raw = String(unit || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  if(/^pacote/.test(raw)) return "pacote";
-  if(/^caixa/.test(raw)) return "caixa";
-  if(/^fardo/.test(raw)) return "fardo";
-  if(/^lata/.test(raw)) return "lata";
-  if(/^garrafa/.test(raw)) return "garrafa";
-  if(/^quilo|^kg$/.test(raw)) return "kg";
-  if(/^grama|^g$/.test(raw)) return "g";
-  if(/^litro|^l$/.test(raw)) return "L";
-  if(/^mililitro|^ml$/.test(raw)) return "ml";
-  if(/^duzia/.test(raw)) return "dúzia";
-  if(/^peca/.test(raw)) return "peça";
-  if(/^par/.test(raw)) return "par";
-  if(/^unidade|^un$/.test(raw)) return "unidade";
-  return unit || "unidade";
+  return normalizeUnitValue(unit);
 }
 
 function normalizeSizeSpoken(num, measure) {
@@ -2065,9 +2280,9 @@ function parseSpokenShoppingItems(text) {
       .replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi, "")
       .trim();
 
-    const name = capitalizeProductName(c);
+    const name = normalizeProductName(c);
     if (name) {
-      items.push({ name, marca:"", tipo:"", embalagem, peso, volume, qty, unit, price:null, checked:false, notFound:false });
+      items.push(normalizeListItem({ name, marca:"", tipo:"", embalagem, peso, volume, qty, unit, price:null, checked:false, notFound:false }));
     }
   }
 
@@ -2123,14 +2338,14 @@ async function aiParseShoppingText(text, type = "mercado") {
   }
   return rawItems
     .map((item) => {
-      const name = capitalizeProductName(item?.name || item?.nome || "");
+      const name = normalizeProductName(item?.name || item?.nome || "");
       if (!name) return null;
       const qty = Number(String(item?.qty || item?.quantidade || 1).replace(",", "."));
-      const unit = String(item?.unit || item?.unidade || "unidade").trim() || "unidade";
+      const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
       const peso = String(item?.peso || "").trim();
       const volume = String(item?.volume || "").trim();
       const embalagem = String(item?.embalagem || peso || volume || "").trim();
-      return {
+      return normalizeListItem({
         name,
         marca: String(item?.marca || "").trim(),
         tipo: String(item?.tipo || "").trim(),
@@ -2142,7 +2357,7 @@ async function aiParseShoppingText(text, type = "mercado") {
         price: null,
         checked: false,
         notFound: false,
-      };
+      });
     })
     .filter(Boolean);
 }
@@ -2172,17 +2387,17 @@ function demoOrganize(items) {
       if (keys.some(k=>n.includes(k))) {
         if (!cats[cat]) cats[cat]=[];
         const detail=[item.marca,item.tipo,item.embalagem||item.peso||item.volume].filter(Boolean).join(" ");
-        cats[cat].push({name:item.name,detail,qty:item.qty,unit:item.unit,price:null,checked:false,notFound:false});
+        cats[cat].push(normalizeListItem({name:item.name,detail,qty:item.qty,unit:item.unit,price:null,checked:false,notFound:false}));
         found=true;break;
       }
     }
     if(!found){
       if(!cats["Outros"])cats["Outros"]=[];
       const detail=[item.marca,item.tipo,item.embalagem||item.peso||item.volume].filter(Boolean).join(" ");
-      cats["Outros"].push({name:item.name,detail,qty:item.qty,unit:item.unit,price:null,checked:false,notFound:false});
+      cats["Outros"].push(normalizeListItem({name:item.name,detail,qty:item.qty,unit:item.unit,price:null,checked:false,notFound:false}));
     }
   });
-  return Object.entries(cats).map(([name,items])=>({name,items}));
+  return sanitizeCategories(Object.entries(cats).map(([name,items])=>({name,items})));
 }
 
 // ── ESTILOS BASE ───────────────────────────────────────────────────────────
@@ -2235,8 +2450,8 @@ function photoItemsToText(items) {
   return (Array.isArray(items) ? items : [])
     .map((item) => {
       const qty = item?.qty || item?.quantidade || 1;
-      const unit = item?.unit || item?.unidade || "unidade";
-      const name = capitalizeProductName(item?.name || item?.nome || "");
+      const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
+      const name = normalizeProductName(item?.name || item?.nome || "");
       if (!name) return "";
       return `${qty} ${unit} ${name}`.trim();
     })
@@ -2827,8 +3042,11 @@ export default function App(){
     setLoading(true);
     try{
       let categories;
-      try{categories=await aiOrganize(pendingItems,listType);}
-      catch{categories=demoOrganize(pendingItems);showToast("⚠️ IA indisponível — organização básica");}
+      const itemsWithMemory=applyUserMemoryToItems(pendingItems);
+      try{categories=await aiOrganize(itemsWithMemory,listType);}
+      catch{categories=demoOrganize(itemsWithMemory);showToast("⚠️ IA indisponível — organização básica");}
+      categories=sanitizeCategories(categories);
+      saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const newList={id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
       const nl=[newList,...lists];
@@ -2848,7 +3066,7 @@ export default function App(){
     setBudgetEnabled(list.budget>0);
     setBudgetConfirmed(false);
     setListNameConfirmed(false);
-    const items=list.categories.flatMap(c=>c.items.map(i=>({name:i.name,marca:"",tipo:i.detail||"",embalagem:"",peso:"",volume:"",qty:i.qty,unit:i.unit,price:null,checked:false,notFound:false})));
+    const items=list.categories.flatMap(c=>c.items.map(i=>normalizeListItem({name:i.name,marca:"",tipo:i.detail||"",embalagem:"",peso:"",volume:"",qty:i.qty,unit:i.unit,price:null,checked:false,notFound:false})));
     setPendingItems(items);
     setScreen("create");
     setReuseModal(null);
@@ -2884,14 +3102,15 @@ export default function App(){
         clean=clean.replace(/^[\s•\-\*]+/,"").trim();
         clean=clean.replace(/^\d+[.):]\s*/,"").trim();
       }
-      return{name:clean,marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty,unit,price:null,checked:false,notFound:false};
+      return normalizeListItem({name:clean,marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty,unit,price:null,checked:false,notFound:false});
     }).filter(i=>i.name.length>0);
   };
 
   const importTextAsPendingItems=(text,{closePaste=false,closePhoto=false}={})=>{
     const items=parseListTextToItems(text);
-    if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
-    setPendingItems(prev=>[...prev,...items]);
+    const normalizedItems=applyUserMemoryToItems(items).map(normalizeListItem);
+    if(!normalizedItems.length){showToast("⚠️ Nenhum item encontrado");return;}
+    setPendingItems(prev=>[...prev,...normalizedItems]);
     if(closePaste){setPasteText("");setShowPasteModal(false);}
     if(closePhoto){setOcrText("");setOcrFileName("");setOcrProgress(0);setShowPhotoModal(false);}
     showToast("✅ "+items.length+" itens importados!");
@@ -2916,6 +3135,7 @@ export default function App(){
           showToast("⚠️ IA indisponível — importação simples aplicada",3200);
         }
       }
+      items=applyUserMemoryToItems(items).map(normalizeListItem);
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
       setPendingItems(prev=>[...prev,...items]);
       if(closePaste){setPasteText("");setShowPasteModal(false);}
@@ -3569,7 +3789,7 @@ export default function App(){
                 {visibleItems.map((row,idx)=>(
                   <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
                     <span style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.item.name}</span>
-                    <span style={{color:"#6B7280",whiteSpace:"nowrap"}}>{row.item.qty||1} {row.item.unit||"un."}</span>
+                    <span style={{color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(row.item.qty||1,row.item.unit||"unidade")}</span>
                   </div>
                 ))}
               </div>
@@ -3828,7 +4048,7 @@ export default function App(){
                       <span style={{fontSize:16}}>🛒</span>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {[item.qty+" "+item.unit,item.marca,item.tipo,item.name,emb].filter(Boolean).join(" · ")}
+                          {[formatQtyUnit(item.qty,item.unit),item.marca,item.tipo,item.name,emb].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <button onClick={()=>editPendingItem(i)}
@@ -4124,9 +4344,9 @@ export default function App(){
                         const totalItemPrice=hasPrice?fmtR(item.price*item.qty):"";
                         let priceLine="";
                         if(hasPrice){
-                          priceLine=item.qty>1?`${item.qty} ${item.unit} × ${fmtR(item.price)}`:`1 ${item.unit} × ${fmtR(item.price)}`;
+                          priceLine=item.qty>1?`${formatQtyUnit(item.qty,item.unit)} × ${fmtR(item.price)}`:`${formatQtyUnit(1,item.unit)} × ${fmtR(item.price)}`;
                         } else {
-                          priceLine=item.qty>1?`${item.qty} ${item.unit}`:`${item.unit}`;
+                          priceLine=item.qty>1?formatQtyUnit(item.qty,item.unit):formatUnitForQuantity(1,item.unit);
                         }
 
                         return(
