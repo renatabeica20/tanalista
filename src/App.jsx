@@ -1872,6 +1872,64 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
   return categories;
 }
 
+
+async function aiParseShoppingText(text, type = "mercado") {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) return [];
+  const typeName = TYPE_NAMES[type] || "geral";
+
+  const prompt = [
+    "Você é especialista em interpretar listas de compras ditadas ou coladas em português do Brasil.",
+    "Transforme o texto em itens estruturados para uma lista do tipo: " + typeName + ".",
+    "O texto pode vir como fala contínua, com vírgulas, pausas, 'e', quantidades ou unidades misturadas.",
+    "Retorne APENAS JSON válido, sem markdown, sem explicação, neste formato:",
+    '{"items":[{"name":"arroz","qty":2,"unit":"pacote","marca":"","tipo":"","peso":"","volume":"","embalagem":""}]}',
+    "Regras:",
+    "- Separe corretamente itens ditados em sequência, como: 'arroz feijão leite detergente';",
+    "- Preserve quantidades quando existirem: '2 arroz' => qty 2;",
+    "- Interprete unidades comuns: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
+    "- Se a unidade não estiver clara, use 'unidade';",
+    "- name deve conter apenas o produto principal, sem quantidade;",
+    "- marca, tipo, peso, volume e embalagem podem ficar vazios quando não forem citados;",
+    "- Não invente itens não mencionados.",
+    "",
+    "TEXTO:",
+    cleanText,
+  ].join("\n");
+
+  const parsed = await callAnthropicJSON({
+    prompt,
+    model: ANTHROPIC_MODEL_ORGANIZE,
+    maxTokens: 1400,
+  });
+
+  const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+  return rawItems
+    .map((item) => {
+      const name = String(item?.name || item?.nome || "").trim();
+      if (!name) return null;
+      const qty = Number(String(item?.qty || item?.quantidade || 1).replace(",", "."));
+      const unit = String(item?.unit || item?.unidade || "unidade").trim() || "unidade";
+      const peso = String(item?.peso || "").trim();
+      const volume = String(item?.volume || "").trim();
+      const embalagem = String(item?.embalagem || peso || volume || "").trim();
+      return {
+        name,
+        marca: String(item?.marca || "").trim(),
+        tipo: String(item?.tipo || "").trim(),
+        embalagem,
+        peso,
+        volume,
+        qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+        unit,
+        price: null,
+        checked: false,
+        notFound: false,
+      };
+    })
+    .filter(Boolean);
+}
+
 function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão
   const map = [
@@ -2106,6 +2164,9 @@ export default function App(){
   const [reuseModal,setReuseModal]=useState(null);
   const [listMenuId,setListMenuId]=useState(null);
   const [mNotFound,setMNotFound]=useState(false);
+  const [voiceListening,setVoiceListening]=useState(false);
+  const [voiceProcessing,setVoiceProcessing]=useState(false);
+  const voiceRecognitionRef=useRef(null);
 
   const triggerBudgetSavedPulse=useCallback(()=>{
     setBudgetSavedPulse(true);
@@ -2543,7 +2604,8 @@ export default function App(){
       let categories;
       try{categories=await aiOrganize(pendingItems,listType);}
       catch{categories=demoOrganize(pendingItems);showToast("⚠️ IA indisponível — organização básica");}
-      const newList={id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:new Date().toISOString(),total:0};
+      const now=new Date().toISOString();
+      const newList={id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
       const nl=[newList,...lists];
       saveLists(nl);
       setCurrentList(newList);
@@ -2610,7 +2672,76 @@ export default function App(){
     showToast("✅ "+items.length+" itens importados!");
   };
 
-  const parsePastedText=()=>importTextAsPendingItems(pasteText,{closePaste:true});
+  const importTextAsPendingItemsWithAI=async(text,{closePaste=false,source="texto"}={})=>{
+    const clean=String(text||"").trim();
+    if(!clean){showToast("⚠️ Nenhum item informado");return;}
+    setVoiceProcessing(source==="voz");
+    setLoading(true);
+    try{
+      let items=[];
+      try{
+        items=await aiParseShoppingText(clean,listType);
+      }catch(err){
+        console.warn("IA indisponível para interpretar texto; usando importação simples.",err);
+        items=parseListTextToItems(clean);
+        showToast("⚠️ IA indisponível — importação simples aplicada",3200);
+      }
+      if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
+      setPendingItems(prev=>[...prev,...items]);
+      if(closePaste){setPasteText("");setShowPasteModal(false);}
+      showToast(source==="voz" ? `🎤 ${items.length} item(ns) adicionados por voz` : `✅ ${items.length} item(ns) interpretados pela IA`,2800);
+    }finally{
+      setVoiceProcessing(false);
+      setLoading(false);
+    }
+  };
+
+  const parsePastedText=()=>importTextAsPendingItemsWithAI(pasteText,{closePaste:true,source:"texto"});
+
+  const startVoiceInput=()=>{
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SpeechRecognition){
+      showToast("⚠️ Reconhecimento de voz indisponível neste navegador. Tente pelo Chrome no Android.",5200);
+      return;
+    }
+    if(voiceListening){
+      try{voiceRecognitionRef.current?.stop?.();}catch{}
+      setVoiceListening(false);
+      return;
+    }
+
+    const recognition=new SpeechRecognition();
+    recognition.lang="pt-BR";
+    recognition.interimResults=true;
+    recognition.continuous=false;
+    let finalTranscript="";
+
+    recognition.onstart=()=>{setVoiceListening(true);showToast("🎤 Ouvindo... fale os itens da lista",2200);};
+    recognition.onresult=(event)=>{
+      let interim="";
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const transcript=event.results[i][0]?.transcript||"";
+        if(event.results[i].isFinal)finalTranscript+=transcript+" ";
+        else interim+=transcript;
+      }
+      const preview=(finalTranscript+" "+interim).trim();
+      if(preview)setPasteText(preview);
+    };
+    recognition.onerror=(event)=>{
+      console.warn("Erro no reconhecimento de voz:",event);
+      setVoiceListening(false);
+      if(event?.error==="not-allowed")showToast("⚠️ Permita o uso do microfone para ditar a lista.",4200);
+      else showToast("⚠️ Não consegui ouvir com clareza. Tente novamente.",3200);
+    };
+    recognition.onend=()=>{
+      setVoiceListening(false);
+      const text=(finalTranscript||pasteText||"").trim();
+      if(text)importTextAsPendingItemsWithAI(text,{source:"voz"});
+    };
+
+    voiceRecognitionRef.current=recognition;
+    try{recognition.start();}catch(err){console.warn(err);setVoiceListening(false);}
+  };
 
   const handlePhotoListFile=async(e)=>{
     const file=e.target.files?.[0];
@@ -3290,10 +3421,14 @@ export default function App(){
                   style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>＋ Inserir</button>
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Digite um item, cole sua lista ou organize tudo com IA.</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,marginTop:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>setShowPasteModal(true)}
                   style={{width:"100%",padding:"15px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(109,40,217,0.08)"}}>
                   📋 Colar lista
+                </button>
+                <button onClick={startVoiceInput} disabled={voiceProcessing}
+                  style={{width:"100%",padding:"15px",borderRadius:20,background:voiceListening?"#FEF2F2":"#ECFDF5",border:`2px solid ${voiceListening?"#DC2626":"#16A34A"}`,color:voiceListening?"#DC2626":"#15803D",fontWeight:900,fontSize:15,cursor:voiceProcessing?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(22,163,74,0.08)",opacity:voiceProcessing?0.65:1}}>
+                  {voiceListening?"⏹️ Parar":voiceProcessing?"⏳ IA...":"🎤 Falar lista"}
                 </button>
               </div>
             </div>
