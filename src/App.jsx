@@ -2975,6 +2975,87 @@ export default function App(){
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
+
+  const getManualDialogUnits = useCallback(() => {
+    const base = ["unidade", "pacote", "kg", "L", "caixa", "fardo"];
+    const fromConfig = Array.isArray(dlgConfig?.unidades) ? dlgConfig.unidades.map(normalizeUnitValue) : [];
+    return Array.from(new Set([...base, ...fromConfig])).filter(Boolean).slice(0, 8);
+  }, [dlgConfig]);
+
+  const isDecimalManualUnit = useCallback((unit) => ["kg", "g", "L", "ml"].includes(normalizeUnitValue(unit)), []);
+
+  const getManualQtyStep = useCallback((unit = dlgUnit) => isDecimalManualUnit(unit) ? 0.5 : 1, [dlgUnit, isDecimalManualUnit]);
+
+  const formatManualQty = useCallback((qty) => {
+    const n = Number(qty || 0);
+    if (!Number.isFinite(n)) return "1";
+    return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2))).replace(".", ",");
+  }, []);
+
+  const setManualQtyFromText = useCallback((value) => {
+    const normalized = String(value || "").replace(",", ".").replace(/[^0-9.]/g, "");
+    const number = Number(normalized);
+    if (!Number.isFinite(number) || number <= 0) {
+      setDlgQty("");
+      return;
+    }
+    setDlgQty(Number(number.toFixed(2)));
+  }, []);
+
+  const changeManualQty = useCallback((direction) => {
+    const step = getManualQtyStep();
+    setDlgQty((current) => {
+      const base = Number(String(current || step).replace(",", "."));
+      const safeBase = Number.isFinite(base) && base > 0 ? base : step;
+      const next = Math.max(step, safeBase + direction * step);
+      return Number(next.toFixed(2));
+    });
+  }, [getManualQtyStep]);
+
+  const handleManualUnitChange = useCallback((unit) => {
+    const cleanUnit = normalizeUnitValue(unit);
+    setDlgUnit(cleanUnit);
+    if (isDecimalManualUnit(cleanUnit)) {
+      setDlgPeso("");
+      setDlgVolume("");
+      setDlgQty((current) => {
+        const n = Number(String(current || 1).replace(",", "."));
+        return Number.isFinite(n) && n > 0 ? n : 1;
+      });
+    } else {
+      setDlgQty((current) => {
+        const n = Number(String(current || 1).replace(",", "."));
+        return Math.max(1, Math.round(Number.isFinite(n) ? n : 1));
+      });
+    }
+  }, [isDecimalManualUnit]);
+
+  const getManualSizeOptions = useCallback(() => {
+    if (!dlgConfig || isDecimalManualUnit(dlgUnit)) return [];
+    const sizes = [...(Array.isArray(dlgConfig.pesos) ? dlgConfig.pesos : []), ...(Array.isArray(dlgConfig.volumes) ? dlgConfig.volumes : [])]
+      .filter(Boolean);
+    return Array.from(new Set(sizes)).slice(0, 10);
+  }, [dlgConfig, dlgUnit, isDecimalManualUnit]);
+
+  const setManualSize = useCallback((size) => {
+    const value = String(size || "").trim();
+    if (/\b(ml|l)\b/i.test(value)) {
+      setDlgVolume(value);
+      setDlgPeso("");
+    } else {
+      setDlgPeso(value);
+      setDlgVolume("");
+    }
+  }, []);
+
+  const buildManualPreview = useCallback(() => {
+    const qty = Number(String(dlgQty || 1).replace(",", "."));
+    const unit = normalizeUnitValue(dlgUnit || "unidade");
+    const name = normalizeProductName(itemDialog?.name || "");
+    const size = isDecimalManualUnit(unit) ? "" : String(dlgPeso || dlgVolume || "").trim();
+    return `${formatQtyUnit(Number.isFinite(qty) && qty > 0 ? qty : 1, unit)} · ${[name, size].filter(Boolean).join(" ")}`;
+  }, [dlgQty, dlgUnit, itemDialog, dlgPeso, dlgVolume, isDecimalManualUnit]);
+
   const saveLists=(nl)=>{
     const safe=(Array.isArray(nl)?nl:[]).filter(l=>!wasListDeletedLocally(l));
     setLists(safe);
@@ -3280,8 +3361,8 @@ export default function App(){
     if (existing) {
       const cfg = getProductConfig(name);
       setDlgConfig(cfg);
-      setDlgMarca(existing.marca||"");
-      setDlgTipo(existing.tipo||"");
+      setDlgMarca("");
+      setDlgTipo("");
       setDlgPeso(existing.peso||"");
       setDlgVolume(existing.volume||"");
       setDlgQty(existing.qty||1);
@@ -3289,32 +3370,17 @@ export default function App(){
       setItemDialog({name});
       return;
     }
-    // Novo item: abre diálogo com loading, chama IA
-    setDlgLoading(true);
-    setDlgConfig(null);
-    setDlgMarca(""); setDlgTipo(""); setDlgPeso(""); setDlgVolume("");
-    setDlgQty(1); setDlgUnit("unidade");
+    // Novo item manual: abre diálogo simples e rápido, sem marca/tipo.
+    const cfg = getProductConfig(name);
+    setDlgLoading(false);
+    setDlgConfig(cfg);
+    setDlgMarca(""); setDlgTipo("");
+    const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || "unidade");
+    setDlgUnit(normalizeUnitValue(preferredUnit));
+    setDlgQty(1);
+    setDlgPeso(cfg.pesos?.[0] || "");
+    setDlgVolume(!cfg.pesos?.length ? (cfg.volumes?.[0] || "") : "");
     setItemDialog({name});
-    try {
-      const cfg = await classifyProduct(name);
-      setDlgConfig(cfg);
-      setDlgMarca(cfg.marcas?.[0]||"");
-      setDlgTipo(cfg.tipos?.[0]||"");
-      setDlgPeso(cfg.pesos?.[0]||"");
-      setDlgVolume(cfg.volumes?.[0]||"");
-      setDlgUnit(cfg.unidades?.[0]||"unidade");
-    } catch(err) {
-      const cfg = getProductConfig(name);
-      setDlgConfig(cfg);
-      setDlgMarca(cfg.marcas?.[0]||"");
-      setDlgTipo(cfg.tipos?.[0]||"");
-      setDlgPeso(cfg.pesos?.[0]||"");
-      setDlgVolume(cfg.volumes?.[0]||"");
-      setDlgUnit(cfg.unidades?.[0]||"unidade");
-      console.warn("Classificação básica aplicada sem exibir erro ao usuário.", err);
-    } finally {
-      setDlgLoading(false);
-    }
   };
 
   const handleAddItem = async () => {
@@ -3324,20 +3390,31 @@ export default function App(){
   };
 
   const confirmDialog = () => {
-    const embalagem = dlgPeso||dlgVolume||"";
-    const newItem = {
+    const unit = normalizeUnitValue(dlgUnit || "unidade");
+    const qtyNumber = Number(String(dlgQty || 1).replace(",", "."));
+    const decimalUnit = ["kg", "g", "L", "ml"].includes(unit);
+    const embalagem = decimalUnit ? "" : (dlgPeso || dlgVolume || "");
+    const newItem = normalizeListItem({
       name: itemDialog.name,
-      marca: dlgMarca||"",
-      tipo: dlgTipo||"",
+      marca: "",
+      tipo: "",
       embalagem,
-      peso: dlgPeso,
-      volume: dlgVolume,
-      qty: dlgQty,
-      unit: dlgUnit,
+      peso: !decimalUnit && /(g|kg)/i.test(embalagem) ? embalagem : "",
+      volume: !decimalUnit && /(ml|l)/i.test(embalagem) ? embalagem : "",
+      qty: Number.isFinite(qtyNumber) && qtyNumber > 0 ? qtyNumber : 1,
+      unit,
       price: null,
       checked: false,
       notFound: false
-    };
+    });
+    try {
+      const memory = loadUserItemMemory();
+      const key = normalizePlainText(newItem.name);
+      if (key) {
+        memory[key] = { name: newItem.name, unit: newItem.unit, detail: newItem.detail || newItem.embalagem || "", updatedAt: new Date().toISOString() };
+        localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
+      }
+    } catch {}
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -3346,7 +3423,7 @@ export default function App(){
     }
     setItemDialog(null);
     setCurrentInput("");
-    showToast(editPendingIdx!=null?"✏️ Atualizado":"✅ "+itemDialog.name+" adicionado");
+    showToast(editPendingIdx!=null?"✏️ Atualizado":"✅ "+buildManualPreview()+" adicionado");
   };
 
   const editPendingItem=(idx)=>{
@@ -4405,70 +4482,47 @@ export default function App(){
           )}
           {!dlgLoading&&dlgConfig&&(<>
 
-          {/* Tipo */}
-          {/* Marca */}
-          {dlgConfig.marcas?.length>0&&(
-            <div style={{marginBottom:16}}>
-              <label style={lbl}>Marca</label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                <button onClick={()=>setDlgMarca("")} style={chip(dlgMarca==="","#8E24AA","#F3E5F5","#6A1B9A")}>Qualquer</button>
-                {dlgConfig.marcas.map(m=><button key={m} onClick={()=>setDlgMarca(m)} style={chip(dlgMarca===m,"#8E24AA","#F3E5F5","#6A1B9A")}>{m}</button>)}
-              </div>
-            </div>
-          )}
-
-          {/* Tipo */}
-          {dlgConfig.tipos?.length>0&&(
-            <div style={{marginBottom:16}}>
-              <label style={lbl}>Tipo / Variação</label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                <button onClick={()=>setDlgTipo("")} style={chip(dlgTipo==="")}>Qualquer</button>
-                {dlgConfig.tipos.map(t=><button key={t} onClick={()=>setDlgTipo(t)} style={chip(dlgTipo===t)}>{t}</button>)}
-              </div>
-            </div>
-          )}
-
-          {/* Peso */}
-          {dlgConfig.pesos?.length>0&&(
-            <div style={{marginBottom:16}}>
-              <label style={lbl}>Peso / Tamanho</label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {dlgConfig.pesos.map(p=><button key={p} onClick={()=>setDlgPeso(p)} style={chip(dlgPeso===p,"#1A6B8A","#E8F4F8","#1A6B8A")}>{p}</button>)}
-              </div>
-            </div>
-          )}
-
-          {/* Volume */}
-          {dlgConfig.volumes?.length>0&&(
-            <div style={{marginBottom:16}}>
-              <label style={lbl}>Volume / Embalagem</label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {dlgConfig.volumes.map(v=><button key={v} onClick={()=>setDlgVolume(v)} style={chip(dlgVolume===v,"#1A6B8A","#E8F4F8","#1A6B8A")}>{v}</button>)}
-              </div>
-            </div>
-          )}
-
-          {/* Quantidade */}
+          {/* Quantidade enxuta */}
           <div style={{marginBottom:16}}>
             <label style={lbl}>Quantidade</label>
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <button onClick={()=>setDlgQty(q=>Math.max(1,q-1))} style={qBtn}>−</button>
-              <span style={{fontWeight:900,fontSize:24,color:"#111827",minWidth:36,textAlign:"center"}}>{dlgQty}</span>
-              <button onClick={()=>setDlgQty(q=>q+1)} style={qBtn}>＋</button>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <button onClick={()=>changeManualQty(-1)} style={qBtn}>−</button>
+              <input
+                value={formatManualQty(dlgQty)}
+                inputMode="decimal"
+                onChange={(e)=>setManualQtyFromText(e.target.value)}
+                onBlur={()=>{ if(!dlgQty) setDlgQty(getManualQtyStep()); }}
+                style={{...inp({textAlign:"center",fontWeight:900,fontSize:22,padding:"10px 12px",maxWidth:120,borderRadius:18})}}
+              />
+              <button onClick={()=>changeManualQty(1)} style={qBtn}>＋</button>
+            </div>
+            <div style={{fontSize:12,color:"#6B7280",marginTop:8}}>
+              Para kg e litro, os botões avançam de 0,5 em 0,5. Também é possível digitar o valor.
             </div>
           </div>
 
           {/* Unidade */}
-          <div style={{marginBottom:20}}>
-            <label style={lbl}>Unidade de contagem</label>
+          <div style={{marginBottom:16}}>
+            <label style={lbl}>Unidade</label>
             <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-              {dlgConfig.unidades?.map(u=><button key={u} onClick={()=>setDlgUnit(u)} style={chip(dlgUnit===u,"#6B3FA0","#F3EEF9","#6B3FA0")}>{u}</button>)}
+              {getManualDialogUnits().map(u=><button key={u} onClick={()=>handleManualUnitChange(u)} style={chip(normalizeUnitValue(dlgUnit)===normalizeUnitValue(u),"#6B3FA0","#F3EEF9","#6B3FA0")}>{formatUnitForQuantity(Number(dlgQty||1), u)}</button>)}
             </div>
           </div>
 
+          {/* Tamanho da embalagem */}
+          {getManualSizeOptions().length>0&&(
+            <div style={{marginBottom:16}}>
+              <label style={lbl}>Tamanho da embalagem <span style={{fontWeight:500,color:"#9CA3AF"}}>(opcional)</span></label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                <button onClick={()=>{setDlgPeso("");setDlgVolume("");}} style={chip(!(dlgPeso||dlgVolume),"#1A6B8A","#E8F4F8","#1A6B8A")}>Sem tamanho</button>
+                {getManualSizeOptions().map(size=><button key={size} onClick={()=>setManualSize(size)} style={chip((dlgPeso||dlgVolume)===size,"#1A6B8A","#E8F4F8","#1A6B8A")}>{size}</button>)}
+              </div>
+            </div>
+          )}
+
           {/* Preview */}
-          <div style={{background:"#F5F3FF",borderRadius:18,padding:"12px 14px",marginBottom:16,fontSize:13,color:"#6D28D9",fontWeight:700}}>
-            ✅ {[dlgQty+" "+dlgUnit, dlgMarca, dlgTipo, itemDialog.name, dlgPeso||dlgVolume].filter(Boolean).join(" · ")}
+          <div style={{background:"#F5F3FF",borderRadius:18,padding:"12px 14px",marginBottom:16,fontSize:14,color:"#6D28D9",fontWeight:800,display:"flex",alignItems:"center",gap:8}}>
+            <span>✅</span><span>{buildManualPreview()}</span>
           </div>
 
           </>)}
