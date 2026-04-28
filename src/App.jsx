@@ -2987,14 +2987,39 @@ export default function App(){
   const getManualQtyStep = useCallback((unit = dlgUnit) => isDecimalManualUnit(unit) ? 0.5 : 1, [dlgUnit, isDecimalManualUnit]);
 
   const formatManualQty = useCallback((qty) => {
+    // Mantém a digitação natural de números decimais.
+    // Ex.: permite o usuário digitar "1," antes de completar "1,5".
+    if (typeof qty === "string") {
+      return qty.replace(".", ",");
+    }
     const n = Number(qty || 0);
     if (!Number.isFinite(n)) return "1";
     return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2))).replace(".", ",");
   }, []);
 
   const setManualQtyFromText = useCallback((value) => {
-    const normalized = String(value || "").replace(",", ".").replace(/[^0-9.]/g, "");
-    const number = Number(normalized);
+    let raw = String(value || "")
+      .replace(/[^0-9,.]/g, "")
+      .replace(/\./g, ",");
+
+    // Permite somente uma vírgula decimal.
+    const firstComma = raw.indexOf(",");
+    if (firstComma >= 0) {
+      raw = raw.slice(0, firstComma + 1) + raw.slice(firstComma + 1).replace(/,/g, "");
+    }
+
+    // Durante a digitação, preserva estados intermediários válidos: "", "1,".
+    if (raw === "" || /^\d+,?$/.test(raw)) {
+      setDlgQty(raw);
+      return;
+    }
+
+    if (/^\d+,\d{0,2}$/.test(raw)) {
+      setDlgQty(raw);
+      return;
+    }
+
+    const number = Number(raw.replace(",", "."));
     if (!Number.isFinite(number) || number <= 0) {
       setDlgQty("");
       return;
@@ -3128,10 +3153,19 @@ export default function App(){
     return href.replace(/\/l\/.*$/,"/").replace(/\/lista\/.*$/,"/").replace(/\/index\.html$/,"/").replace(/\/$/,"");
   };
 
+  const openWhatsAppDirect=(text,preparedWindow=null)=>{
+    const encoded=encodeURIComponent(text);
+    const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+    const url=isMobile
+      ? `whatsapp://send?text=${encoded}`
+      : `https://web.whatsapp.com/send?text=${encoded}`;
+    openShareWindow(url,preparedWindow);
+  };
+
   const shareAppWhatsApp=()=>{
     const appUrl=getPublicAppUrl();
     const text=`Estou usando o Tá na Lista para organizar compras, compartilhar listas e controlar o orçamento. Conheça o app:\n${appUrl}`;
-    openWhatsAppShare(text);
+    openWhatsAppDirect(text);
   };
 
   useEffect(()=>{
@@ -3249,50 +3283,6 @@ export default function App(){
     lines.push("");
     lines.push("Se ainda não usa o Tá na Lista, abra o link e toque em ‘Adicionar à Tela de Início’. ");
     return lines.join("\n");
-  };
-
-  const isMobileDevice=()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||"");
-
-  const buildWhatsAppUrl=(text,{fallback=false}={})=>{
-    const encoded=encodeURIComponent(text||"");
-    if(isMobileDevice()&&!fallback){
-      return `whatsapp://send?text=${encoded}`;
-    }
-    if(!isMobileDevice()&&!fallback){
-      return `https://web.whatsapp.com/send?text=${encoded}`;
-    }
-    return `https://wa.me/?text=${encoded}`;
-  };
-
-  const openWhatsAppShare=(text,preparedWindow=null)=>{
-    const primaryUrl=buildWhatsAppUrl(text);
-
-    // No celular/PWA, usar o esquema nativo abre o aplicativo do WhatsApp direto,
-    // evitando a tela intermediária do api.whatsapp.com.
-    if(isMobileDevice()){
-      if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
-      window.location.href=primaryUrl;
-
-      // Fallback: se o app não estiver instalado ou o esquema nativo falhar,
-      // abre o fluxo web padrão como alternativa.
-      setTimeout(()=>{
-        if(!document.hidden){
-          window.location.href=buildWhatsAppUrl(text,{fallback:true});
-        }
-      },1200);
-      return;
-    }
-
-    if(preparedWindow&&!preparedWindow.closed){
-      preparedWindow.location.href=primaryUrl;
-      preparedWindow.focus?.();
-      return;
-    }
-
-    const opened=window.open(primaryUrl,"_blank","noopener,noreferrer");
-    if(!opened){
-      window.location.href=buildWhatsAppUrl(text,{fallback:true});
-    }
   };
 
   const openShareWindow=(url,preparedWindow=null)=>{
@@ -4130,12 +4120,12 @@ export default function App(){
   const shareWhatsApp=async(listArg=null)=>{
     const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
-    const preparedWindow=isMobileDevice()?null:window.open("about:blank","_blank");
+    const preparedWindow=window.open("about:blank","_blank");
     try{
       showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
       const text=buildShareInviteText(published,link);
-      openWhatsAppShare(text,preparedWindow);
+      openWhatsAppDirect(text,preparedWindow);
       showToast("✅ Link da lista pronto para envio pelo WhatsApp!");
     }catch(err){
       if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
@@ -4529,7 +4519,14 @@ export default function App(){
                 value={formatManualQty(dlgQty)}
                 inputMode="decimal"
                 onChange={(e)=>setManualQtyFromText(e.target.value)}
-                onBlur={()=>{ if(!dlgQty) setDlgQty(getManualQtyStep()); }}
+                onBlur={()=>{
+                  const n = Number(String(dlgQty || "").replace(",", "."));
+                  if (!Number.isFinite(n) || n <= 0) {
+                    setDlgQty(getManualQtyStep());
+                  } else {
+                    setDlgQty(Number(n.toFixed(2)));
+                  }
+                }}
                 style={{...inp({textAlign:"center",fontWeight:900,fontSize:22,padding:"10px 12px",maxWidth:120,borderRadius:18})}}
               />
               <button onClick={()=>changeManualQty(1)} style={qBtn}>＋</button>
@@ -4762,7 +4759,9 @@ export default function App(){
                         if(hasPrice){
                           priceLine=item.qty>1?`${formatQtyUnit(item.qty,item.unit)} × ${fmtR(item.price)}`:`${formatQtyUnit(1,item.unit)} × ${fmtR(item.price)}`;
                         } else {
-                          priceLine=item.qty>1?formatQtyUnit(item.qty,item.unit):formatUnitForQuantity(1,item.unit);
+                          // Sempre exibe a quantidade completa, inclusive quando for 1 unidade
+                          // ou fração de kg/litro. Ex.: "1 pacote", "1 kg", "0,5 kg".
+                          priceLine=formatQtyUnit(item.qty || 1, item.unit || "unidade");
                         }
 
                         return(
