@@ -2667,7 +2667,9 @@ function parseSpokenShoppingItemsProfessional(text) {
   const qtyWords = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,\\.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
   let raw = normalizeSpokenDecimalPhrases(text)
-    .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2")
+    // Protege vírgula decimal antes de usar vírgula como separador de itens.
+    .replace(/(\d+)\s*,\s*(\d+)/g, "$1§DECIMAL§$2")
+    .replace(/(\d+)\s*\.\s*(\d+)/g, "$1§DECIMAL§$2")
     .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
     .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
     .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
@@ -2677,7 +2679,10 @@ function parseSpokenShoppingItemsProfessional(text) {
 
   // Quebra apenas antes de uma nova quantidade + unidade + produto, preservando "arroz 5kg" no item anterior.
   raw = raw.replace(new RegExp(`\\s+(${qtyWords})\\s+(${unitWords})\\s+(?=[a-záéíóúãõç])`, "gi"), ", $1 $2 ");
-  const chunks = raw.split(/\s*,\s*/).map(v=>v.trim()).filter(Boolean);
+  const chunks = raw
+    .split(/\s*,\s*/)
+    .map(v=>v.replace(/§DECIMAL§/g, ",").trim())
+    .filter(Boolean);
   const items = [];
   for (let c of chunks) {
     let qty = 1, unit = "unidade", embalagem = "", marca = "", tipo = "";
