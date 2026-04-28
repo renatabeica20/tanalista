@@ -3016,11 +3016,11 @@ export default function App(){
                 {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
-                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
+                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:156}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
                   <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:14}}><ModuleIcon type={m.iconType} size={72} active={m.active} /></div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
-                  <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#111827",textAlign:"center",width:"100%"}}>{m.name}</div>
+                  <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4,textAlign:"center",width:"100%"}}>{m.desc}</div>
                 </div>
               ))}
             </div>
