@@ -2522,22 +2522,23 @@ function decimalToBrazilianString(n) {
 }
 
 function normalizeSpokenDecimalPhrases(value) {
-  const qtyWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|\d+)";
-  const decimalWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|\d+)";
+  const qtyWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|\\d+)";
+  const decimalWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|\\d+)";
   return String(value || "")
-    .replace(new RegExp(`\b(${qtyWord})\s*(?:v[ií]rgula|ponto)\s*(${decimalWord})\b`, "gi"), (full, a, b) => {
+    .replace(/(\d+)\s*[,\.]\s*(\d+)/g, "$1,$2")
+    .replace(new RegExp(`\\b(${qtyWord})\\s*(?:v[ií]rgula|virgula|ponto)\\s*(${decimalWord})\\b`, "gi"), (full, a, b) => {
       const left = numberFromPortuguese(a);
       const right = numberFromPortuguese(b);
       if ((!left && left !== 0) || (!right && right !== 0)) return full;
-      return `${left},${String(right).replace(/^0+/, "") || "0"}`;
+      return `${decimalToBrazilianString(left)},${String(right).replace(/^0+/, "") || "0"}`;
     })
-    .replace(/\b(um|uma)\s+quilo\s+e\s+mei[ao]\b/gi, "1,5 kg")
-    .replace(/\b(dois|duas)\s+quilos\s+e\s+mei[ao]\b/gi, "2,5 kg")
-    .replace(/\b(tr[eê]s)\s+quilos\s+e\s+mei[ao]\b/gi, "3,5 kg")
-    .replace(/\b(um|uma)\s+litro\s+e\s+mei[ao]\b/gi, "1,5 L")
-    .replace(/\b(dois|duas)\s+litros\s+e\s+mei[ao]\b/gi, "2,5 L")
-    .replace(/\bmei[ao]\s+quilo\b/gi, "0,5 kg")
-    .replace(/\bmei[ao]\s+litro\b/gi, "0,5 L")
+    .replace(/\b(um|uma)\s+(?:quilo|kg)\s+e\s+mei[ao]\b/gi, "1,5 kg")
+    .replace(/\b(dois|duas)\s+(?:quilos|kg)\s+e\s+mei[ao]\b/gi, "2,5 kg")
+    .replace(/\b(tr[eê]s)\s+(?:quilos|kg)\s+e\s+mei[ao]\b/gi, "3,5 kg")
+    .replace(/\b(um|uma)\s+(?:litro|l)\s+e\s+mei[ao]\b/gi, "1,5 L")
+    .replace(/\b(dois|duas)\s+(?:litros|l)\s+e\s+mei[ao]\b/gi, "2,5 L")
+    .replace(/\bmei[ao]\s+(?:quilo|kg)\b/gi, "0,5 kg")
+    .replace(/\bmei[ao]\s+(?:litro|l)\b/gi, "0,5 L")
     .replace(/(\d+)\s*,\s*(\d+)/g, "$1,$2");
 }
 
