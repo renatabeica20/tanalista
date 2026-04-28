@@ -1950,7 +1950,18 @@ function normalizeSizeSpoken(num, measure) {
 }
 
 function splitContinuousVoiceIntoChunks(text) {
-  const raw = String(text || "")
+  const qtyStartWords = "(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,.]?\\d*)";
+  const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
+  const productWords = [
+    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
+  ];
+  const normalizedProducts = productWords
+    .map(w => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+    .sort((a,b)=>b.length-a.length);
+  const escapeRegExp = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const productAlternation = normalizedProducts.map(escapeRegExp).join("|");
+
+  let raw = String(text || "")
     .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
     .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
     .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
@@ -1958,20 +1969,17 @@ function splitContinuousVoiceIntoChunks(text) {
     .replace(/\s+/g, " ")
     .trim();
 
+  // iPhone/Whisper às vezes devolve tudo em uma única frase sem pontuação.
+  // Criamos quebras antes de uma nova quantidade/unidade/produto.
+  raw = raw.replace(new RegExp("\\s+(" + qtyStartWords + ")\\s+(?=(" + unitWords + "|" + productAlternation + ")\\b)", "gi"), ", $1 ");
+
   const explicit = raw.split(/\s*,\s*/g).map(v => v.trim()).filter(v => v.length > 1);
-  const productWords = [
-    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","sabonete","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
-  ];
-  const normalizedProducts = productWords
-    .map(w => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
-    .sort((a,b)=>b.length-a.length);
 
   const splitOne = (chunk) => {
     const normalized = chunk.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const matches = [];
     for (const product of normalizedProducts) {
-      const escaped = product.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g");
+      const re = new RegExp("(^|\\s)" + escapeRegExp(product) + "(?=\\s|$)", "g");
       let m;
       while ((m = re.exec(normalized)) !== null) {
         const idx = m.index + (m[1] ? m[1].length : 0);
@@ -2896,12 +2904,17 @@ export default function App(){
     setLoading(true);
     try{
       let items=[];
-      try{
-        items=await aiParseShoppingText(clean,listType);
-      }catch(err){
-        console.warn("IA indisponível para interpretar texto; usando importação simples.",err);
-        items=parseListTextToItems(clean);
-        showToast("⚠️ IA indisponível — importação simples aplicada",3200);
+      const voiceParsed = source==="voz" ? parseSpokenShoppingItems(clean) : [];
+      if(source==="voz" && voiceParsed.length){
+        items=voiceParsed;
+      }else{
+        try{
+          items=await aiParseShoppingText(clean,listType);
+        }catch(err){
+          console.warn("IA indisponível para interpretar texto; usando importação simples.",err);
+          items=parseListTextToItems(clean);
+          showToast("⚠️ IA indisponível — importação simples aplicada",3200);
+        }
       }
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
       setPendingItems(prev=>[...prev,...items]);
