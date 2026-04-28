@@ -4,38 +4,69 @@ export const config = {
   },
 };
 
+function sendJson(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+}
+
+async function readRequestBuffer(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+function filenameFromHeaders(req, contentType) {
+  const rawName = req.headers["x-audio-filename"] || "";
+  try {
+    const decoded = decodeURIComponent(String(rawName || ""));
+    if (decoded && /\.[a-z0-9]{2,5}$/i.test(decoded)) return decoded;
+  } catch {}
+
+  const type = String(contentType || "").toLowerCase();
+  if (type.includes("mp4")) return "lista-voz.m4a";
+  if (type.includes("aac")) return "lista-voz.aac";
+  if (type.includes("wav")) return "lista-voz.wav";
+  if (type.includes("mpeg") || type.includes("mp3")) return "lista-voz.mp3";
+  if (type.includes("ogg")) return "lista-voz.ogg";
+  return "lista-voz.webm";
+}
+
 export default async function handler(req, res) {
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") return sendJson(res, 200, { ok: true });
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Método não permitido" });
+    return sendJson(res, 405, { error: "Método não permitido." });
   }
 
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: "OPENAI_API_KEY não configurada" });
+      return sendJson(res, 500, { error: "OPENAI_API_KEY não configurada no Vercel." });
     }
 
-    const chunks = [];
-    for await (const chunk of req) {
-      chunks.push(chunk);
-    }
-
-    const buffer = Buffer.concat(chunks);
-    if (!buffer.length) {
-      return res.status(400).json({ error: "Áudio vazio" });
+    const buffer = await readRequestBuffer(req);
+    if (!buffer || buffer.length < 1000) {
+      return sendJson(res, 400, { error: "Áudio vazio ou muito curto." });
     }
 
     const contentType = req.headers["content-type"] || "audio/webm";
-    const blob = new Blob([buffer], { type: contentType });
+    const filename = filenameFromHeaders(req, contentType);
 
     const formData = new FormData();
-    formData.append("file", blob, "audio.webm");
-    formData.append("model", "gpt-4o-mini-transcribe");
-    formData.append("language", "pt");
+    const blob = new Blob([buffer], { type: contentType });
+    formData.append("file", blob, filename);
+    formData.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1");
+    formData.append("language", req.headers["x-audio-language"] || "pt");
+    formData.append("response_format", "json");
+    formData.append(
+      "prompt",
+      "Lista de compras em português do Brasil. Preserve quantidades, unidades, embalagens, pesos e volumes."
+    );
 
-    const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const openaiRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -43,22 +74,21 @@ export default async function handler(req, res) {
       body: formData,
     });
 
-    const data = await response.json();
+    const data = await openaiRes.json().catch(() => ({}));
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Falha na transcrição",
+    if (!openaiRes.ok) {
+      return sendJson(res, openaiRes.status, {
+        error: data?.error?.message || "Erro ao transcrever áudio na OpenAI.",
         details: data,
       });
     }
 
-    return res.status(200).json({
-      text: data.text || "",
-    });
+    return sendJson(res, 200, { text: data?.text || "" });
   } catch (error) {
-    return res.status(500).json({
-      error: "Erro interno na transcrição",
-      details: error.message,
+    console.error("Erro em /api/transcribe:", error);
+    return sendJson(res, 500, {
+      error: "Erro interno na transcrição.",
+      details: error?.message || String(error),
     });
   }
 }
