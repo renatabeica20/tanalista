@@ -1,5 +1,7 @@
 {
-  "routes": [
-    { "src": "/l/(.*)", "dest": "/" }
-  ]
+  "functions": {
+    "api/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  }
 }
