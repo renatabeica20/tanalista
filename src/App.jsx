@@ -1964,7 +1964,7 @@ function singularizePortugueseWord(word) {
 function normalizeProductName(value) {
   const clean = String(value || "")
     .replace(/\s+/g, " ")
-    .replace(/\b(de|do|da|dos|das)\s*$/i, "")
+    .replace(/\s+(de|do|da|dos|das)\s*$/i, "")
     .trim();
   if (!clean) return "";
 
@@ -2898,6 +2898,7 @@ export default function App(){
   const [dlgUnit,setDlgUnit]=useState("unidade");
   const [dlgConfig,setDlgConfig]=useState(null);
   const [editPendingIdx,setEditPendingIdx]=useState(null);
+  const [itemDialogMode,setItemDialogMode]=useState("pending");
   const [listNameConfirmed,setListNameConfirmed]=useState(false);
   const [budgetConfirmed,setBudgetConfirmed]=useState(false);
   const [budgetSavedPulse,setBudgetSavedPulse]=useState(false);
@@ -3386,7 +3387,7 @@ export default function App(){
   // ── Classificação por IA em tempo real ──────────────────────────────
   const [dlgLoading, setDlgLoading] = useState(false);
 
-  const openProductDialog = async (name, existing=null) => {
+  const openProductDialog = async (name, existing=null, options={}) => {
     if (existing) {
       const cfg = getProductConfig(name);
       setDlgConfig(cfg);
@@ -3397,6 +3398,7 @@ export default function App(){
       setDlgQty(existing.qty||1);
       setDlgUnit(existing.unit||cfg.unidades?.[0]||"unidade");
       setItemDialog({name});
+      setItemDialogMode("pending");
       return;
     }
     // Novo item manual: abre diálogo simples e rápido, sem marca/tipo.
@@ -3410,6 +3412,7 @@ export default function App(){
     setDlgPeso(cfg.pesos?.[0] || "");
     setDlgVolume(!cfg.pesos?.length ? (cfg.volumes?.[0] || "") : "");
     setItemDialog({name});
+    setItemDialogMode(options?.mode || "pending");
   };
 
   const handleAddItem = async () => {
@@ -3444,6 +3447,25 @@ export default function App(){
         localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
       }
     } catch {}
+    if (itemDialogMode === "extra" && currentList) {
+      const l = JSON.parse(JSON.stringify(currentList));
+      const preferredCat = inferPreferredCategoryForItem(newItem) || "Itens Extras";
+      let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText(preferredCat));
+      if (!cat) {
+        cat = { name: preferredCat, items: [] };
+        l.categories.push(cat);
+      }
+      cat.items.push({ ...newItem, extra: true });
+      l.categories = sanitizeCategories(l.categories);
+      updateList(l);
+      setItemDialog(null);
+      setItemDialogMode("pending");
+      setCurrentInput("");
+      setExName(""); setExQty(1); setExUnit("unidade"); setExPrice("");
+      showToast("⭐ Item extra adicionado!");
+      return;
+    }
+
     if (editPendingIdx != null) {
       setPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
       setEditPendingIdx(null);
@@ -3451,6 +3473,7 @@ export default function App(){
       setPendingItems(prev=>[...prev,newItem]);
     }
     setItemDialog(null);
+    setItemDialogMode("pending");
     setCurrentInput("");
     showToast(editPendingIdx!=null?"✏️ Atualizado":"✅ "+buildManualPreview()+" adicionado");
   };
@@ -4062,9 +4085,12 @@ export default function App(){
   const addExtra=()=>{
     if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
     const l=JSON.parse(JSON.stringify(currentList));
-    let cat=l.categories.find(c=>c.name==="Itens Extras");
-    if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-    cat.items.push({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false});
+    const item=normalizeListItem({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false,extra:true});
+    const preferredCat=inferPreferredCategoryForItem(item)||"Itens Extras";
+    let cat=l.categories.find(c=>normalizePlainText(c.name)===normalizePlainText(preferredCat));
+    if(!cat){cat={name:preferredCat,items:[]};l.categories.push(cat);}
+    cat.items.push(item);
+    l.categories=sanitizeCategories(l.categories);
     updateList(l);setExtraModal(false);
     setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
     showToast("⭐ Item extra adicionado!");
@@ -4499,9 +4525,9 @@ export default function App(){
 
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
-        <ModalSheet onClose={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}}>
+        <ModalSheet onClose={()=>{setItemDialog(null);setItemDialogMode("pending");setEditPendingIdx(null);setCurrentInput("");}}>
           <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialog.name}</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:8}}>{dlgLoading?"":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:8}}>{dlgLoading?"":itemDialogMode==="extra"?"Defina os detalhes do item extra":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
           {dlgLoading&&(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 0",gap:14}}>
               <div style={{width:40,height:40,borderRadius:"50%",border:"4px solid #E6FAF2",borderTopColor:"#6D28D9",animation:"spin 0.8s linear infinite"}}/>
@@ -4562,11 +4588,11 @@ export default function App(){
 
           </>)}
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>{setItemDialog(null);setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
+            <button onClick={()=>{setItemDialog(null);setItemDialogMode("pending");setEditPendingIdx(null);setCurrentInput("");}} style={{...btnGr,flex:1}}>Cancelar</button>
             {!dlgLoading&&(
               <button onClick={confirmDialog}
                 style={{flex:2,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
-                {editPendingIdx!=null?"Atualizar ✓":"Confirmar ✓"}
+                {itemDialogMode==="extra"?"Adicionar à lista ✓":editPendingIdx!=null?"Atualizar ✓":"Confirmar ✓"}
               </button>
             )}
           </div>
@@ -4872,10 +4898,10 @@ export default function App(){
             <label style={lbl}>Produto</label>
             <div style={{display:"flex",gap:8}}>
               <input value={exName} onChange={e=>setExName(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
                 placeholder="Nome do produto..."
                 style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim());setExtraModal(false);}}}
+              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
                 disabled={!exName.trim()}
                 style={{padding:"0 16px",borderRadius:18,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#6B7280",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
                 Inserir IA
