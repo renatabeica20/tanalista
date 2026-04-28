@@ -545,7 +545,7 @@ function BrandWordmark({ compact = false, color = "#111827" }) {
   );
 }
 
-function ModuleIcon({ type="compras", size=38, active=false }) {
+function ModuleIcon({ type="compras", size=72, active=false }) {
   const iconMap = {
     compras: "/compras.svg",
     festa: "/festa.svg",
@@ -570,27 +570,29 @@ function ModuleIcon({ type="compras", size=38, active=false }) {
   return (
     <div
       style={{
-        width:size,
-        height:size,
-        borderRadius:Math.round(size*0.28),
-        background:"linear-gradient(135deg,#4C1D95,#7C3AED)",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"center",
-        boxShadow:active?"0 14px 28px rgba(109,40,217,0.24)":"0 10px 22px rgba(109,40,217,0.16)",
-        border:"1px solid rgba(255,255,255,0.35)",
-        position:"relative",
-        overflow:"hidden",
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.24),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        margin: "0 auto",
+        position: "relative",
+        flexShrink: 0,
       }}
     >
       <img
         src={src}
         alt={type}
         style={{
-          width:Math.round(size*0.72),
-          height:Math.round(size*0.72),
-          objectFit:"contain",
-          display:"block",
+          width: size,
+          height: size,
+          objectFit: "contain",
+          display: "block",
+          borderRadius: Math.round(size * 0.24),
+          boxShadow: active
+            ? "0 18px 34px rgba(109,40,217,0.28)"
+            : "0 14px 26px rgba(109,40,217,0.18)",
         }}
         onError={(e)=>{
           e.currentTarget.style.display="none";
@@ -601,13 +603,16 @@ function ModuleIcon({ type="compras", size=38, active=false }) {
       <span
         style={{
           display:"none",
-          width:"100%",
-          height:"100%",
+          width:size,
+          height:size,
+          borderRadius:Math.round(size*0.24),
           alignItems:"center",
           justifyContent:"center",
           color:"#FFFFFF",
-          fontSize:Math.round(size*0.52),
+          fontSize:Math.round(size*0.44),
           fontWeight:900,
+          background:"linear-gradient(135deg,#4C1D95,#7C3AED)",
+          boxShadow:active?"0 18px 34px rgba(109,40,217,0.28)":"0 14px 26px rgba(109,40,217,0.18)",
         }}
       >
         {fallback}
@@ -615,6 +620,7 @@ function ModuleIcon({ type="compras", size=38, active=false }) {
     </div>
   );
 }
+
 function getListOriginMeta(list) {
   if (!list) return null;
   const currentName = getAppUserName();
@@ -3012,7 +3018,7 @@ export default function App(){
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
                   style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
-                  <div style={{marginBottom:10}}><ModuleIcon type={m.iconType} size={38} active={m.active} /></div>
+                  <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:14}}><ModuleIcon type={m.iconType} size={72} active={m.active} /></div>
                   <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
                   <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
                 </div>
