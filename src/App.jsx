@@ -545,6 +545,28 @@ function BrandWordmark({ compact = false, color = "#111827" }) {
   );
 }
 
+function ModuleIcon({ type="compras", size=38, active=false }) {
+  if (type === "compras") return <AppLogo size={size} radius={Math.round(size*0.28)} shadow={false} />;
+  const labels = { festa:"★", conta:"R$", saude:"+", eventos:"QR", condominio:"ED" };
+  const label = labels[type] || "•";
+  return <div style={{width:size,height:size,borderRadius:Math.round(size*0.28),background:"linear-gradient(135deg,#4C1D95,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",color:"#FFFFFF",fontWeight:900,fontSize:type==="condominio"||type==="eventos"?12:18,boxShadow:active?"0 14px 28px rgba(109,40,217,0.24)":"0 10px 22px rgba(109,40,217,0.16)",border:"1px solid rgba(255,255,255,0.35)",position:"relative",overflow:"hidden"}}><span style={{position:"absolute",right:6,top:6,width:8,height:8,borderRadius:"50%",background:"#22C55E"}}/><span>{label}</span></div>;
+}
+function getListOriginMeta(list) {
+  if (!list) return null;
+  const currentName = getAppUserName();
+  if (list.imported || list.importedFrom) {
+    const from = list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "não informado";
+    return { type:"received", icon:"📥", text:"Recebida de " + from };
+  }
+  const owner = list.ownerName || list.remetente || currentName;
+  if (owner) {
+    const normalizedOwner = String(owner).trim().toLowerCase();
+    const normalizedCurrent = String(currentName || "").trim().toLowerCase();
+    return { type:"created", icon:"✍️", text: normalizedCurrent && normalizedOwner === normalizedCurrent ? "Criada por você" : "Feita por " + owner };
+  }
+  return null;
+}
+
 const LIST_TYPES = [
   {id:"mercado",   label:"🛒 Supermercado"},
   {id:"festa",     label:"🎉 Festa/Churrasco"},
@@ -2623,11 +2645,19 @@ export default function App(){
     }
     setCheckPopup({ci,ii});
   };
+  const toggleNotFound=(ci,ii)=>{
+    const l=JSON.parse(JSON.stringify(currentList));
+    const item=l.categories[ci].items[ii];
+    item.notFound=!item.notFound;
+    if(item.notFound){ item.checked=false; item.price=null; }
+    updateList(l); setSearch(""); setTimeout(scrollToListTop,100);
+    showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
+  };
 
   const openItemModal=(ci,ii)=>{
     const item=currentList.categories[ci].items[ii];
     setItemModal({ci,ii});setMQty(item.qty||1);setMPriceText(item.price!=null?fmtBRL(item.price):"");
-    setMNotFound(item.notFound||false);
+    setMNotFound(false);
   };
 
   const confirmItem=()=>{
@@ -2908,19 +2938,17 @@ export default function App(){
             <div style={{fontWeight:800,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:14}}>Módulos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:28}}>
               {[
-                {iconSrc:"/compras.svg",name:"Compras",desc:"Lista inteligente",active:true},
-                {iconSrc:"/festa.svg",name:"Festa",desc:"Churrasco e eventos",active:false},
-                {iconSrc:"/conta.svg",name:"Conta",desc:"Dividir no restaurante",active:false},
-                {iconSrc:"/saude.svg",name:"Saúde",desc:"Receitas e remédios",active:false},
-                {iconSrc:"/eventos.svg",name:"Eventos",desc:"Convites e QR Code",active:false},
-                {iconSrc:"/condominio.svg",name:"Condomínio",desc:"Gestão e aprovações",active:false},
+                {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
+                {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
+                {iconType:"conta",name:"Conta",desc:"Dividir no restaurante",active:false},
+                {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
+                {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
+                {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
                 <div key={m.name} onClick={()=>m.active&&setScreen("create")}
-                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.65,position:"relative",overflow:"hidden"}}>
+                  style={{background:"rgba(255,255,255,0.92)",borderRadius:24,padding:"20px 16px",cursor:m.active?"pointer":"default",boxShadow:"0 14px 34px rgba(109,40,217,0.10)",border:"1px solid #E9D5FF",opacity:m.active?1:0.55,position:"relative",overflow:"hidden"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#E5E7EB",color:"#6B7280",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:180,textTransform:"uppercase"}}>Em breve</div>}
-                  <div style={{width:56,height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:"0 12px 24px rgba(109,40,217,0.20)",border:"1px solid rgba(255,255,255,0.55)"}}>
-                    <img src={m.iconSrc} alt={m.name} style={{width:38,height:38,objectFit:"contain",display:"block"}} />
-                  </div>
+                  <div style={{marginBottom:10}}><ModuleIcon type={m.iconType} size={38} active={m.active} /></div>
                   <div style={{fontWeight:800,fontSize:14,color:"#111827"}}>{m.name}</div>
                   <div style={{fontSize:12,color:"#6B7280",marginTop:3,lineHeight:1.4}}>{m.desc}</div>
                 </div>
@@ -2952,9 +2980,9 @@ export default function App(){
                           {budgetSummary&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,padding:"5px 9px",borderRadius:999,background:budgetSummary.bg,border:"1px solid "+budgetSummary.border,color:budgetSummary.color,fontSize:11,fontWeight:900}}>
                             <span>{budgetSummary.icon}</span><span>{budgetSummary.text}</span>
                           </div>)}
-                          {list.importedFrom&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,marginLeft:budgetSummary?6:0,padding:"5px 9px",borderRadius:999,background:"#EEF2FF",border:"1px solid #C4B5FD",color:"#4C1D95",fontSize:11,fontWeight:900}}>
-                            <span>📥</span><span>Recebida de {list.importedFrom}</span>
-                          </div>)}
+                          {(()=>{ const originMeta=getListOriginMeta(list); return originMeta&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:7,marginLeft:budgetSummary?6:0,padding:"5px 9px",borderRadius:999,background:originMeta.type==="received"?"#EEF2FF":"#ECFDF5",border:"1px solid "+(originMeta.type==="received"?"#C4B5FD":"#A7F3D0"),color:originMeta.type==="received"?"#4C1D95":"#047857",fontSize:11,fontWeight:900}}>
+                            <span>{originMeta.icon}</span><span>{originMeta.text}</span>
+                          </div>); })()}
                         </div>
                         <div style={{color:"#9CA3AF",fontSize:18,flexShrink:0}}>›</div>
                       </div>
@@ -3270,7 +3298,7 @@ export default function App(){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:900,fontSize:13}}>Lista compartilhada</div>
                 <div style={{fontSize:12,fontWeight:700,opacity:0.85}}>
-                  {(currentList.importedFrom||currentList.remetente)?`Recebida de ${currentList.importedFrom||currentList.remetente} · `:""}{checkedItems}/{totalItems} itens concluídos
+                  {(()=>{ const originMeta=getListOriginMeta(currentList); return originMeta?originMeta.text + " · ":""; })()}{checkedItems}/{totalItems} itens concluídos
                 </div>
                 <div style={{height:7,background:"rgba(109,40,217,0.16)",borderRadius:999,overflow:"hidden",marginTop:7}}>
                   <div style={{height:"100%",width:(totalItems?Math.round((checkedItems/totalItems)*100):0)+"%",background:"linear-gradient(90deg,#7C3AED,#A855F7)",borderRadius:999,transition:"width 0.35s"}}/>
@@ -3452,6 +3480,7 @@ export default function App(){
                                 )}
                               </div>
                             </div>
+                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#EF4444":"#E5E7EB"),background:item.notFound?"#FEF2F2":"#FFFFFF",color:item.notFound?"#EF4444":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
                           </div>
                         );
                       })}
@@ -3478,19 +3507,6 @@ export default function App(){
           <ModalSheet onClose={()=>setItemModal(null)}>
             <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
             <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>{currentList.categories[itemModal.ci]?.name}</div>
-            {/* Nao encontrado toggle */}
-            <div style={{display:"flex",alignItems:"center",gap:12,background:mNotFound?"#FEF2F2":"#F9FAFB",borderRadius:20,padding:"12px 14px",marginBottom:16,cursor:"pointer"}}
-              onClick={()=>setMNotFound(!mNotFound)}>
-              <div style={{width:28,height:28,borderRadius:"50%",border:"2.5px solid "+(mNotFound?"#EF4444":"#E5E7EB"),background:mNotFound?"#FEE2E2":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>
-                {mNotFound?"✗":""}
-              </div>
-              <div>
-                <div style={{fontWeight:700,fontSize:14,color:mNotFound?"#EF4444":"#111827"}}>Item não encontrado / em falta</div>
-                <div style={{fontSize:12,color:"#6B7280"}}>Marcar como indisponível na loja</div>
-              </div>
-            </div>
-
-            {!mNotFound&&<>
             <div style={{marginBottom:16}}>
               <label style={lbl}>Quantidade</label>
               <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -3515,7 +3531,7 @@ export default function App(){
                 </div>
               )}
             </div>
-            </>}
+
 
             <div style={{display:"flex",gap:10}}>
               <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:18,background:"#FFE8E8",border:"none",color:"#FF4444",fontWeight:700,fontSize:16,cursor:"pointer"}}>🗑</button>
