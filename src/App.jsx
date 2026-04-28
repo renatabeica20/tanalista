@@ -311,6 +311,27 @@ async function updateSharedListRecord(id, list) {
   return Array.isArray(data) ? data[0] : data;
 }
 
+async function deleteSharedListRecord(id) {
+  if (!id || !hasSupabaseConfig()) return false;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Erro ao excluir lista compartilhada (${res.status}) ${text}`.trim());
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("Erro ao excluir lista compartilhada no Supabase:", err);
+    return false;
+  }
+}
+
 function sharedListSignature(list) {
   try {
     if (!list) return "";
@@ -1990,12 +2011,58 @@ async function readShoppingListFromImage(file) {
   return photoItemsToText(items);
 }
 
+const DELETED_LIST_KEYS_STORAGE = "tnl_deleted_list_keys";
+
+function getDeletedListKeys() {
+  try {
+    const raw = localStorage.getItem(DELETED_LIST_KEYS_STORAGE) || "[]";
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDeletedListKeys(keys) {
+  try {
+    localStorage.setItem(DELETED_LIST_KEYS_STORAGE, JSON.stringify(Array.from(keys).filter(Boolean)));
+  } catch {
+    // Ignora bloqueios pontuais de armazenamento local.
+  }
+}
+
+function getListPersistenceKeys(listOrId) {
+  if (!listOrId) return [];
+  if (typeof listOrId === "string" || typeof listOrId === "number") return [`id:${String(listOrId)}`];
+  const keys = [];
+  if (listOrId.id) keys.push(`id:${String(listOrId.id)}`);
+  if (listOrId.sharedId) keys.push(`shared:${String(listOrId.sharedId)}`);
+  if (listOrId.userId && listOrId.name) keys.push(`user:${String(listOrId.userId)}:${String(listOrId.name)}`);
+  return keys;
+}
+
+function markListAsDeletedLocally(list) {
+  const keys = getDeletedListKeys();
+  getListPersistenceKeys(list).forEach(key => keys.add(key));
+  saveDeletedListKeys(keys);
+}
+
+function wasListDeletedLocally(list) {
+  const deleted = getDeletedListKeys();
+  return getListPersistenceKeys(list).some(key => deleted.has(key));
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════
 export default function App(){
   const [screen,setScreen]=useState("home");
-  const [lists,setLists]=useState(()=>{try{return JSON.parse(localStorage.getItem("tnl_lists")||"[]")}catch{return[]}});
+  const [lists,setLists]=useState(()=>{
+    try{
+      const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+      return Array.isArray(stored)?stored.filter(l=>!wasListDeletedLocally(l)):[];
+    }catch{return[]}
+  });
   const [currentList,setCurrentList]=useState(null);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState({show:false,msg:""});
@@ -2089,7 +2156,11 @@ export default function App(){
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
-  const saveLists=(nl)=>{setLists(nl);localStorage.setItem("tnl_lists",JSON.stringify(nl));};
+  const saveLists=(nl)=>{
+    const safe=(Array.isArray(nl)?nl:[]).filter(l=>!wasListDeletedLocally(l));
+    setLists(safe);
+    localStorage.setItem("tnl_lists",JSON.stringify(safe));
+  };
 
   const restoreUserListsFromCloud=useCallback(async(userId,{silent=false}={})=>{
     if(!userId)return;
@@ -2102,6 +2173,7 @@ export default function App(){
         const restored=[];
         for(const record of records){
           const local=sharedRecordToLocalList(record);
+          if(wasListDeletedLocally(local))continue;
           const key=local.sharedId||local.id;
           if(key && !known.has(key)){
             restored.push(local);
@@ -2334,6 +2406,11 @@ export default function App(){
     };
 
     const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+    if(wasListDeletedLocally(received)){
+      setSharedLandingRecord(null);
+      showToast("🗑 Esta lista já foi excluída neste aparelho",2200);
+      return;
+    }
     const already=existing.some(l=>((sharedId&&l.sharedId===sharedId)||l.id===received.id));
     if(!already){
       const nl=[received,...existing];
@@ -2829,7 +2906,36 @@ export default function App(){
     showToast("⭐ Item extra adicionado!");
   };
 
-  const deleteList=(id)=>{saveLists(lists.filter(l=>l.id!==id));setConfirmDelete(null);showToast("🗑 Lista excluída");};
+  const deleteList=async(id)=>{
+    const target=lists.find(l=>l.id===id || l.sharedId===id);
+    if(!target){setConfirmDelete(null);return;}
+
+    // Marca a lista como excluída neste aparelho antes de recarregar do Supabase.
+    // Isso impede que listas apagadas reapareçam em "Listas Recentes" após fechar o app ou reiniciar o celular.
+    markListAsDeletedLocally(target);
+
+    const targetKeys=new Set(getListPersistenceKeys(target));
+    const nl=lists.filter(l=>!getListPersistenceKeys(l).some(key=>targetKeys.has(key)));
+    saveLists(nl);
+    setConfirmDelete(null);
+    setListMenuId(null);
+
+    if(currentList && getListPersistenceKeys(currentList).some(key=>targetKeys.has(key))){
+      setCurrentList(null);
+      setScreen("home");
+    }
+
+    showToast("🗑 Lista excluída");
+
+    // Se a lista foi criada pelo próprio usuário e possui registro no Supabase, tenta excluir também no servidor.
+    // Caso o Supabase bloqueie DELETE por política/RLS, a marcação local acima continua impedindo o retorno da lista.
+    if(target.sharedId && !target.imported){
+      const removedFromCloud=await deleteSharedListRecord(target.sharedId);
+      if(!removedFromCloud){
+        showToast("🗑 Lista excluída deste aparelho",1800);
+      }
+    }
+  };
 
   const getSenderName=()=>{
     const clean=saveAppUserName(senderName || getAppUserName());
