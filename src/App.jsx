@@ -3289,7 +3289,7 @@ function savePriceHistory(history) {
   }
 }
 
-function addPriceHistoryEntry({ itemName, unitPrice, totalPrice, quantity, unit, listType, listName }) {
+function addPriceHistoryEntry({ itemName, unitPrice, totalPrice, quantity, unit, listType, listName, listId, itemId, recordedAt }) {
   const cleanName = String(itemName || "").trim();
   const price = Number(unitPrice || totalPrice || 0);
   if (!cleanName || !Number.isFinite(price) || price <= 0) return null;
@@ -3304,7 +3304,9 @@ function addPriceHistoryEntry({ itemName, unitPrice, totalPrice, quantity, unit,
     unit: unit || "unidade",
     listType: listType || "geral",
     listName: listName || "",
-    createdAt: new Date().toISOString(),
+    listId: listId || "",
+    itemId: itemId || "",
+    createdAt: recordedAt || new Date().toISOString(),
     monthKey: new Date().toISOString().slice(0, 7),
   };
 
@@ -3358,18 +3360,29 @@ function getPriceComparison(itemName, currentPrice) {
 
 
 
-function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedAt = null) {
+function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedAt = null, context = {}) {
   const key = normalizePriceItemName(itemName);
   const current = Number(currentPrice || 0);
   if (!key || !Number.isFinite(current) || current <= 0) return null;
 
+  const currentTime = currentRecordedAt ? new Date(currentRecordedAt).getTime() : 0;
+  const currentListId = context?.listId || "";
+  const currentItemId = context?.itemId || "";
+
   const history = readPriceHistory()
     .filter((h) => h.itemKey === key)
     .filter((h) => {
-      if (!currentRecordedAt) return true;
-      const ht = new Date(h.createdAt || 0).getTime();
-      const ct = new Date(currentRecordedAt || 0).getTime();
-      return Number.isFinite(ht) && Number.isFinite(ct) ? ht < ct - 500 : true;
+      // Nunca comparar o item com o próprio registro da lista atual.
+      if (currentListId && h.listId && h.listId === currentListId && currentItemId && h.itemId && h.itemId === currentItemId) return false;
+      if (currentListId && h.listId && h.listId === currentListId && !currentItemId) return false;
+
+      // Proteção adicional: se houver data do preço atual, ignora registros simultâneos/posteriores.
+      if (currentTime) {
+        const ht = new Date(h.createdAt || 0).getTime();
+        if (Number.isFinite(ht) && ht >= currentTime - 250) return false;
+      }
+
+      return true;
     })
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
@@ -3456,8 +3469,8 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
   };
 }
 
-function PriceMonthBadge({ itemName, price, compact = false, recordedAt = null }) {
-  const comparison = getPreviousMonthItemComparison(itemName, price, recordedAt);
+function PriceMonthBadge({ itemName, price, compact = false, recordedAt = null, listId = "", itemId = "" }) {
+  const comparison = getPreviousMonthItemComparison(itemName, price, recordedAt, { listId, itemId });
   if (!comparison) return null;
 
   const colors = {
@@ -5103,7 +5116,10 @@ export default function App(){
           quantity: Number(item.qty || 1),
           unit: item.unit || "unidade",
           listType: currentList?.type || listType,
-          listName: currentList?.name || listName
+          listName: currentList?.name || listName,
+          listId: currentList?.id || "",
+          itemId: item.id || item.name || "",
+          recordedAt: item.priceRecordedAt || new Date().toISOString()
         });
       } catch {}
     }
@@ -5961,7 +5977,7 @@ export default function App(){
                                   <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
                               </div>
-                              {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} compact />}
+                              {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} listId={currentList?.id} itemId={item.id || item.name} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
                             <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
@@ -6038,7 +6054,7 @@ export default function App(){
                     <div style={{fontSize:13,fontWeight:800,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
                       Total calculado: {fmtR(total)}
                     </div>
-                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} recordedAt={item.priceRecordedAt || null} />
+                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} recordedAt={item.priceRecordedAt || null} listId={currentList?.id} itemId={item.id || item.name} />
                   </div>
                 );
               })()}
