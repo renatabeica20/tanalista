@@ -3357,6 +3357,100 @@ function getPriceComparison(itemName, currentPrice) {
 
 
 
+
+function getPreviousMonthItemComparison(itemName, currentPrice) {
+  const key = normalizePriceItemName(itemName);
+  const current = Number(currentPrice || 0);
+  if (!key || !Number.isFinite(current) || current <= 0) return null;
+
+  const previousMonth = getPreviousMonthKey(new Date());
+  const previousEntries = readPriceHistory()
+    .filter((h) => h.itemKey === key && h.monthKey === previousMonth)
+    .map((h) => Number(h.unitPrice || h.totalPrice || 0))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  if (!previousEntries.length) {
+    return {
+      status: "novo",
+      label: "Sem preço no mês anterior",
+      diff: 0,
+      previousPrice: 0,
+      currentPrice: current,
+    };
+  }
+
+  const previousPrice = average(previousEntries);
+  const diff = Number((current - previousPrice).toFixed(2));
+  const abs = Math.abs(diff);
+
+  if (abs < 0.01) {
+    return {
+      status: "estavel",
+      label: "Mesmo preço do mês anterior",
+      diff: 0,
+      previousPrice,
+      currentPrice: current,
+    };
+  }
+
+  if (diff > 0) {
+    return {
+      status: "acima",
+      label: `${diff.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais caro que no mês anterior`,
+      diff,
+      previousPrice,
+      currentPrice: current,
+    };
+  }
+
+  return {
+    status: "abaixo",
+    label: `${abs.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais barato que no mês anterior`,
+    diff,
+    previousPrice,
+    currentPrice: current,
+  };
+}
+
+function PriceMonthBadge({ itemName, price, compact = false }) {
+  const comparison = getPreviousMonthItemComparison(itemName, price);
+  if (!comparison) return null;
+
+  const colors = {
+    acima: { bg:"#FEE2E2", color:"#991B1B", icon:"🔴" },
+    abaixo: { bg:"#DCFCE7", color:"#166534", icon:"🟢" },
+    estavel: { bg:"#FEF3C7", color:"#92400E", icon:"🟡" },
+    novo: { bg:"#EDE9FE", color:"#5B21B6", icon:"ℹ️" },
+  };
+  const c = colors[comparison.status] || colors.novo;
+
+  return (
+    <div style={{
+      marginTop:compact?4:8,
+      padding:compact?"4px 7px":"8px 10px",
+      borderRadius:compact?999:12,
+      background:c.bg,
+      color:c.color,
+      fontSize:compact?10:12,
+      fontWeight:900,
+      display:"inline-flex",
+      alignItems:"center",
+      gap:5,
+      maxWidth:"100%",
+      lineHeight:1.25,
+      flexWrap:"wrap"
+    }}>
+      <span>{c.icon}</span>
+      <span>{comparison.label}</span>
+      {!compact && comparison.previousPrice ? (
+        <span style={{opacity:.85}}>
+          · mês anterior {comparison.previousPrice.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function getItemPriceMemory(itemName) {
   const key = normalizePriceItemName(itemName);
   const history = readPriceHistory()
@@ -3508,7 +3602,7 @@ function PriceStatsPanel() {
         <div>
           <div style={{fontWeight:900,color:"#4C1D95",fontSize:16}}>Estatísticas de preços</div>
           <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>
-            Histórico local de {stats.totalRecords} preço(s) registrado(s)
+            Histórico local de {stats.totalRecords} preço(s) registrado(s) · Média e percentual aparecem aqui como leitura estatística
           </div>
         </div>
         <div style={{textAlign:"right"}}>
@@ -5822,6 +5916,7 @@ export default function App(){
                                   <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
                               </div>
+                              {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
                             <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
@@ -5898,7 +5993,7 @@ export default function App(){
                     <div style={{fontSize:13,fontWeight:800,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
                       Total calculado: {fmtR(total)}
                     </div>
-                    <PriceInsightBadge itemName={item.name} price={parseBRL(mPriceText)} />
+                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} />
                   </div>
                 );
               })()}
