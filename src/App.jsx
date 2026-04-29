@@ -5712,7 +5712,7 @@ const price=Number(item.price||0);
                       {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
                         const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
-                        const realII=search?cat.items.findIndex(it=>it===item):ii;
+                        const realII=cat.items.findIndex(it=>it===item);
                         const isLast=displayItems.length-1===ii;
 
                         // Monta descrição e linha de preço
@@ -5729,7 +5729,7 @@ const price=Number(item.price||0);
                         }
 
                         return(
-                          <div key={ii}
+                          <div key={`${ci}-${realII}-${item.name || "item"}`}
                             onClick={()=>{if(item.notFound)return;openItemModal(ci,realII);if(search)setSearch("");}}
                             style={{
                               display:"flex",alignItems:"center",gap:12,
