@@ -3378,6 +3378,7 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
       status: "novo",
       label: "Sem histórico anterior",
       diff: 0,
+      percent: 0,
       previousPrice: 0,
       currentPrice: current,
       source: "none",
@@ -3407,6 +3408,7 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
       status: "novo",
       label: "Sem histórico anterior",
       diff: 0,
+      percent: 0,
       previousPrice: 0,
       currentPrice: current,
       source: "none",
@@ -3415,12 +3417,16 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
 
   const diff = Number((current - previousPrice).toFixed(2));
   const abs = Math.abs(diff);
+  const percent = previousPrice ? Number(((diff / previousPrice) * 100).toFixed(1)) : 0;
+  const absPercent = Math.abs(percent);
+  const pctLabel = `${diff > 0 ? "+" : diff < 0 ? "-" : ""}${absPercent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
   if (abs < 0.01) {
     return {
       status: "estavel",
       label: `Mesmo preço da ${sourceLabel}`,
       diff: 0,
+      percent: 0,
       previousPrice,
       currentPrice: current,
       source: sourceLabel,
@@ -3430,8 +3436,9 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
   if (diff > 0) {
     return {
       status: "acima",
-      label: `${diff.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais caro que a ${sourceLabel}`,
+      label: `${diff.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais caro que a ${sourceLabel} (${pctLabel})`,
       diff,
+      percent,
       previousPrice,
       currentPrice: current,
       source: sourceLabel,
@@ -3440,8 +3447,9 @@ function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedA
 
   return {
     status: "abaixo",
-    label: `${abs.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais barato que a ${sourceLabel}`,
+    label: `${abs.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais barato que a ${sourceLabel} (${pctLabel})`,
     diff,
+    percent,
     previousPrice,
     currentPrice: current,
     source: sourceLabel,
