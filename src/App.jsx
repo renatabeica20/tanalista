@@ -2912,6 +2912,7 @@ export default function App(){
   const [budgetText,setBudgetText]=useState("");
   const [pendingItems,setPendingItems]=useState([]);
   const [currentInput,setCurrentInput]=useState("");
+  const [editingListId,setEditingListId]=useState(null);
 
   // Product dialog
   const [itemDialog,setItemDialog]=useState(null);
@@ -3518,6 +3519,34 @@ export default function App(){
     openProductDialog(pendingItems[idx].name,pendingItems[idx]);
   };
 
+  const preserveEditedListStatus=(oldList,newCategories)=>{
+    if(!oldList)return newCategories;
+    const oldByName=new Map();
+    (oldList.categories||[]).forEach(cat=>{
+      (cat.items||[]).forEach(item=>{
+        const key=normalizePlainText(item.name);
+        if(key&&!oldByName.has(key))oldByName.set(key,item);
+      });
+    });
+    return (newCategories||[]).map(cat=>({
+      ...cat,
+      items:(cat.items||[]).map(item=>{
+        const old=oldByName.get(normalizePlainText(item.name));
+        if(!old)return item;
+        return {
+          ...item,
+          checked:Boolean(old.checked),
+          notFound:Boolean(old.notFound),
+          price:old.price ?? item.price ?? null,
+          priceMode:old.priceMode || item.priceMode,
+          purchaseWeightKg:old.purchaseWeightKg,
+          originalQty:old.originalQty ?? item.originalQty ?? item.qty,
+          qtyAdjusted:Boolean(old.qtyAdjusted),
+        };
+      })
+    }));
+  };
+
   // ── Organizar ─────────────────────────────────────────────────────────
   const organizeList=async()=>{
     if(pendingItems.length===0){showToast("⚠️ Adicione pelo menos um item");return;}
@@ -3530,13 +3559,21 @@ export default function App(){
       categories=sanitizeCategories(categories);
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
-      const newList={id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
-      const nl=[newList,...lists];
+      const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
+      if(editingOriginal){
+        categories=preserveEditedListStatus(editingOriginal,categories);
+      }
+      const newList=editingOriginal
+        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0}
+        : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
+      const nl=editingOriginal
+        ? lists.map(l=>l.id===editingOriginal.id?newList:l)
+        : [newList,...lists];
       saveLists(nl);
       setCurrentList(newList);
-      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);
+      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
       setScreen("list");setSearch("");setCollapsedCats({});
-      showToast("✅ Lista organizada!");
+      showToast(editingOriginal?"✅ Alterações salvas na lista!":"✅ Lista organizada!");
     }finally{setLoading(false);}
   };
 
@@ -3975,11 +4012,44 @@ export default function App(){
   };
 
   const openListForEdit=(list)=>{
+    if(!list)return;
+    if(isListFinished(list)){
+      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
+      setListMenuId(null);
+      return;
+    }
+
+    const items=(list.categories||[]).flatMap(cat=>(cat.items||[]).map(item=>normalizeListItem({
+      name:item.name,
+      marca:item.marca||"",
+      tipo:item.tipo||item.detail||"",
+      embalagem:item.embalagem||item.detail||"",
+      peso:item.peso||"",
+      volume:item.volume||"",
+      qty:item.qty||1,
+      unit:item.unit||"unidade",
+      price:null,
+      checked:false,
+      notFound:false,
+      extra:Boolean(item.extra || cat.name==="Itens Extras")
+    })));
+
+    setEditingListId(list.id);
     setCurrentList(list);
-    setScreen("list");
+    setListName(list.name||"Minha lista");
+    setListType(list.type||"mercado");
+    setBudgetText(Number(list.budget||0)>0?fmtBRL(Number(list.budget||0)):"");
+    setBudgetEnabled(Number(list.budget||0)>0);
+    setBudgetConfirmed(Boolean(Number(list.budget||0)>0));
+    setListNameConfirmed(Boolean(list.name));
+    setPendingItems(items);
+    setCurrentInput("");
+    setEditPendingIdx(null);
+    setScreen("create");
     setSearch("");
     setCollapsedCats({});
     setListMenuId(null);
+    showToast("✏️ Lista aberta para edição");
   };
 
   const duplicateList=(list)=>{
@@ -4532,7 +4602,7 @@ export default function App(){
                 {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
                 {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
               ].map(m=>(
-                <div key={m.name} onClick={()=>m.active&&setScreen("create")}
+                <div key={m.name} onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
                   style={{background:m.active?"#FFFFFF":"rgba(255,255,255,0.86)",borderRadius:24,padding:"18px 14px",cursor:m.active?"pointer":"default",boxShadow:m.active?"0 18px 38px rgba(109,40,217,0.14)":"0 10px 26px rgba(17,24,39,0.06)",border:m.active?"1.5px solid #C4B5FD":"1px solid #E9D5FF",position:"relative",overflow:"hidden",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:154,transition:"transform .2s ease, box-shadow .2s ease"}}>
                   {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#F5F3FF",color:"#6D28D9",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #DDD6FE"}}>Em breve</div>}
                   {m.active&&<div style={{position:"absolute",top:10,right:10,background:"#ECFDF5",color:"#047857",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #A7F3D0"}}>Ativo</div>}
@@ -4638,7 +4708,7 @@ export default function App(){
       {screen==="create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");}}
+            <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
               {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()} 👋</div>)}
@@ -4733,7 +4803,7 @@ export default function App(){
             )}
             <button onClick={organizeList} disabled={loading||pendingItems.length===0}
               style={{...btnG,padding:18,borderRadius:22,fontSize:17,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 32px rgba(109,40,217,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
-              ✨ Organizar Lista {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+              {editingListId?"💾 Salvar alterações":"✨ Organizar Lista"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
         </div>
@@ -4819,18 +4889,23 @@ export default function App(){
           LIST SCREEN
       ════════════════════════════════════ */}
       {screen==="list"&&currentList&&(
-        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-          <div style={{background:"linear-gradient(135deg,#5B21B6,#7C3AED)",padding:"22px 20px 26px",boxShadow:"0 18px 42px rgba(91,33,182,0.22)"}}>
-            {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:10,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-              <button onClick={()=>setScreen("home")}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:36,height:36,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-              <div style={{fontWeight:900,fontSize:20,color:"white",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{currentList.name}</div>
-              <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:180,padding:"6px 16px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>💬 Enviar Lista</button>
-
-            </div>
-            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:18,padding:"12px 14px"}}>
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF 0%,#F8FAFC 48%,#FFFFFF 100%)"}}>
+          <div style={{padding:"18px 16px 22px"}}>
+            <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 54%,#8B5CF6 100%)",borderRadius:28,padding:"18px 18px 20px",boxShadow:"0 22px 48px rgba(91,33,182,0.24)",border:"1px solid rgba(255,255,255,0.28)"}}>
+              <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 18% 8%,rgba(255,255,255,0.22),transparent 32%),radial-gradient(circle at 90% 0%,rgba(255,255,255,0.14),transparent 34%)",pointerEvents:"none"}}/>
+              <div style={{position:"relative",zIndex:1}}>
+                {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:12,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+                  <button onClick={()=>setScreen("home")}
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.28)",borderRadius:"50%",width:38,height:38,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)"}}>←</button>
+                  <div style={{flex:1,minWidth:0,textAlign:"center"}}>
+                    <div style={{fontWeight:900,fontSize:20,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentList.name}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
+                  </div>
+                  <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)"}}>💬 Enviar</button>
+                </div>
+                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
@@ -4852,6 +4927,7 @@ export default function App(){
               </div>
             </div>
           </div>
+        </div>
 
           {currentList.sharedId&&(
             <div style={{margin:"10px 20px 0",background:"#EEF2FF",border:"1px solid #C4B5FD",borderRadius:18,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,color:"#4C1D95"}}>
