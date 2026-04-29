@@ -2201,22 +2201,32 @@ function normalizeVoiceMeasurementPhrases(text) {
     return Number.isFinite(n) ? n : null;
   };
 
+  const fmtQty = (value, decimals = 2) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    return String(Number(n.toFixed(decimals))).replace(".", ",");
+  };
+
   raw = raw.replace(/(\d+)\s*,\s*(\d+)/g, "$1§DEC§$2");
 
-  // "um quilo e duzentos gramas de picanha" / "1 kg e 200 g de picanha" => "1,2 kg de picanha"
+  // "um quilo e meio de carne" => "1,5 kg de carne".
+  // Deve vir antes da regra de gramas para evitar "meio" virar 0,0005 kg.
+  raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:quilos?|quilo|kg)\\s+e\\s+mei[ao]\\s+de\\s+([^,.;]+)`, "gi"), (m, kg, product) => {
+    const kgNum = toNum(kg);
+    if (!Number.isFinite(kgNum)) return m;
+    return `${fmtQty(kgNum + 0.5)} kg de ${product.trim()}`;
+  });
+
+  // "um quilo e duzentos gramas de picanha" / "1 kg e 200 g de picanha" => "1,2 kg de picanha".
+  // Se a parte complementar for "cem", "duzentos", etc., interpreta como gramas.
   raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:quilos?|quilo|kg)\\s+e\\s+(${num})\\s*(?:gramas?|g)?\\s+de\\s+([^,.;]+)`, "gi"), (m, kg, g, product) => {
+    const gRaw = String(g || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    if (/^mei[ao]$/.test(gRaw)) return m;
     const kgNum = toNum(kg);
     const gNum = toNum(g);
     if (!Number.isFinite(kgNum) || !Number.isFinite(gNum)) return m;
     const total = kgNum + (gNum / 1000);
-    return `${String(total).replace(".", ",")} kg de ${product.trim()}`;
-  });
-
-  // "um quilo e meio de carne" => "1,5 kg de carne"
-  raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:quilos?|quilo|kg)\\s+e\\s+mei[ao]\\s+de\\s+([^,.;]+)`, "gi"), (m, kg, product) => {
-    const kgNum = toNum(kg);
-    if (!Number.isFinite(kgNum)) return m;
-    return `${String(kgNum + 0.5).replace(".", ",")} kg de ${product.trim()}`;
+    return `${fmtQty(total)} kg de ${product.trim()}`;
   });
 
   // "dois litros e quinhentos ml de suco" => "2,5 L de suco"
@@ -2225,7 +2235,7 @@ function normalizeVoiceMeasurementPhrases(text) {
     const mlNum = toNum(ml);
     if (!Number.isFinite(lNum) || !Number.isFinite(mlNum)) return m;
     const total = lNum + (mlNum / 1000);
-    return `${String(total).replace(".", ",")} L de ${product.trim()}`;
+    return `${fmtQty(total)} L de ${product.trim()}`;
   });
 
   // "meio quilo de carne" => "0,5 kg de carne"
@@ -2403,7 +2413,7 @@ function parseSpokenShoppingItems(text) {
         const grams = numberFromPortuguese(implicitGrams[1]);
         const productName = implicitGrams[2].trim();
         if (Number.isFinite(grams) && grams > 0 && grams < 1000 && productName) {
-          qty = Number((grams / 1000).toFixed(3));
+          qty = Number((grams / 1000).toFixed(2));
           unit = "kg";
           c = productName;
         }
@@ -2867,7 +2877,7 @@ function parseSpokenShoppingItemsProfessional(text) {
     if (m) {
       const grams = numberFromPortuguese(m[1]);
       if (Number.isFinite(grams) && grams >= 100 && grams < 1000) {
-        qty = Number((grams / 1000).toFixed(3));
+        qty = Number((grams / 1000).toFixed(2));
         unit = "kg";
         c = m[2].trim();
       }
