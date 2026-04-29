@@ -3358,62 +3358,98 @@ function getPriceComparison(itemName, currentPrice) {
 
 
 
-function getPreviousMonthItemComparison(itemName, currentPrice) {
+function getPreviousMonthItemComparison(itemName, currentPrice, currentRecordedAt = null) {
   const key = normalizePriceItemName(itemName);
   const current = Number(currentPrice || 0);
   if (!key || !Number.isFinite(current) || current <= 0) return null;
 
-  const previousMonth = getPreviousMonthKey(new Date());
-  const previousEntries = readPriceHistory()
-    .filter((h) => h.itemKey === key && h.monthKey === previousMonth)
-    .map((h) => Number(h.unitPrice || h.totalPrice || 0))
-    .filter((n) => Number.isFinite(n) && n > 0);
+  const history = readPriceHistory()
+    .filter((h) => h.itemKey === key)
+    .filter((h) => {
+      if (!currentRecordedAt) return true;
+      const ht = new Date(h.createdAt || 0).getTime();
+      const ct = new Date(currentRecordedAt || 0).getTime();
+      return Number.isFinite(ht) && Number.isFinite(ct) ? ht < ct - 500 : true;
+    })
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-  if (!previousEntries.length) {
+  if (!history.length) {
     return {
       status: "novo",
-      label: "Sem preço no mês anterior",
+      label: "Sem histórico anterior",
       diff: 0,
       previousPrice: 0,
       currentPrice: current,
+      source: "none",
     };
   }
 
-  const previousPrice = average(previousEntries);
+  const previousMonth = getPreviousMonthKey(new Date(currentRecordedAt || Date.now()));
+  const previousMonthEntries = history
+    .filter((h) => h.monthKey === previousMonth)
+    .map((h) => Number(h.unitPrice || h.totalPrice || 0))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  let previousPrice = 0;
+  let sourceLabel = "última compra";
+
+  if (previousMonthEntries.length) {
+    previousPrice = average(previousMonthEntries);
+    sourceLabel = "mês anterior";
+  } else {
+    const last = history.find((h) => Number(h.unitPrice || h.totalPrice || 0) > 0);
+    previousPrice = Number(last?.unitPrice || last?.totalPrice || 0);
+    sourceLabel = "última compra";
+  }
+
+  if (!previousPrice) {
+    return {
+      status: "novo",
+      label: "Sem histórico anterior",
+      diff: 0,
+      previousPrice: 0,
+      currentPrice: current,
+      source: "none",
+    };
+  }
+
   const diff = Number((current - previousPrice).toFixed(2));
   const abs = Math.abs(diff);
 
   if (abs < 0.01) {
     return {
       status: "estavel",
-      label: "Mesmo preço do mês anterior",
+      label: `Mesmo preço da ${sourceLabel}`,
       diff: 0,
       previousPrice,
       currentPrice: current,
+      source: sourceLabel,
     };
   }
 
   if (diff > 0) {
     return {
       status: "acima",
-      label: `${diff.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais caro que no mês anterior`,
+      label: `${diff.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais caro que a ${sourceLabel}`,
       diff,
       previousPrice,
       currentPrice: current,
+      source: sourceLabel,
     };
   }
 
   return {
     status: "abaixo",
-    label: `${abs.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais barato que no mês anterior`,
+    label: `${abs.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})} mais barato que a ${sourceLabel}`,
     diff,
     previousPrice,
     currentPrice: current,
+    source: sourceLabel,
   };
 }
 
-function PriceMonthBadge({ itemName, price, compact = false }) {
-  const comparison = getPreviousMonthItemComparison(itemName, price);
+function PriceMonthBadge({ itemName, price, compact = false, recordedAt = null }) {
+  const comparison = getPreviousMonthItemComparison(itemName, price, recordedAt);
   if (!comparison) return null;
 
   const colors = {
@@ -5039,6 +5075,7 @@ export default function App(){
       const p=parseBRL(mPriceText);
       if(p!=null&&p>=0){
         item.price=p;
+        item.priceRecordedAt=new Date().toISOString();
         item.priceMode=mPriceMode||"total";
         if(item.priceMode==="perKg"){
           const kg=numberFromText(mWeightText);
@@ -5916,7 +5953,7 @@ export default function App(){
                                   <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
                               </div>
-                              {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} compact />}
+                              {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
                             <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
@@ -5993,7 +6030,7 @@ export default function App(){
                     <div style={{fontSize:13,fontWeight:800,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
                       Total calculado: {fmtR(total)}
                     </div>
-                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} />
+                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} recordedAt={item.priceRecordedAt || null} />
                   </div>
                 );
               })()}
@@ -6122,6 +6159,7 @@ export default function App(){
                 <button onClick={()=>{
                   const l=JSON.parse(JSON.stringify(currentList));
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
+                  l.categories[checkPopup.ci].items[checkPopup.ii].checkedAt=new Date().toISOString();
                   updateList(l);setCheckPopup(null);setSearch("");
                   setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
