@@ -3638,7 +3638,7 @@ function PriceStatsEntryCard({ onClick }) {
         background:"#FFFFFF",
         borderRadius:18,
         padding:"14px 16px",
-        margin:"24px 0 40px",
+        margin:"18px 0 22px",
         boxShadow:"0 8px 18px rgba(17,24,39,0.05)",
         cursor:"pointer",
         fontFamily:"inherit",
@@ -5699,16 +5699,26 @@ const [lists,setLists]=useState(()=>{
               ))}
             </div>
 
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
 
-          
-          <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
-
-          <div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
-            Listas recentes
-          </div>
-
-{lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
+            <div style={{
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"space-between",
+              gap:12,
+              margin:"6px 0 14px",
+              width:"100%",
+              boxSizing:"border-box",
+              clear:"both"
+            }}>
+              <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>
+                Listas recentes
+              </div>
+              {lists.length>0&&(
+                <div style={{fontSize:12,color:"#6B7280",fontWeight:800,flexShrink:0}}>
+                  {lists.length} {lists.length===1?"lista":"listas"}
+                </div>
+              )}
             </div>
             {lists.length===0?(
               <div style={{textAlign:"center",padding:"28px 20px",color:"#6B7280",background:"#FFFFFF",border:"1px dashed #D1D5DB",borderRadius:24,boxShadow:"0 12px 28px rgba(17,24,39,0.04)"}}>
