@@ -4143,70 +4143,9 @@ export default function App(){
     }
   },[currentList,showToast]);
 
-  useEffect(()=>{
-    const sharedId=currentList?.sharedId;
-    if(screen!=="list" || !sharedId || !currentList)return;
-
-    let cancelled=false;
-
-    const applyRemoteList=(record)=>{
-      if(cancelled || !record?.data)return;
-      const remote={
-        ...record.data,
-        id:currentList.id,
-        sharedId,
-        isShared:true,
-        imported:currentList.imported,
-        importedFrom:record?.remetente || currentList.importedFrom || currentList.remetente || "Não informado",
-        remetente:record?.remetente || currentList.remetente || "Não informado",
-        sharedOwner:record?.remetente || currentList.sharedOwner || "Não informado",
-        lastSyncedAt:new Date().toISOString(),
-      };
-
-      const remoteSig=sharedListSignature(remote);
-      const localSig=sharedListSignature(currentList);
-      if(!remoteSig || remoteSig===localSig)return;
-
-      setCurrentList(remote);
-      setLists(prev=>{
-        const nl=(prev||[]).map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?remote:l);
-        try{localStorage.setItem("tnl_lists",JSON.stringify(nl));}catch{}
-        return nl;
-      });
-
-      const now=Date.now();
-      if(now-(autoSyncNoticeRef.current||0)>15000){
-        autoSyncNoticeRef.current=now;
-        const remoteProgress=getProgress(remote);
-        setSharedUpdateNotice({
-          msg:"Lista atualizada por outro participante · "+remoteProgress.checkedItems+"/"+remoteProgress.totalItems+" itens concluídos",
-          at:now
-        });
-        showToast("🔄 Lista compartilhada atualizada automaticamente",3200);
-        setTimeout(()=>setSharedUpdateNotice(null),6500);
-      }
-    };
-
-    const syncNow=async()=>{
-      if(cancelled || sharedSyncing || document.hidden)return;
-      try{
-        const record=await getSharedListRecord(sharedId);
-        applyRemoteList(record);
-      }catch(err){
-        console.warn("Falha na sincronização automática",err);
-      }
-    };
-
-    const interval=setInterval(syncNow,10000);
-    const onFocus=()=>syncNow();
-    window.addEventListener("focus",onFocus);
-
-    return()=>{
-      cancelled=true;
-      clearInterval(interval);
-      window.removeEventListener("focus",onFocus);
-    };
-  },[currentList,screen,sharedSyncing,showToast]);
+  // Etapa 4: sincronização manual.
+  // A lista compartilhada é atualizada pelo botão “Atualizar”, evitando
+  // conflito e notificações excessivas durante a compra.
 
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.notFound?0:getItemLineTotal(i)),0);
 
@@ -4903,7 +4842,7 @@ export default function App(){
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
                   </div>
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)"}}>💬 Enviar</button>
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)"}}>💬 Enviar lista</button>
                 </div>
                 <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -4945,6 +4884,13 @@ export default function App(){
                   <span>🔄</span><span>{sharedUpdateNotice.msg}</span>
                 </div>)}
               </div>
+              <button
+                onClick={refreshSharedListFromCloud}
+                disabled={sharedSyncing}
+                style={{border:"none",borderRadius:16,padding:"10px 12px",background:sharedSyncing?"#DDD6FE":"#6D28D9",color:"white",fontSize:12,fontWeight:900,cursor:sharedSyncing?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 20px rgba(109,40,217,0.18)"}}
+              >
+                {sharedSyncing?"Atualizando...":"Atualizar"}
+              </button>
 
             </div>
           )}
