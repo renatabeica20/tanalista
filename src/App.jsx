@@ -347,6 +347,43 @@ function sharedListSignature(list) {
   }
 }
 
+
+function getListSyncStamp(list) {
+  const candidates = [list?.lastSyncedAt, list?.lastCloudSeenAt, list?.cloudUpdatedAt, list?.updatedAt, list?.lastLocalUpdateAt, list?.createdAt];
+  for (const value of candidates) {
+    const t = value ? new Date(value).getTime() : 0;
+    if (Number.isFinite(t) && t > 0) return t;
+  }
+  return 0;
+}
+
+function formatRelativeSyncTime(value) {
+  const t = value ? new Date(value).getTime() : 0;
+  if (!Number.isFinite(t) || t <= 0) return "ainda não sincronizada";
+  const diff = Math.max(0, Date.now() - t);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "agora";
+  if (min === 1) return "há 1 min";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h === 1) return "há 1 h";
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "há 1 dia" : `há ${d} dias`;
+}
+
+function markListCloudSynced(list, remoteData = null) {
+  const now = new Date().toISOString();
+  const base = remoteData || list || {};
+  const cloudStamp = base.lastSyncedAt || base.cloudUpdatedAt || base.updatedAt || now;
+  return {
+    ...(list || {}),
+    lastCloudSeenAt: cloudStamp,
+    lastRemoteSignature: sharedListSignature(base),
+    lastSyncStatus: "ok",
+  };
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim().replace(/```json|```/g, "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
@@ -4333,17 +4370,47 @@ export default function App(){
     setCollapsedCats({});
   };
 
-  const syncSharedListToCloud=useCallback(async(list,{silent=true}={})=>{
+  const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
     const sharedId=list?.sharedId;
     if(!sharedId)return null;
     try{
       if(!silent)setSharedSyncing(true);
-      const record=await updateSharedListRecord(sharedId,list);
+
+      // Proteção simples contra sobrescrita: antes de salvar, verifica se há
+      // uma versão remota mais recente que a última versão vista neste aparelho.
+      if(!force){
+        const remote=await getSharedListRecord(sharedId).catch(()=>null);
+        const remoteData=remote?.data;
+        if(remoteData){
+          const remoteStamp=getListSyncStamp(remoteData);
+          const localKnownStamp=getListSyncStamp({lastSyncedAt:list?.lastCloudSeenAt || list?.lastSyncedAt});
+          const remoteSignature=sharedListSignature(remoteData);
+          const localSignature=sharedListSignature(list);
+          const knownSignature=list?.lastRemoteSignature || "";
+          const remoteChanged=remoteSignature && remoteSignature!==knownSignature && remoteSignature!==localSignature;
+          if(remoteChanged && remoteStamp>=localKnownStamp){
+            setSharedUpdateNotice({type:"conflict",msg:"Há uma versão mais recente. Toque em Atualizar antes de continuar."});
+            if(!silent)showToast("⚠️ Existe uma versão mais recente desta lista. Toque em Atualizar antes de salvar.",6200);
+            return null;
+          }
+        }
+      }
+
+      const payload={...list,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      const record=await updateSharedListRecord(sharedId,payload);
+      const synced=markListCloudSynced(payload,record?.data||payload);
+      setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
+      setLists(prev=>{
+        const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===synced.id || (sharedId&&l.sharedId===sharedId)?{...l,...synced}:l);
+        try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
+        return next;
+      });
+      setSharedUpdateNotice({type:"ok",msg:"Lista sincronizada agora"});
       if(!silent)showToast("🔄 Lista compartilhada sincronizada");
       return record;
     }catch(err){
       console.warn("Falha ao sincronizar lista compartilhada",err);
-      if(!silent)showToast("⚠️ Não foi possível sincronizar. Verifique a política UPDATE no Supabase.",5200);
+      if(!silent)showToast("⚠️ Não foi possível sincronizar. Verifique a conexão e as permissões do Supabase.",5200);
       return null;
     }finally{
       if(!silent)setSharedSyncing(false);
@@ -4357,7 +4424,7 @@ export default function App(){
     try{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
-      const refreshed={
+      const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
         sharedId,
@@ -4366,20 +4433,37 @@ export default function App(){
         importedFrom:record?.remetente || currentList.importedFrom || currentList.remetente || "Não informado",
         remetente:record?.remetente || currentList.remetente || "Não informado",
         sharedOwner:record?.remetente || currentList.sharedOwner || "Não informado",
-        lastSyncedAt:new Date().toISOString(),
-      };
+        pulledAt:new Date().toISOString(),
+      },record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const nl=existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l);
+      const hasLocal=existing.some(l=>l.id===currentList.id || (sharedId&&l.sharedId===sharedId));
+      const nl=hasLocal
+        ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
+        : [refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
+      setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
       showToast("🔄 Lista atualizada");
     }catch(err){
+      console.warn("Falha ao atualizar lista compartilhada",err);
       showToast("⚠️ Não foi possível atualizar a lista compartilhada",5200);
     }finally{
       setSharedSyncing(false);
     }
   },[currentList,showToast]);
+
+
+
+  useEffect(()=>{
+    if(screen!=="list" || !currentList?.sharedId)return;
+    const lastPull=getListSyncStamp({lastSyncedAt:currentList.lastCloudSeenAt || currentList.pulledAt});
+    if(lastPull && Date.now()-lastPull<45000)return;
+    const now=Date.now();
+    if(now-(autoSyncNoticeRef.current||0)<45000)return;
+    autoSyncNoticeRef.current=now;
+    refreshSharedListFromCloud().catch(()=>null);
+  },[screen,currentList?.id,currentList?.sharedId]);
 
   // Etapa 4: sincronização manual.
   // A lista compartilhada é atualizada pelo botão “Atualizar”, evitando
@@ -4389,7 +4473,7 @@ export default function App(){
 
   const updateList=(ul)=>{
     const{fullTotal}=getProgress(ul);ul.total=fullTotal;
-    const updated={...ul,lastLocalUpdateAt:new Date().toISOString()};
+    const updated={...ul,total:fullTotal,lastLocalUpdateAt:new Date().toISOString(),dirtySinceLastSync:Boolean(ul.sharedId)};
     setCurrentList(updated);
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
     if(updated.sharedId){
@@ -5118,8 +5202,11 @@ export default function App(){
                 <div style={{height:7,background:"rgba(109,40,217,0.16)",borderRadius:999,overflow:"hidden",marginTop:7}}>
                   <div style={{height:"100%",width:(totalItems?Math.round((checkedItems/totalItems)*100):0)+"%",background:"linear-gradient(90deg,#7C3AED,#A855F7)",borderRadius:999,transition:"width 0.35s"}}/>
                 </div>
-                {sharedUpdateNotice&&(<div style={{marginTop:7,fontSize:11,fontWeight:900,color:"#047857",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"5px 8px",display:"inline-flex",alignItems:"center",gap:5}}>
-                  <span>🔄</span><span>{sharedUpdateNotice.msg}</span>
+                <div style={{marginTop:7,fontSize:11,fontWeight:900,color:"#312E81",background:"rgba(255,255,255,0.62)",border:"1px solid rgba(124,58,237,0.18)",borderRadius:999,padding:"5px 8px",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <span>🕒</span><span>Última atualização: {formatRelativeSyncTime(currentList.lastCloudSeenAt || currentList.lastSyncedAt || currentList.pulledAt)}</span>
+                </div>
+                {sharedUpdateNotice&&(<div style={{marginTop:7,fontSize:11,fontWeight:900,color:sharedUpdateNotice.type==="conflict"?"#B91C1C":"#047857",background:sharedUpdateNotice.type==="conflict"?"#FEF2F2":"#ECFDF5",border:"1px solid "+(sharedUpdateNotice.type==="conflict"?"#FECACA":"#A7F3D0"),borderRadius:999,padding:"5px 8px",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <span>{sharedUpdateNotice.type==="conflict"?"⚠️":"🔄"}</span><span>{sharedUpdateNotice.msg}</span>
                 </div>)}
               </div>
               <button
