@@ -3625,15 +3625,213 @@ function PriceInsightBadge({ itemName, price }) {
   );
 }
 
+
+
+function PriceStatsEntryCard({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width:"100%",
+        boxSizing:"border-box",
+        border:"1px solid #E9D5FF",
+        background:"linear-gradient(135deg,#FFFFFF,#FAF7FF)",
+        borderRadius:24,
+        padding:"18px 18px",
+        margin:"12px 0 22px",
+        boxShadow:"0 12px 28px rgba(109,40,217,0.08)",
+        cursor:"pointer",
+        fontFamily:"inherit",
+        textAlign:"left",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"space-between",
+        gap:14
+      }}
+    >
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{
+          width:46,height:46,borderRadius:16,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          background:"linear-gradient(135deg,#EDE9FE,#F5F3FF)",
+          color:"#5B21B6",
+          fontSize:24,
+          flexShrink:0
+        }}>📊</div>
+        <div style={{minWidth:0}}>
+          <div style={{fontWeight:900,color:"#4C1D95",fontSize:18,lineHeight:1.15}}>Estatísticas de preços</div>
+          <div style={{fontSize:13,color:"#6B7280",marginTop:4,lineHeight:1.35}}>Toque para visualizar suas análises de compra</div>
+        </div>
+      </div>
+      <div style={{
+        width:34,height:34,borderRadius:"50%",
+        display:"flex",alignItems:"center",justifyContent:"center",
+        background:"#FFFFFF",
+        border:"1px solid #E5E7EB",
+        color:"#6D28D9",
+        fontWeight:900,
+        flexShrink:0
+      }}>›</div>
+    </button>
+  );
+}
+
+function PriceStatsScreen({ onBack }) {
+  const stats = getPriceStatsSummary();
+  const maxMonthly = Math.max(...(stats.monthlyTotals || []).map(x => Number(x.total || 0)), 1);
+
+  return (
+    <div style={{
+      minHeight:"100vh",
+      background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 48%,#F9FAFB 100%)",
+      padding:"22px 18px 34px",
+      boxSizing:"border-box",
+      fontFamily:"inherit"
+    }}>
+      <div style={{maxWidth:760,margin:"0 auto"}}>
+        <div style={{
+          background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",
+          borderRadius:28,
+          padding:"20px 18px",
+          color:"#FFFFFF",
+          boxShadow:"0 18px 44px rgba(109,40,217,0.22)",
+          marginBottom:18
+        }}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <button onClick={onBack} style={{
+              width:44,height:44,borderRadius:"50%",
+              border:"1px solid rgba(255,255,255,0.28)",
+              background:"rgba(255,255,255,0.16)",
+              color:"#FFFFFF",
+              fontSize:24,
+              cursor:"pointer",
+              fontFamily:"inherit"
+            }}>←</button>
+            <div style={{textAlign:"center",flex:1,minWidth:0}}>
+              <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Estatísticas de preços</div>
+              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Acompanhe variações e padrões das suas compras</div>
+            </div>
+            <div style={{width:44}} />
+          </div>
+        </div>
+
+        {!stats.totalRecords ? (
+          <div style={{
+            background:"#FFFFFF",
+            border:"1px solid #E5E7EB",
+            borderRadius:24,
+            padding:24,
+            textAlign:"center",
+            boxShadow:"0 12px 28px rgba(17,24,39,0.06)"
+          }}>
+            <div style={{fontSize:42,marginBottom:8}}>📊</div>
+            <div style={{fontSize:20,fontWeight:900,color:"#111827",marginBottom:6}}>Ainda não há dados suficientes</div>
+            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>
+              As estatísticas aparecerão após você registrar preços nos itens comprados.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:14}}>
+              <div style={{
+                background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:22,padding:16,
+                boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
+              }}>
+                <div style={{fontSize:12,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Preços registrados</div>
+                <div style={{fontSize:28,color:"#111827",fontWeight:900,marginTop:4}}>{stats.totalRecords}</div>
+              </div>
+              <div style={{
+                background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:22,padding:16,
+                boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
+              }}>
+                <div style={{fontSize:12,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Média registrada</div>
+                <div style={{fontSize:24,color:"#111827",fontWeight:900,marginTop:6}}>
+                  {stats.averageTicket.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              background:"#FFFFFF",
+              border:"1px solid #E5E7EB",
+              borderRadius:24,
+              padding:18,
+              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
+              marginBottom:14
+            }}>
+              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Maiores altas</div>
+              {stats.topIncreases?.length ? (
+                <div style={{display:"grid",gap:8}}>
+                  {stats.topIncreases.map((it,idx)=>(
+                    <div key={idx} style={{
+                      display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,
+                      background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:16,padding:"11px 12px"
+                    }}>
+                      <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.itemName}</div>
+                      <div style={{
+                        fontWeight:900,
+                        color:it.percent>0?"#B91C1C":"#166534",
+                        background:it.percent>0?"#FEE2E2":"#DCFCE7",
+                        padding:"5px 9px",
+                        borderRadius:999,
+                        flexShrink:0
+                      }}>{it.percent>0?"+":""}{it.percent}%</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há comparação suficiente entre compras.</div>
+              )}
+            </div>
+
+            <div style={{
+              background:"#FFFFFF",
+              border:"1px solid #E5E7EB",
+              borderRadius:24,
+              padding:18,
+              boxShadow:"0 12px 28px rgba(17,24,39,0.06)"
+            }}>
+              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Evolução mensal</div>
+              {stats.monthlyTotals?.length ? (
+                <div style={{display:"grid",gap:10}}>
+                  {stats.monthlyTotals.slice(-8).map((m)=> {
+                    const width = Math.max(8, Math.round((Number(m.total || 0) / maxMonthly) * 100));
+                    return (
+                      <div key={m.month} style={{display:"grid",gridTemplateColumns:"70px 1fr 92px",gap:9,alignItems:"center"}}>
+                        <div style={{fontSize:12,fontWeight:900,color:"#4B5563"}}>{m.month}</div>
+                        <div style={{height:12,background:"#F3F4F6",borderRadius:999,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${width}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
+                        </div>
+                        <div style={{fontSize:12,fontWeight:900,color:"#111827",textAlign:"right"}}>
+                          {m.total.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há evolução mensal registrada.</div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function PriceStatsPanel() {
   const stats = getPriceStatsSummary();
 
   const panelStyle = {
     width: "100%",
     boxSizing: "border-box",
-    margin: "18px 0 22px",
+    margin: "14px 0 22px",
     padding: 16,
     borderRadius: 24,
+    display: "block",
+    clear: "both",
     background: "linear-gradient(135deg,#FFFFFF,#FAF7FF)",
     border: "1px solid #E9D5FF",
     boxShadow: "0 12px 28px rgba(109,40,217,0.08)",
@@ -3731,7 +3929,9 @@ function PriceStatsPanel() {
 
 export default function App(){
   const [screen,setScreen]=useState("home");
-  const [lists,setLists]=useState(()=>{
+  
+  const [showPriceStatsScreen, setShowPriceStatsScreen] = useState(false);
+const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
       return Array.isArray(stored)?stored.filter(l=>!wasListDeletedLocally(l)):[];
@@ -5324,6 +5524,8 @@ export default function App(){
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
   // ─────────────────────────────────────────────────────────────────────
+  if(showPriceStatsScreen) return <PriceStatsScreen onBack={()=>setShowPriceStatsScreen(false)} />;
+
   return(
     <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
 
@@ -5468,11 +5670,12 @@ export default function App(){
             </div>
 
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-              
-          <div style={{width:"100%",boxSizing:"border-box",clear:"both"}}>
-            <PriceStatsPanel />
+
+          <div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
+            <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Listas recentes</div>
           </div>
-<div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Listas recentes</div>
+          <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
+
 
               {lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
             </div>
