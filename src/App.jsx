@@ -1859,6 +1859,21 @@ function formatMoneyInput(raw) {
     maximumFractionDigits: 2,
   }).format(value);
 }
+
+function normalizeDecimalInput(raw) {
+  const value = String(raw || "")
+    .replace(/[^0-9,.]/g, "")
+    .replace(/\./g, ",");
+  const parts = value.split(",");
+  if (parts.length <= 1) return parts[0] || "";
+  return `${parts[0]},${parts.slice(1).join("").slice(0, 3)}`;
+}
+
+function formatQtyDisplay(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "1";
+  return String(Math.round(n * 1000) / 1000).replace(".", ",");
+}
 function fmtR(val) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -2956,6 +2971,7 @@ export default function App(){
   // Item modal
   const [itemModal,setItemModal]=useState(null);
   const [mQty,setMQty]=useState(1);
+  const [mQtyText,setMQtyText]=useState("1");
   const [mPriceText,setMPriceText]=useState("");
   const [mPriceMode,setMPriceMode]=useState("total");
   const [mWeightText,setMWeightText]=useState("");
@@ -4136,6 +4152,11 @@ export default function App(){
 
   const toggleCheck=(ci,ii)=>{
     const item=currentList.categories[ci].items[ii];
+    if(item.notFound){
+      showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
+      returnToSearch();
+      return;
+    }
     if(item.checked){
       const l=JSON.parse(JSON.stringify(currentList));
       l.categories[ci].items[ii].checked=false;
@@ -4157,9 +4178,14 @@ export default function App(){
 
   const openItemModal=(ci,ii)=>{
     const item=currentList.categories[ci].items[ii];
+    if(item?.notFound){
+      showToast("⚠️ Item em falta. Use o botão de falta para voltar a pendente.");
+      return;
+    }
     const defaultMode=item.priceMode || inferDefaultPriceMode(item);
     setItemModal({ci,ii});
     setMQty(item.qty||1);
+    setMQtyText(formatQtyDisplay(item.qty||1));
     setMPriceMode(defaultMode);
     setMPriceText(item.price!=null?fmtBRL(item.price):"");
     setMWeightText(item.purchaseWeightKg?String(item.purchaseWeightKg).replace(".",","):"");
@@ -4169,9 +4195,10 @@ export default function App(){
   const confirmItem=()=>{
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[itemModal.ci].items[itemModal.ii];
+    const confirmedQty=numberFromText(mQtyText) || Number(mQty||1) || 1;
     const previousQty=Number(item.qty||1);
     if(item.originalQty==null)item.originalQty=previousQty;
-    item.qty=mQty;
+    item.qty=confirmedQty;
     item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     item.notFound=mNotFound;
     if(mNotFound){
@@ -4374,7 +4401,7 @@ export default function App(){
 
   // ─────────────────────────────────────────────────────────────────────
   return(
-    <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative"}}>
+    <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
 
       {/* LOADING */}
       {loading&&(
@@ -4473,7 +4500,7 @@ export default function App(){
       ════════════════════════════════════ */}
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
-        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
           <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"34px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
@@ -4491,7 +4518,7 @@ export default function App(){
               </div>
             </div>
           </div>
-          <div style={{padding:20,flex:1,paddingBottom:100,maxWidth:720,width:"100%",margin:"0 auto"}}>
+          <div style={{padding:20,flex:1,paddingBottom:100,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Módulos</div>
               <div style={{fontSize:12,color:"#8B5CF6",fontWeight:800}}>6 áreas integradas</div>
@@ -4991,18 +5018,18 @@ export default function App(){
 
                         return(
                           <div key={ii}
-                            onClick={()=>{openItemModal(ci,realII);if(search)setSearch("");}}
+                            onClick={()=>{if(item.notFound)return;openItemModal(ci,realII);if(search)setSearch("");}}
                             style={{
                               display:"flex",alignItems:"center",gap:12,
                               padding:"13px 14px",
                               borderBottom:isLast?"none":`1px solid ${theme.bg}`,
                               background:hl?"#FFFDE7":item.notFound?"#FFFBEB":item.checked?theme.bg+"80":"white",
-                              opacity:item.checked?0.62:1,cursor:"pointer",
+                              opacity:item.notFound?0.46:(item.checked?0.62:1),filter:item.notFound?"grayscale(0.15)":"none",cursor:item.notFound?"not-allowed":"pointer",
                               transition:"background 0.15s",
                             }}>
                             {/* Checkbox com cor da categoria */}
-                            <div onClick={e=>{e.stopPropagation();toggleCheck(ci,realII);if(search)setSearch("");}}
-                              style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:"#E5E7EB"}`,background:item.checked?theme.border:"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,color:"white",cursor:"pointer",transition:"all 0.2s"}}>
+                            <div onClick={e=>{e.stopPropagation();if(item.notFound){showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");return;}toggleCheck(ci,realII);if(search)setSearch("");}}
+                              style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:(item.notFound?"#F59E0B":"#E5E7EB")}`,background:item.checked?theme.border:(item.notFound?"#FEF3C7":"white"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,color:"white",cursor:item.notFound?"not-allowed":"pointer",transition:"all 0.2s"}}>
                               {item.checked?"✓":""}
                             </div>
                             {/* Conteúdo */}
@@ -5054,9 +5081,9 @@ export default function App(){
             <div style={{marginBottom:16}}>
               <label style={lbl}>Quantidade</label>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <button onClick={()=>setMQty(q=>Math.max(0.001,Math.round(((Number(q)||1)-0.1)*1000)/1000))} style={qBtn}>−</button>
-                <input value={String(mQty).replace(".",",")} onChange={e=>{const v=numberFromText(e.target.value);setMQty(v&&v>0?v:0);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:"#E5E7EB"}),width:92}} />
-                <button onClick={()=>setMQty(q=>Math.round(((Number(q)||0)+0.1)*1000)/1000)} style={qBtn}>＋</button>
+                <button onClick={()=>{const next=Math.max(0.001,Math.round(((numberFromText(mQtyText)||Number(mQty)||1)-0.1)*1000)/1000);setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>−</button>
+                <input value={mQtyText} onChange={e=>{const txt=normalizeDecimalInput(e.target.value);setMQtyText(txt);const v=numberFromText(txt);if(v!=null&&v>0)setMQty(v);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:"#E5E7EB"}),width:112}} />
+                <button onClick={()=>{const next=Math.round(((numberFromText(mQtyText)||Number(mQty)||0)+0.1)*1000)/1000;setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>＋</button>
                 <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{item.unit||"un"}</span>
               </div>
             </div>
@@ -5091,7 +5118,7 @@ export default function App(){
               </div>
               <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Digite apenas números. Ex.: 800 vira R$ 8,00.</div>
               {mPriceText&&parseBRL(mPriceText)!=null&&(()=>{
-                const temp={...item,qty:mQty,price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
+                const temp={...item,qty:(numberFromText(mQtyText)||mQty),price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
                 const total=getItemLineTotal(temp);
                 return (
                   <div style={{fontSize:13,fontWeight:800,marginTop:8,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
