@@ -682,17 +682,17 @@ function getListOriginMeta(list) {
 
 const LIST_TYPES = [
   {id:"mercado",   label:"🛒 Supermercado"},
-  {id:"festa",     label:"🎉 Festa/Churrasco"},
+  {id:"festa",     label:"🎉 Eventos"},
   {id:"construcao",label:"🏗️ Construção"},
   {id:"eletrico",  label:"⚡ Elétrico"},
   {id:"escolar",   label:"🏫 Escolar"},
   {id:"farmacia",  label:"💊 Farmácia"},
   {id:"condominio",label:"🏢 Condomínio"},
-  {id:"outros",    label:"📦 Outros"},
+  {id:"outros",    label:"📦 Outras"},
 ];
 
 const TYPE_NAMES = {
-  mercado:"supermercado", festa:"festa/churrasco", construcao:"construção",
+  mercado:"supermercado", festa:"eventos", construcao:"construção",
   eletrico:"material elétrico", escolar:"material escolar",
   farmacia:"farmácia", condominio:"condomínio", outros:"geral",
 };
@@ -4567,7 +4567,7 @@ export default function App(){
                 <button onClick={handleAddItem}
                   style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>＋ Inserir</button>
               </div>
-              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Digite um item, cole sua lista ou organize tudo com IA.</div>
+              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>setShowPasteModal(true)}
                   style={{width:"100%",padding:"15px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(109,40,217,0.08)"}}>
@@ -4606,7 +4606,7 @@ export default function App(){
             )}
             <button onClick={organizeList} disabled={loading||pendingItems.length===0}
               style={{...btnG,padding:18,borderRadius:22,fontSize:17,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 32px rgba(109,40,217,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
-              ✨ Organizar com IA {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+              ✨ Organizar Lista {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
         </div>
