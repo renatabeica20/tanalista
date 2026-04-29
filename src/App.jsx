@@ -2166,12 +2166,23 @@ function applyUserMemoryToItems(items) {
 function numberFromPortuguese(value) {
   const raw = String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const map = {
-    "meio":0.5,"meia":0.5,"um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
-    "onze":11,"doze":12,"treze":13,"quatorze":14,"catorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20
+    "zero":0,"meio":0.5,"meia":0.5,"um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
+    "onze":11,"doze":12,"treze":13,"quatorze":14,"catorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20,
+    "trinta":30,"quarenta":40,"cinquenta":50,"sessenta":60,"setenta":70,"oitenta":80,"noventa":90,
+    "cem":100,"cento":100,"duzentos":200,"duzentas":200,"trezentos":300,"trezentas":300,"quatrocentos":400,"quatrocentas":400,"quinhentos":500,"quinhentas":500,
+    "seiscentos":600,"seiscentas":600,"setecentos":700,"setecentas":700,"oitocentos":800,"oitocentas":800,"novecentos":900,"novecentas":900,
+    "mil":1000
   };
   if (/^(um|uma)\s+e\s+mei[ao]$/.test(raw)) return 1.5;
   if (/^(dois|duas)\s+e\s+mei[ao]$/.test(raw)) return 2.5;
   if(map[raw] !== undefined) return map[raw];
+  if (/\s+e\s+/.test(raw)) {
+    const sum = raw.split(/\s+e\s+/).reduce((acc, part) => {
+      const value = map[part.trim()];
+      return value === undefined ? NaN : acc + value;
+    }, 0);
+    if (Number.isFinite(sum)) return sum;
+  }
   const n = Number(raw.replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
@@ -2546,10 +2557,56 @@ function decimalToBrazilianString(n) {
   return Number.isInteger(num) ? String(num) : String(num).replace(".", ",");
 }
 
+function normalizeCompoundWeightAndVolumePhrases(value) {
+  const numberWords = [
+    "zero","meio","meia","um","uma","dois","duas","três","tres","quatro","cinco","seis","sete","oito","nove","dez",
+    "onze","doze","treze","quatorze","catorze","quinze","dezesseis","dezessete","dezoito","dezenove","vinte",
+    "trinta","quarenta","cinquenta","sessenta","setenta","oitenta","noventa","cem","cento","duzentos","duzentas",
+    "trezentos","trezentas","quatrocentos","quatrocentas","quinhentos","quinhentas","seiscentos","seiscentas",
+    "setecentos","setecentas","oitocentos","oitocentas","novecentos","novecentas","mil"
+  ].join("|");
+  const qty = `(?:\\d+[,.]?\\d*|${numberWords})`;
+  const toBR = (num) => decimalToBrazilianString(Math.round(Number(num) * 1000) / 1000);
+  const parse = (v) => numberFromPortuguese(v);
+
+  let text = String(value || "");
+
+  // "1 quilo e 200 gramas de picanha" => "1,2 kg de picanha".
+  text = text.replace(new RegExp(`\\b(${qty})\\s*(?:kg|quilo|quilos)\\s+e\\s+(${qty})\\s*(?:g|grama|gramas)\\b(?:\\s+de)?`, "gi"), (full, kgPart, gPart) => {
+    const kg = parse(kgPart);
+    const grams = parse(gPart);
+    if (kg == null || grams == null) return full;
+    return `${toBR(kg + grams / 1000)} kg de`;
+  });
+
+  // "700 gramas de batata" => "0,7 kg de batata".
+  text = text.replace(new RegExp(`\\b(${qty})\\s*(?:g|grama|gramas)\\b(?:\\s+de)?`, "gi"), (full, gPart) => {
+    const grams = parse(gPart);
+    if (grams == null || grams >= 1000) return full;
+    return `${toBR(grams / 1000)} kg de`;
+  });
+
+  // "2 litros e 500 ml de refrigerante" => "2,5 L de refrigerante".
+  text = text.replace(new RegExp(`\\b(${qty})\\s*(?:l|litro|litros)\\s+e\\s+(${qty})\\s*(?:ml|mililitro|mililitros)\\b(?:\\s+de)?`, "gi"), (full, lPart, mlPart) => {
+    const liters = parse(lPart);
+    const ml = parse(mlPart);
+    if (liters == null || ml == null) return full;
+    return `${toBR(liters + ml / 1000)} L de`;
+  });
+
+  text = text.replace(new RegExp(`\\b(${qty})\\s*(?:ml|mililitro|mililitros)\\b(?:\\s+de)?`, "gi"), (full, mlPart) => {
+    const ml = parse(mlPart);
+    if (ml == null || ml >= 1000) return full;
+    return `${toBR(ml / 1000)} L de`;
+  });
+
+  return text.replace(/\bde\s+de\b/gi, "de").replace(/\s+/g, " ").trim();
+}
+
 function normalizeSpokenDecimalPhrases(value) {
   const qtyWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|dez|\\d+)";
   const decimalWord = "(?:zero|um|uma|dois|duas|tres|três|quatro|cinco|seis|sete|oito|nove|\\d+)";
-  return String(value || "")
+  return normalizeCompoundWeightAndVolumePhrases(String(value || ""))
     .replace(/(\d+)\s*[,\.]\s*(\d+)/g, "$1,$2")
     .replace(new RegExp(`\\b(${qtyWord})\\s*(?:v[ií]rgula|virgula|ponto)\\s*(${decimalWord})\\b`, "gi"), (full, a, b) => {
       const left = numberFromPortuguese(a);
@@ -2747,6 +2804,9 @@ async function aiParseShoppingTextProfessional(text, type = "mercado") {
     "Regras rígidas:",
     "- Cada produto citado deve virar um item. Não crie item para kg, ml, litros, unidades ou 'com 24 unidades'.",
     "- '1,5 kg de carne' => qty 1.5, unit 'kg', name 'Carne'. Nunca transforme 1,5 em 5.",
+    "- '1 quilo e 200 gramas de picanha' => um único item: name 'Picanha', qty 1.2, unit 'kg'. Nunca gere '1 unidade de picanha' + '200g de picanha'.",
+    "- '700 gramas de batata' => um único item: name 'Batata', qty 0.7, unit 'kg'.",
+    "- '2 litros e 500 ml de refrigerante' => um único item: qty 2.5, unit 'L'.",
     "- '1 pacote arroz 5kg' => name 'Arroz', qty 1, unit 'pacote', embalagem '5kg'.",
     "- '2 fardos cerveja Heineken long neck com 24 unidades' => name 'Cerveja', qty 2, unit 'fardo', marca 'Heineken', tipo 'Long neck', embalagem 'com 24 unidades'.",
     "- Manga, pera, maçã, banana, tomate, batata, cenoura e similares são produtos de hortifruti na categorização.",
