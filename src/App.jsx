@@ -3159,6 +3159,14 @@ export default function App(){
     setTimeout(()=>searchRef.current?.focus?.(),180);
   },[]);
 
+  const returnToSearch=useCallback((delay=120)=>{
+    setSearch("");
+    setTimeout(()=>{
+      scrollToListTop();
+      setTimeout(()=>searchRef.current?.focus?.(),160);
+    },delay);
+  },[scrollToListTop]);
+
   const getPublicAppUrl=()=>{
     const origin=window.location?.origin;
     if(origin && origin!=="null") return origin;
@@ -3897,7 +3905,7 @@ export default function App(){
   const getProgress=(list)=>{
     if(!list)return{totalItems:0,checkedItems:0,fullTotal:0,notFoundItems:0};
     let t=0,c=0,s=0,nf=0;
-    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;s+=getItemLineTotal(i);}));
+    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;if(!i.notFound)s+=getItemLineTotal(i);}));
     return{totalItems:t,checkedItems:c,fullTotal:s,notFoundItems:nf};
   };
 
@@ -4114,7 +4122,7 @@ export default function App(){
     };
   },[currentList,screen,sharedSyncing,showToast]);
 
-  const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+getItemLineTotal(i),0);
+  const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.notFound?0:getItemLineTotal(i)),0);
 
   const updateList=(ul)=>{
     const{fullTotal}=getProgress(ul);ul.total=fullTotal;
@@ -4133,8 +4141,7 @@ export default function App(){
       l.categories[ci].items[ii].checked=false;
       l.categories[ci].items[ii].price=null;
       updateList(l);
-      setSearch("");
-      setTimeout(scrollToListTop,100);
+      returnToSearch();
       return;
     }
     setCheckPopup({ci,ii});
@@ -4144,7 +4151,7 @@ export default function App(){
     const item=l.categories[ci].items[ii];
     item.notFound=!item.notFound;
     if(item.notFound){ item.checked=false; item.price=null; }
-    updateList(l); setSearch(""); setTimeout(scrollToListTop,100);
+    updateList(l); returnToSearch();
     showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
   };
 
@@ -4162,7 +4169,10 @@ export default function App(){
   const confirmItem=()=>{
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[itemModal.ci].items[itemModal.ii];
+    const previousQty=Number(item.qty||1);
+    if(item.originalQty==null)item.originalQty=previousQty;
     item.qty=mQty;
+    item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     item.notFound=mNotFound;
     if(mNotFound){
       item.checked=false;item.price=null;
@@ -4184,8 +4194,7 @@ export default function App(){
     updateList(l);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
     setItemModal(null);
-    setSearch("");
-    setTimeout(scrollToListTop,100);
+    returnToSearch();
     const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
     if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
   };
@@ -4200,11 +4209,12 @@ export default function App(){
   const quickAdjust=(ci,ii,delta)=>{
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[ci].items[ii];
-    const newQty=Math.max(0.5,Math.round((item.qty+delta)*10)/10);
+    const newQty=Math.max(0.5,Math.round(((Number(item.qty)||1)+delta)*10)/10);
+    if(item.originalQty==null)item.originalQty=Number(item.qty||1);
     item.qty=newQty;
+    item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     updateList(l);
-    setSearch("");
-    setTimeout(scrollToListTop,100);
+    returnToSearch();
     showToast(delta>0?"+" +delta+" "+item.name:delta+" "+item.name);
   };
 
@@ -4246,7 +4256,7 @@ export default function App(){
     const l=JSON.parse(JSON.stringify(currentList));
     let cat=l.categories.find(c=>c.name==="Itens Extras");
     if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-    cat.items.push({name:exName.trim(),detail:"",qty:exQty,unit:exUnit,price:parseBRL(exPrice),checked:false,notFound:false,extra:true});
+    cat.items.push({name:exName.trim(),detail:"",qty:exQty,originalQty:exQty,unit:exUnit,price:parseBRL(exPrice),priceMode:parseBRL(exPrice)!=null?"total":undefined,checked:false,notFound:false,extra:true});
     l.categories = sanitizeCategories(l.categories);
     updateList(l);setExtraModal(false);
     setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
@@ -4354,7 +4364,10 @@ export default function App(){
   const{totalItems,checkedItems,fullTotal}=getProgress(currentList);
   const budget=currentList?.budget||0;
   const budgetDiff=budget>0?budget-fullTotal:null;
-  const pct=budget>0?Math.min(100,(fullTotal/budget)*100):totalItems>0?(checkedItems/totalItems)*100:0;
+  const rawBudgetPct=budget>0?(fullTotal/budget)*100:0;
+  const pct=budget>0?Math.min(100,rawBudgetPct):totalItems>0?(checkedItems/totalItems)*100:0;
+  const budgetPctLabel=budget>0?Math.round(rawBudgetPct):Math.round(pct);
+  const progressColor=budget>0?(rawBudgetPct<=75?"#34D399":rawBudgetPct<=100?"#FBBF24":"#F87171"):(pct<50?"#34D399":pct<80?"#FBBF24":"#F87171");
 
   // ── Preview do item no diálogo ────────────────────────────────────────
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
@@ -4796,15 +4809,18 @@ export default function App(){
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
               </div>
               <div style={{height:10,background:"rgba(255,255,255,0.2)",borderRadius:5,overflow:"hidden",marginBottom:6}}>
-                <div style={{height:"100%",background:pct<50?"#34D399":pct<80?"#FBBF24":"#F87171",borderRadius:5,width:pct+"%",transition:"width 0.4s, background 0.6s"}}/>
+                <div style={{height:"100%",background:progressColor,borderRadius:5,width:pct+"%",transition:"width 0.45s ease, background 0.6s"}}/>
               </div>
-              <div style={{textAlign:"center",fontSize:13,fontWeight:700}}>
+              <div style={{textAlign:"center",fontSize:13,fontWeight:900,lineHeight:1.35}}>
                 {budget>0?(
-                  <span style={{color:budgetDiff<0?"#EF4444":"#22C55E"}}>
-                    {budgetDiff<0?"⚠️ Acima em "+fmtR(Math.abs(budgetDiff)):"Saldo: "+fmtR(budgetDiff)}
-                  </span>
+                  <>
+                    <div style={{color:budgetDiff<0?"#FECACA":"#BBF7D0",fontSize:15}}>
+                      {budgetDiff<0?"⚠️ Ultrapassado: "+fmtR(Math.abs(budgetDiff)):"Saldo disponível: "+fmtR(budgetDiff)}
+                    </div>
+                    <div style={{color:"rgba(255,255,255,0.82)",fontSize:12,marginTop:2}}>{budgetPctLabel}% do orçamento utilizado</div>
+                  </>
                 ):(
-                  <span style={{color:"rgba(255,255,255,0.75)",fontSize:12}}>{checkedItems}/{totalItems} itens</span>
+                  <span style={{color:"rgba(255,255,255,0.75)",fontSize:12}}>{checkedItems}/{totalItems} itens · {budgetPctLabel}% concluído</span>
                 )}
               </div>
             </div>
@@ -4873,7 +4889,7 @@ export default function App(){
                             const l=JSON.parse(JSON.stringify(currentList));
                             l.categories[ci].items.splice(ii,1);
                             if(l.categories[ci].items.length===0)l.categories.splice(ci,1);
-                            updateList(l);setSearch("");setTimeout(scrollToListTop,100);showToast("🗑 "+name+" removido");
+                            updateList(l);returnToSearch();showToast("🗑 "+name+" removido");
                           }}
                             style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                             🗑 Remover
@@ -4908,6 +4924,9 @@ export default function App(){
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
+                const aExtra=normalizePlainText(a.cat.name)==="itens extras";
+                const bExtra=normalizePlainText(b.cat.name)==="itens extras";
+                if(aExtra!==bExtra)return aExtra?1:-1;
                 const aDone=a.cat.items.length>0&&a.cat.items.every(i=>i.checked||i.notFound);
                 const bDone=b.cat.items.length>0&&b.cat.items.every(i=>i.checked||i.notFound);
                 if(aDone===bDone)return a.origIdx-b.origIdx;
@@ -4920,20 +4939,24 @@ export default function App(){
               const allDone=done===total&&total>0;
               const sub=getCatSubtotal(cat);
               const isCollapsed=collapsedCats[ci];
+              const isExtraCat=normalizePlainText(cat.name)==="itens extras";
               const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
               if(search&&filtered.length===0)return null;
               const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
                 const aDone=!!(a.checked||a.notFound);
                 const bDone=!!(b.checked||b.notFound);
-                if(aDone===bDone)return cat.items.indexOf(a)-cat.items.indexOf(b);
+                if(aDone===bDone){
+                  if(!aDone)return String(a.name||"").localeCompare(String(b.name||""),"pt-BR");
+                  return cat.items.indexOf(a)-cat.items.indexOf(b);
+                }
                 return aDone?1:-1;
               });
 
               return(
-                <div key={ci} style={{marginBottom:12,borderRadius:18,overflow:"hidden",border:`2px solid ${allDone?"#6D28D9":theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s"}}>
+                <div key={ci} style={{marginBottom:12,borderRadius:18,overflow:"hidden",border:`2px solid ${isExtraCat?"#E64A19":allDone?"#6D28D9":theme.border}`,boxShadow:isExtraCat?"0 10px 26px rgba(230,74,25,0.14)":"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s, box-shadow 0.3s"}}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
-                    style={{background:allDone?"#E8F5E9":theme.bg,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",borderBottom:isCollapsed?"none":`1px solid ${theme.border}40`}}>
+                    style={{background:isExtraCat?"linear-gradient(135deg,#FFF7ED,#FFEDD5)":allDone?"#E8F5E9":theme.bg,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",borderBottom:isCollapsed?"none":`1px solid ${theme.border}40`}}>
                     <span style={{fontSize:20}}>{theme.icon}</span>
                     <span style={{fontWeight:800,fontSize:14,color:allDone?"#2E7D32":theme.header,flex:1}}>
                       {cat.name}
@@ -4973,8 +4996,8 @@ export default function App(){
                               display:"flex",alignItems:"center",gap:12,
                               padding:"13px 14px",
                               borderBottom:isLast?"none":`1px solid ${theme.bg}`,
-                              background:hl?"#FFFDE7":item.checked?theme.bg+"80":"white",
-                              opacity:(item.checked||item.notFound)?0.65:1,cursor:"pointer",
+                              background:hl?"#FFFDE7":item.notFound?"#FFFBEB":item.checked?theme.bg+"80":"white",
+                              opacity:item.checked?0.62:1,cursor:"pointer",
                               transition:"background 0.15s",
                             }}>
                             {/* Checkbox com cor da categoria */}
@@ -4985,10 +5008,11 @@ export default function App(){
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:(item.checked||item.notFound)?"#9E9E9E":"#111827",textDecoration:(item.checked||item.notFound)?"line-through":"none",textDecorationColor:item.checked&&!item.notFound?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:700,fontSize:15,color:item.checked?"#9E9E9E":item.notFound?"#92400E":"#111827",textDecoration:item.checked?"line-through":"none",textDecorationColor:item.checked?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                                 {descLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>extra</span>}
-                                {item.notFound&&<span style={{fontSize:10,fontWeight:700,background:"#EF4444",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>não encontrado</span>}
+                                {item.qtyAdjusted&&<span style={{fontSize:10,fontWeight:800,background:"#EEF2FF",color:"#4C1D95",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>✏️ qtd. ajustada</span>}
+                                {item.notFound&&<span style={{fontSize:10,fontWeight:800,background:"#F59E0B",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>⚠️ em falta</span>}
                               </div>
                               {/* Linha 2: qty × preço = total */}
                               <div style={{fontSize:12,marginTop:4,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
@@ -5000,7 +5024,7 @@ export default function App(){
                                 )}
                               </div>
                             </div>
-                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#EF4444":"#E5E7EB"),background:item.notFound?"#FEF2F2":"#FFFFFF",color:item.notFound?"#EF4444":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
+                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
                           </div>
                         );
                       })}
@@ -5029,10 +5053,10 @@ export default function App(){
             <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>{currentList.categories[itemModal.ci]?.name}</div>
             <div style={{marginBottom:16}}>
               <label style={lbl}>Quantidade</label>
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <button onClick={()=>setMQty(q=>Math.max(1,q-1))} style={qBtn}>−</button>
-                <span style={{fontWeight:900,fontSize:24,color:"#111827",minWidth:36,textAlign:"center"}}>{mQty}</span>
-                <button onClick={()=>setMQty(q=>q+1)} style={qBtn}>＋</button>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <button onClick={()=>setMQty(q=>Math.max(0.001,Math.round(((Number(q)||1)-0.1)*1000)/1000))} style={qBtn}>−</button>
+                <input value={String(mQty).replace(".",",")} onChange={e=>{const v=numberFromText(e.target.value);setMQty(v&&v>0?v:0);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:"#E5E7EB"}),width:92}} />
+                <button onClick={()=>setMQty(q=>Math.round(((Number(q)||0)+0.1)*1000)/1000)} style={qBtn}>＋</button>
                 <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{item.unit||"un"}</span>
               </div>
             </div>
