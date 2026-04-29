@@ -2947,6 +2947,8 @@ export default function App(){
   const [itemModal,setItemModal]=useState(null);
   const [mQty,setMQty]=useState(1);
   const [mPriceText,setMPriceText]=useState("");
+  const [mPriceMode,setMPriceMode]=useState("total");
+  const [mWeightText,setMWeightText]=useState("");
 
   // Extra modal
   const [extraModal,setExtraModal]=useState(false);
@@ -3250,7 +3252,7 @@ export default function App(){
         const status=i.notFound?"❌":i.checked?"✅":"⬜";
         const detail=i.detail?" ("+i.detail+")":"";
         const qty=i.qty>1?" "+i.qty+"×":"";
-        const price=i.price!=null?" — "+fmtR(i.price*(i.qty||1)):"";
+        const price=i.price!=null?" — "+fmtR(getItemLineTotal(i)):"";
         lines.push(status+" "+i.name+detail+qty+price);
       });
       lines.push("");
@@ -3821,11 +3823,71 @@ export default function App(){
     }
   };
 
-  // ── Progress ──────────────────────────────────────────────────────────
+  // ── Progress e cálculo proporcional de preços ─────────────────────────
+  const numberFromText=(value)=>{
+    const n=Number(String(value||"").replace(/\./g,"").replace(",","."));
+    return Number.isFinite(n)?n:null;
+  };
+
+  const normalizeUnitForCalc=(unit)=>String(unit||"unidade").trim().toLowerCase();
+
+  const inferDefaultPriceMode=(item)=>{
+    const u=normalizeUnitForCalc(item?.unit);
+    const name=normalizePlainText(item?.name||"");
+    if(["kg","g"].includes(u))return "perKg";
+    if(["l","lt","litro","litros","ml"].includes(u))return "perLiter";
+    if(/batata|tomate|cebola|alho|banana|maca|laranja|limao|cenoura|carne|frango|peixe|salmao|picanha|alcatra|patinho|queijo|presunto|mortadela/.test(name))return "perKg";
+    return "total";
+  };
+
+  const qtyToKg=(item)=>{
+    const q=Number(item?.qty||0);
+    const u=normalizeUnitForCalc(item?.unit);
+    if(u==="kg")return q;
+    if(u==="g")return q/1000;
+    const stored=Number(item?.purchaseWeightKg||0);
+    return stored>0?stored:null;
+  };
+
+  const qtyToLiter=(item)=>{
+    const q=Number(item?.qty||0);
+    const u=normalizeUnitForCalc(item?.unit);
+    if(["l","lt","litro","litros"].includes(u))return q;
+    if(u==="ml")return q/1000;
+    const stored=Number(item?.purchaseVolumeL||0);
+    return stored>0?stored:null;
+  };
+
+  const getItemLineTotal=(item)=>{
+    if(!item || item.price==null)return 0;
+    const price=Number(item.price||0);
+    const mode=item.priceMode||"unit";
+    if(mode==="total")return price;
+    if(mode==="perKg"){
+      const kg=qtyToKg(item);
+      return kg!=null?price*kg:price;
+    }
+    if(mode==="perLiter"){
+      const liters=qtyToLiter(item);
+      return liters!=null?price*liters:price;
+    }
+    return price*Number(item.qty||1);
+  };
+
+  const getPriceDescription=(item)=>{
+    if(!item || item.price==null)return "";
+    const mode=item.priceMode||"unit";
+    if(mode==="total")return "Preço total informado";
+    if(mode==="perKg")return `Preço por kg: ${fmtR(item.price)}`;
+    if(mode==="perLiter")return `Preço por litro: ${fmtR(item.price)}`;
+    if(mode==="package")return `Preço por pacote: ${fmtR(item.price)}`;
+    return `Preço unitário: ${fmtR(item.price)}`;
+  };
+
   const getProgress=(list)=>{
     if(!list)return{totalItems:0,checkedItems:0,fullTotal:0,notFoundItems:0};
     let t=0,c=0,s=0,nf=0;
-    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;if(i.price!=null)s+=i.price*(i.qty||1);}));
+    list.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(i.checked)c++;if(i.notFound)nf++;s+=getItemLineTotal(i);}));
     return{totalItems:t,checkedItems:c,fullTotal:s,notFoundItems:nf};
   };
 
@@ -4042,7 +4104,7 @@ export default function App(){
     };
   },[currentList,screen,sharedSyncing,showToast]);
 
-  const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.price!=null?i.price*i.qty:0),0);
+  const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+getItemLineTotal(i),0);
 
   const updateList=(ul)=>{
     const{fullTotal}=getProgress(ul);ul.total=fullTotal;
@@ -4078,7 +4140,12 @@ export default function App(){
 
   const openItemModal=(ci,ii)=>{
     const item=currentList.categories[ci].items[ii];
-    setItemModal({ci,ii});setMQty(item.qty||1);setMPriceText(item.price!=null?fmtBRL(item.price):"");
+    const defaultMode=item.priceMode || inferDefaultPriceMode(item);
+    setItemModal({ci,ii});
+    setMQty(item.qty||1);
+    setMPriceMode(defaultMode);
+    setMPriceText(item.price!=null?fmtBRL(item.price):"");
+    setMWeightText(item.purchaseWeightKg?String(item.purchaseWeightKg).replace(".",","):"");
     setMNotFound(false);
   };
 
@@ -4091,7 +4158,17 @@ export default function App(){
       item.checked=false;item.price=null;
     } else {
       const p=parseBRL(mPriceText);
-      if(p!=null&&p>=0)item.price=p;
+      if(p!=null&&p>=0){
+        item.price=p;
+        item.priceMode=mPriceMode||"total";
+        if(item.priceMode==="perKg"){
+          const kg=numberFromText(mWeightText);
+          if(kg&&kg>0)item.purchaseWeightKg=kg;
+          else delete item.purchaseWeightKg;
+        } else {
+          delete item.purchaseWeightKg;
+        }
+      }
       item.checked=true;
     }
     updateList(l);
@@ -4131,7 +4208,7 @@ export default function App(){
       const isSuper=superfluous.some(s=>cat.name.includes(s));
       cat.items.forEach((item,ii)=>{
         if(!item.checked||item.price==null)return;
-        const total=item.price*(item.qty||1);
+        const total=getItemLineTotal(item);
         if((item.qty||1)>1){
           candidates.push({ci,ii,name:item.name,qty:item.qty,price:item.price,tipo:"reduzir",catName:cat.name,economy:item.price,priority:isSuper?1:2});
         }
@@ -4869,10 +4946,10 @@ export default function App(){
                         // Monta descrição e linha de preço
                         const descLine=[item.name,item.detail].filter(Boolean).join(" ");
                         const hasPrice=item.price!=null;
-                        const totalItemPrice=hasPrice?fmtR(item.price*item.qty):"";
+                        const totalItemPrice=hasPrice?fmtR(getItemLineTotal(item)):"";
                         let priceLine="";
                         if(hasPrice){
-                          priceLine=item.qty>1?`${formatQtyUnit(item.qty,item.unit)} × ${fmtR(item.price)}`:`${formatQtyUnit(1,item.unit)} × ${fmtR(item.price)}`;
+                          priceLine=`${formatQtyUnit(item.qty||1,item.unit||"unidade")} · ${getPriceDescription(item)}`;
                         } else {
                           // Sempre exibe a quantidade completa, inclusive quando for 1 unidade
                           // ou fração de kg/litro. Ex.: "1 pacote", "1 kg", "0,5 kg".
@@ -4950,7 +5027,27 @@ export default function App(){
               </div>
             </div>
             <div style={{marginBottom:20}}>
-              <label style={lbl}>Preço unitário</label>
+              <label style={lbl}>Como o preço será informado?</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                {[
+                  ["total","Preço total"],
+                  ["perKg","Preço por kg"],
+                  ["unit","Preço por unidade"],
+                  ["package","Preço por pacote"],
+                  ["perLiter","Preço por litro"],
+                ].map(([mode,label])=>(
+                  <button key={mode} onClick={()=>setMPriceMode(mode)} style={chip(mPriceMode===mode,theme.border,theme.bg,theme.header)}>{label}</button>
+                ))}
+              </div>
+              {mPriceMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(item.unit)) && (
+                <div style={{marginBottom:12}}>
+                  <label style={lbl}>Peso total comprado em kg</label>
+                  <input value={mWeightText} onChange={e=>setMWeightText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="Ex: 0,700 ou 1,2" inputMode="decimal"
+                    style={inp()} onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+                  <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Necessário quando o item está em unidades, mas o mercado cobra por kg.</div>
+                </div>
+              )}
+              <label style={lbl}>{mPriceMode==="total"?"Preço total pago":mPriceMode==="perKg"?"Preço do kg":mPriceMode==="perLiter"?"Preço do litro":mPriceMode==="package"?"Preço do pacote":"Preço da unidade"}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
                 <input value={mPriceText} onChange={e=>setMPriceText(e.target.value.replace(/[^0-9.,]/g,""))}
@@ -4958,11 +5055,15 @@ export default function App(){
                   style={inp({paddingLeft:44})}
                   onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
-              {mPriceText&&parseBRL(mPriceText)!=null&&(
-                <div style={{fontSize:13,fontWeight:700,marginTop:8,color:theme.header}}>
-                  Total: {fmtR((parseBRL(mPriceText)||0)*mQty)}
-                </div>
-              )}
+              {mPriceText&&parseBRL(mPriceText)!=null&&(()=>{
+                const temp={...item,qty:mQty,price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
+                const total=getItemLineTotal(temp);
+                return (
+                  <div style={{fontSize:13,fontWeight:800,marginTop:8,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
+                    Total calculado: {fmtR(total)}
+                  </div>
+                );
+              })()}
             </div>
 
 
