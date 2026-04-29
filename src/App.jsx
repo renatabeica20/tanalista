@@ -3256,6 +3256,263 @@ function gramsToKgFinal(grams) {
   return Number((g / 1000).toFixed(2));
 }
 
+
+
+// ── ETAPA 6: Histórico de preços e estatísticas ───────────────────────────
+// Mantém histórico local por usuário/dispositivo. Futuramente pode migrar para Supabase.
+const PRICE_HISTORY_KEY = "tnl_price_history_v1";
+
+function normalizePriceItemName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function readPriceHistory() {
+  try {
+    const raw = localStorage.getItem(PRICE_HISTORY_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePriceHistory(history) {
+  try {
+    localStorage.setItem(PRICE_HISTORY_KEY, JSON.stringify(Array.isArray(history) ? history.slice(-1000) : []));
+  } catch {
+    // ignora indisponibilidade local
+  }
+}
+
+function addPriceHistoryEntry({ itemName, unitPrice, totalPrice, quantity, unit, listType, listName }) {
+  const cleanName = String(itemName || "").trim();
+  const price = Number(unitPrice || totalPrice || 0);
+  if (!cleanName || !Number.isFinite(price) || price <= 0) return null;
+
+  const entry = {
+    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `price-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    itemName: cleanName,
+    itemKey: normalizePriceItemName(cleanName),
+    unitPrice: Number(price.toFixed(2)),
+    totalPrice: Number(Number(totalPrice || price).toFixed(2)),
+    quantity: Number(quantity || 1),
+    unit: unit || "unidade",
+    listType: listType || "geral",
+    listName: listName || "",
+    createdAt: new Date().toISOString(),
+    monthKey: new Date().toISOString().slice(0, 7),
+  };
+
+  const history = readPriceHistory();
+  history.push(entry);
+  savePriceHistory(history);
+  return entry;
+}
+
+function getPreviousMonthKey(date = new Date()) {
+  const d = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+  return d.toISOString().slice(0, 7);
+}
+
+function average(values) {
+  const nums = values.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (!nums.length) return 0;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+function getPriceComparison(itemName, currentPrice) {
+  const key = normalizePriceItemName(itemName);
+  const current = Number(currentPrice || 0);
+  if (!key || !Number.isFinite(current) || current <= 0) return null;
+
+  const history = readPriceHistory().filter((h) => h.itemKey === key);
+  if (!history.length) {
+    return { status: "novo", label: "Sem histórico anterior", percent: 0, previousAverage: 0, currentPrice: current };
+  }
+
+  const previousMonth = getPreviousMonthKey();
+  const prevMonthEntries = history.filter((h) => h.monthKey === previousMonth);
+  const source = prevMonthEntries.length ? prevMonthEntries : history.slice(-10);
+  const previousAverage = average(source.map((h) => h.unitPrice || h.totalPrice));
+  if (!previousAverage) {
+    return { status: "novo", label: "Sem histórico anterior", percent: 0, previousAverage: 0, currentPrice: current };
+  }
+
+  const percent = ((current - previousAverage) / previousAverage) * 100;
+  const rounded = Number(percent.toFixed(1));
+
+  if (rounded > 5) {
+    return { status: "acima", label: `${rounded}% acima do histórico`, percent: rounded, previousAverage, currentPrice: current };
+  }
+  if (rounded < -5) {
+    return { status: "abaixo", label: `${Math.abs(rounded)}% abaixo do histórico`, percent: rounded, previousAverage, currentPrice: current };
+  }
+  return { status: "estavel", label: "Preço estável", percent: rounded, previousAverage, currentPrice: current };
+}
+
+function getPriceStatsSummary() {
+  const history = readPriceHistory();
+  if (!history.length) {
+    return {
+      totalRecords: 0,
+      averageTicket: 0,
+      topIncreases: [],
+      monthlyTotals: [],
+    };
+  }
+
+  const byMonth = new Map();
+  history.forEach((h) => {
+    const k = h.monthKey || String(h.createdAt || "").slice(0, 7);
+    byMonth.set(k, (byMonth.get(k) || 0) + Number(h.totalPrice || 0));
+  });
+
+  const monthlyTotals = Array.from(byMonth.entries())
+    .map(([month, total]) => ({ month, total: Number(total.toFixed(2)) }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  const byItem = new Map();
+  history.forEach((h) => {
+    if (!byItem.has(h.itemKey)) byItem.set(h.itemKey, []);
+    byItem.get(h.itemKey).push(h);
+  });
+
+  const topIncreases = Array.from(byItem.values())
+    .map((entries) => {
+      const ordered = entries.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      if (ordered.length < 2) return null;
+      const first = Number(ordered[0].unitPrice || ordered[0].totalPrice || 0);
+      const last = Number(ordered[ordered.length - 1].unitPrice || ordered[ordered.length - 1].totalPrice || 0);
+      if (!first || !last) return null;
+      return {
+        itemName: ordered[ordered.length - 1].itemName,
+        first,
+        last,
+        percent: Number((((last - first) / first) * 100).toFixed(1)),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.percent - a.percent)
+    .slice(0, 5);
+
+  return {
+    totalRecords: history.length,
+    averageTicket: Number(average(history.map((h) => h.totalPrice)).toFixed(2)),
+    topIncreases,
+    monthlyTotals,
+  };
+}
+
+function PriceInsightBadge({ itemName, price }) {
+  const comparison = getPriceComparison(itemName, price);
+  if (!comparison) return null;
+
+  const colors = {
+    acima: { bg:"#FEE2E2", color:"#991B1B", icon:"🔴" },
+    abaixo: { bg:"#DCFCE7", color:"#166534", icon:"🟢" },
+    estavel: { bg:"#FEF3C7", color:"#92400E", icon:"🟡" },
+    novo: { bg:"#EDE9FE", color:"#5B21B6", icon:"ℹ️" },
+  };
+  const c = colors[comparison.status] || colors.novo;
+
+  return (
+    <div style={{
+      marginTop:8,
+      padding:"8px 10px",
+      borderRadius:12,
+      background:c.bg,
+      color:c.color,
+      fontSize:12,
+      fontWeight:800,
+      display:"inline-flex",
+      alignItems:"center",
+      gap:6
+    }}>
+      <span>{c.icon}</span>
+      <span>{comparison.label}</span>
+      {comparison.previousAverage ? (
+        <span style={{opacity:.8}}>
+          · média anterior {comparison.previousAverage.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function PriceStatsPanel() {
+  const stats = getPriceStatsSummary();
+
+  if (!stats.totalRecords) {
+    return (
+      <div style={{
+        marginTop:18,
+        padding:16,
+        borderRadius:18,
+        background:"#FFFFFF",
+        border:"1px solid #E5E7EB",
+        boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
+      }}>
+        <div style={{fontWeight:900,color:"#4C1D95",fontSize:16}}>Estatísticas de preços</div>
+        <div style={{fontSize:13,color:"#6B7280",marginTop:6}}>
+          As estatísticas aparecerão após o registro de preços nos itens comprados.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      marginTop:18,
+      padding:16,
+      borderRadius:18,
+      background:"#FFFFFF",
+      border:"1px solid #E5E7EB",
+      boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
+    }}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <div>
+          <div style={{fontWeight:900,color:"#4C1D95",fontSize:16}}>Estatísticas de preços</div>
+          <div style={{fontSize:12,color:"#6B7280",marginTop:3}}>
+            Histórico local de {stats.totalRecords} preço(s) registrado(s)
+          </div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:11,color:"#6B7280",fontWeight:800}}>Média registrada</div>
+          <div style={{fontWeight:900,color:"#111827"}}>
+            {stats.averageTicket.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
+          </div>
+        </div>
+      </div>
+
+      {stats.topIncreases.length ? (
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:12,fontWeight:900,color:"#374151",marginBottom:6}}>Itens com maior alta</div>
+          {stats.topIncreases.map((it, idx) => (
+            <div key={idx} style={{
+              display:"flex",
+              justifyContent:"space-between",
+              gap:10,
+              padding:"7px 0",
+              borderTop:idx ? "1px solid #F3F4F6" : "none",
+              fontSize:12
+            }}>
+              <span style={{fontWeight:800,color:"#111827"}}>{it.itemName}</span>
+              <span style={{fontWeight:900,color:it.percent > 0 ? "#B91C1C" : "#166534"}}>
+                {it.percent > 0 ? "+" : ""}{it.percent}%
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function App(){
   const [screen,setScreen]=useState("home");
   const [lists,setLists]=useState(()=>{
@@ -4306,7 +4563,9 @@ export default function App(){
 
   const getItemLineTotal=(item)=>{
     if(!item || item.price==null)return 0;
-    const price=Number(item.price||0);
+    
+      try { addPriceHistoryEntry({ itemName: item.name, unitPrice: Number(item.price || 0), totalPrice: Number(item.totalPrice || item.price || 0), quantity: Number(item.quantity || 1), unit: item.unit, listType: currentList?.type || listType, listName: currentList?.name || listName }); } catch {}
+const price=Number(item.price||0);
     const mode=item.priceMode||"unit";
     if(mode==="total")return price;
     if(mode==="perKg"){
@@ -4980,6 +5239,7 @@ export default function App(){
 
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Listas recentes</div>
+        <PriceStatsPanel />
               {lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
             </div>
             {lists.length===0?(
