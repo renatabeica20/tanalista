@@ -2187,6 +2187,54 @@ function numberFromPortuguese(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+
+function spokenNumberPattern() {
+  return "(?:zero|meio|meia|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzentos|duzentas|trezentos|trezentas|quatrocentos|quatrocentas|quinhentos|quinhentas|seiscentos|seiscentas|setecentos|setecentas|oitocentos|oitocentas|novecentos|novecentas|mil|\d+[,.]?\d*)";
+}
+
+function normalizeVoiceMeasurementPhrases(text) {
+  let raw = String(text || "").toLowerCase();
+  const num = spokenNumberPattern();
+
+  const toNum = (v) => {
+    const n = numberFromPortuguese(String(v || "").replace(/§DEC§/g, ","));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  raw = raw.replace(/(\d+)\s*,\s*(\d+)/g, "$1§DEC§$2");
+
+  // "um quilo e duzentos gramas de picanha" / "1 kg e 200 g de picanha" => "1,2 kg de picanha"
+  raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:quilos?|quilo|kg)\\s+e\\s+(${num})\\s*(?:gramas?|g)?\\s+de\\s+([^,.;]+)`, "gi"), (m, kg, g, product) => {
+    const kgNum = toNum(kg);
+    const gNum = toNum(g);
+    if (!Number.isFinite(kgNum) || !Number.isFinite(gNum)) return m;
+    const total = kgNum + (gNum / 1000);
+    return `${String(total).replace(".", ",")} kg de ${product.trim()}`;
+  });
+
+  // "um quilo e meio de carne" => "1,5 kg de carne"
+  raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:quilos?|quilo|kg)\\s+e\\s+mei[ao]\\s+de\\s+([^,.;]+)`, "gi"), (m, kg, product) => {
+    const kgNum = toNum(kg);
+    if (!Number.isFinite(kgNum)) return m;
+    return `${String(kgNum + 0.5).replace(".", ",")} kg de ${product.trim()}`;
+  });
+
+  // "dois litros e quinhentos ml de suco" => "2,5 L de suco"
+  raw = raw.replace(new RegExp(`\\b(${num})\\s*(?:litros?|l)\\s+e\\s+(${num})\\s*(?:ml|mililitros?)?\\s+de\\s+([^,.;]+)`, "gi"), (m, l, ml, product) => {
+    const lNum = toNum(l);
+    const mlNum = toNum(ml);
+    if (!Number.isFinite(lNum) || !Number.isFinite(mlNum)) return m;
+    const total = lNum + (mlNum / 1000);
+    return `${String(total).replace(".", ",")} L de ${product.trim()}`;
+  });
+
+  // "meio quilo de carne" => "0,5 kg de carne"
+  raw = raw.replace(/\bmei[ao]\s+(?:quilo|quilos|kg)\s+de\s+([^,.;]+)/gi, (m, product) => `0,5 kg de ${product.trim()}`);
+  raw = raw.replace(/\bmei[ao]\s+(?:litro|litros|l)\s+de\s+([^,.;]+)/gi, (m, product) => `0,5 L de ${product.trim()}`);
+
+  return raw.replace(/§DEC§/g, ",");
+}
+
 function normalizeUnitSpoken(unit) {
   return normalizeUnitValue(unit);
 }
@@ -2215,7 +2263,7 @@ function splitContinuousVoiceIntoChunks(text) {
   const escapeRegExp = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const productAlternation = normalizedProducts.map(escapeRegExp).join("|");
 
-  let raw = String(text || "")
+  let raw = normalizeVoiceMeasurementPhrases(text)
     .replace(/(\d+)\s*,\s*(\d+)/g, "$1§DEC§$2")
     .replace(/\b(um|uma|dois|duas)\s+e\s+mei[ao]\b/gi, (m) => m.toLowerCase().startsWith("do") ? "2§DEC§5" : "1§DEC§5")
     .replace(/\bcom\s+((?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+))\s+(unidades?|un|latas?|garrafas?|long\s+necks?)\b/gi, (m, n, u) => `com ${n}§JOIN§${u}`)
@@ -2300,7 +2348,10 @@ function parseSpokenShoppingItems(text) {
   const items = [];
 
   for (const chunk of chunks) {
-    let c = chunk.replace(/^(quero|preciso|comprar|coloca|coloque|adiciona|adicione)\s+/i, "").trim();
+    let c = chunk
+      .replace(/^(quero|preciso|comprar|coloca|coloque|adiciona|adicione)\s+/i, "")
+      .replace(/^(?:e|de|do|da|dos|das|mais|tamb[eé]m|a[ií])\s+/i, "")
+      .trim();
     let qty = 1;
     let unit = "unidade";
     let peso = "";
@@ -2345,6 +2396,20 @@ function parseSpokenShoppingItems(text) {
       }
     }
 
+    // Regra de fala comum: "oitocentos de carne" / "800 de beterraba" significa 800g do produto.
+    if (unit === "unidade" && qty === 1) {
+      const implicitGrams = c.match(new RegExp(`^(${qtyWords})\s+de\s+(.+)$`, "i"));
+      if (implicitGrams) {
+        const grams = numberFromPortuguese(implicitGrams[1]);
+        const productName = implicitGrams[2].trim();
+        if (Number.isFinite(grams) && grams > 0 && grams < 1000 && productName) {
+          qty = Number((grams / 1000).toFixed(3));
+          unit = "kg";
+          c = productName;
+        }
+      }
+    }
+
     const packMatch = c.match(/\bcom\s+((?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+))\s+(unidades?|un|latas?|garrafas?|long\s+necks?)\b/i);
     if (packMatch) {
       const packQty = numberFromPortuguese(packMatch[1]) || Number(packMatch[1]) || 1;
@@ -2354,6 +2419,7 @@ function parseSpokenShoppingItems(text) {
     }
 
     c = c
+      .replace(/^(?:e|de|do|da|dos|das|mais|tamb[eé]m|a[ií])\s+/i, "")
       .replace(/\b(de|do|da|dos|das|com)\s*$/i, "")
       .replace(/\bde\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+[,.]?\d*)\s*(quilo|quilos|kg|grama|gramas|g|litro|litros|l|ml|mililitros)\b/gi, "")
       .trim();
@@ -2386,6 +2452,9 @@ async function aiParseShoppingText(text, type = "mercado") {
     "- Interprete números por extenso: um=1, dois=2, três=3, quatro=4, cinco=5, dez=10 etc.;",
     "- Exemplo: 'dois pacotes de arroz de cinco quilos' => name 'Arroz', qty 2, unit 'pacote', peso '5kg', embalagem '5kg';",
     "- Exemplo: 'um quilo e meio de carne' ou '1,5 kg de carne' => name 'Carne', qty 1.5, unit 'kg'; nunca transforme 1,5 em 5;",
+    "- Exemplo: 'um quilo e duzentos gramas de picanha' => name 'Picanha', qty 1.2, unit 'kg'; gere UM ÚNICO item;",
+    "- Exemplo: 'oitocentos de carne moída' ou '800 de carne moída' => name 'Carne moída', qty 0.8, unit 'kg';",
+    "- Nunca deixe conectores como 'e', 'de', 'do', 'da' no começo do name;",
     "- Exemplo: 'três caixas de leite de um litro' => name 'Leite', qty 3, unit 'caixa', volume '1L', embalagem '1L';",
     "- Exemplo: 'um fardo de cerveja lata 350 ml' => name 'Cerveja', qty 1, unit 'fardo', volume '350ml', embalagem 'lata 350ml';",
     "- Exemplo: 'dois fardos de cerveja Heineken long neck com 24 unidades' => name 'Cerveja', marca 'Heineken', tipo 'Long neck', qty 2, unit 'fardo', embalagem 'com 24 unidades'; não crie item separado para 24 unidades;",
