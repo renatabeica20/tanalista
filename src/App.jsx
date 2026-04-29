@@ -2169,8 +2169,8 @@ function numberFromPortuguese(value) {
     "zero":0,"meio":0.5,"meia":0.5,"um":1,"uma":1,"dois":2,"duas":2,"tres":3,"quatro":4,"cinco":5,"seis":6,"sete":7,"oito":8,"nove":9,"dez":10,
     "onze":11,"doze":12,"treze":13,"quatorze":14,"catorze":14,"quinze":15,"dezesseis":16,"dezessete":17,"dezoito":18,"dezenove":19,"vinte":20,
     "trinta":30,"quarenta":40,"cinquenta":50,"sessenta":60,"setenta":70,"oitenta":80,"noventa":90,
-    "cem":100,"cento":100,"duzentos":200,"duzentas":200,"trezentos":300,"trezentas":300,"quatrocentos":400,"quatrocentas":400,"quinhentos":500,"quinhentas":500,
-    "seiscentos":600,"seiscentas":600,"setecentos":700,"setecentas":700,"oitocentos":800,"oitocentas":800,"novecentos":900,"novecentas":900,
+    "cem":100,"cento":100,"duzento":200,"duzentos":200,"duzentas":200,"trezento":300,"trezentos":300,"trezentas":300,"quatrocento":400,"quatrocentos":400,"quatrocentas":400,"quinhento":500,"quinhentos":500,"quinhentas":500,
+    "seiscento":600,"seiscentos":600,"seiscentas":600,"setecento":700,"setecentos":700,"setecentas":700,"oitocento":800,"oitocentos":800,"oitocentas":800,"novecento":900,"novecentos":900,"novecentas":900,
     "mil":1000
   };
   if (/^(um|uma)\s+e\s+mei[ao]$/.test(raw)) return 1.5;
@@ -2630,9 +2630,9 @@ function normalizeCompoundWeightAndVolumePhrases(value) {
   const numberWords = [
     "zero","meio","meia","um","uma","dois","duas","três","tres","quatro","cinco","seis","sete","oito","nove","dez",
     "onze","doze","treze","quatorze","catorze","quinze","dezesseis","dezessete","dezoito","dezenove","vinte",
-    "trinta","quarenta","cinquenta","sessenta","setenta","oitenta","noventa","cem","cento","duzentos","duzentas",
-    "trezentos","trezentas","quatrocentos","quatrocentas","quinhentos","quinhentas","seiscentos","seiscentas",
-    "setecentos","setecentas","oitocentos","oitocentas","novecentos","novecentas","mil"
+    "trinta","quarenta","cinquenta","sessenta","setenta","oitenta","noventa","cem","cento","duzento","duzentos","duzentas",
+    "trezento","trezentos","trezentas","quatrocento","quatrocentos","quatrocentas","quinhento","quinhentos","quinhentas","seiscento","seiscentos","seiscentas",
+    "setecento","setecentos","setecentas","oitocento","oitocentos","oitocentas","novecento","novecentos","novecentas","mil"
   ].join("|");
   const qty = `(?:\\d+[,.]?\\d*|${numberWords})`;
   const toBR = (num) => decimalToBrazilianString(Math.round(Number(num) * 1000) / 1000);
@@ -2646,6 +2646,22 @@ function normalizeCompoundWeightAndVolumePhrases(value) {
     const grams = parse(gPart);
     if (kg == null || grams == null) return full;
     return `${toBR(kg + grams / 1000)} kg de`;
+  });
+
+  // "2 quilos e cem de costela" => "2,1 kg de costela".
+  text = text.replace(new RegExp(`\\b(${qty})\\s*(?:kg|quilo|quilos)\\s+e\\s+(${qty})\\s+de\\s+([^,.;]+)`, "gi"), (full, kgPart, gPart, product) => {
+    const kg = parse(kgPart);
+    const grams = parse(gPart);
+    if (kg == null || grams == null || grams <= 0 || grams >= 1000) return full;
+    return `${toBR(kg + grams / 1000)} kg de ${String(product || "").trim()}`;
+  });
+
+  // "oitocentos de beterraba" / "800 de carne" => "0,8 kg de beterraba/carne".
+  text = text.replace(new RegExp(`\\b(${qty})\\s+de\\s+([^,.;]+)`, "gi"), (full, gPart, product) => {
+    const grams = parse(gPart);
+    const productText = String(product || "").trim();
+    if (grams == null || grams < 100 || grams >= 1000 || !productText) return full;
+    return `${toBR(grams / 1000)} kg de ${productText}`;
   });
 
   // "700 gramas de batata" => "0,7 kg de batata".
@@ -2815,44 +2831,90 @@ function repairAndNormalizeVoiceItems(items) {
 }
 
 function parseSpokenShoppingItemsProfessional(text) {
-  const qtyWords = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|\\d+[,\\.]?\\d*)";
+  const qtyWords = "(?:0[,\\.]5|1[,\\.]5|2[,\\.]5|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzento|duzentos|duzentas|trezento|trezentos|trezentas|quatrocento|quatrocentos|quatrocentas|quinhento|quinhentos|quinhentas|seiscento|seiscentos|seiscentas|setecento|setecentos|setecentas|oitocento|oitocentos|oitocentas|novecento|novecentos|novecentas|\\d+[,\\.]?\\d*)";
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
+  const productAnchorWords = "(?:arroz|feij[aã]o|macarr[aã]o|leite|detergente|carne|carne mo[ií]da|frango|cerveja|refrigerante|[oó]leo|azeite|a[çc][uú]car|sal|caf[eé]|p[aã]o|queijo|presunto|manteiga|margarina|iogurte|tomate|cebola|alho|batata|cenoura|banana|ma[çc][aã]|laranja|lim[aã]o|alface|manga|pera|p[eê]ra|beterraba|picanha|costela|peixe|salm[aã]o|lingui[çc]a|salsicha|sab[aã]o|amaciante|desinfetante|sabonete|shampoo|condicionador|desodorante|papel|bolacha|biscoito|chocolate|farinha|maionese|ketchup|mostarda|molho|atum|sardinha|milho|ervilha|aveia|pipoca|vinagre|ovos?|pizza|lasanha|sorvete|fralda|absorvente|copo|prato|garfo|faca|colher|guardanapo)";
+
   let raw = normalizeSpokenDecimalPhrases(text)
-    // Protege vírgula decimal antes de usar vírgula como separador de itens.
     .replace(/(\d+)\s*,\s*(\d+)/g, "$1§DECIMAL§$2")
     .replace(/(\d+)\s*\.\s*(\d+)/g, "$1§DECIMAL§$2")
     .replace(/\b(?:quero|preciso|comprar|coloca|coloque|adiciona|adicione|por favor)\b/gi, " ")
     .replace(/\b(?:mais|tamb[eé]m|a[ií]|depois)\b/gi, ",")
-    .replace(/\s+e\s+(?=(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|\d+)\b)/gi, ", ")
+    .replace(new RegExp(`\\s+e\\s+(?=(${qtyWords})\\b)`, "gi"), ", ")
     .replace(/[.;\n]+/g, ",")
     .replace(/\s+/g, " ")
     .trim();
 
-  // Quebra apenas antes de uma nova quantidade + unidade + produto, preservando "arroz 5kg" no item anterior.
   raw = raw.replace(new RegExp(`\\s+(${qtyWords})\\s+(${unitWords})\\s+(?=[a-záéíóúãõç])`, "gi"), ", $1 $2 ");
+  raw = raw.replace(new RegExp(`\\s+(${qtyWords})\\s+de\\s+(?=${productAnchorWords}\\b)`, "gi"), ", $1 de ");
+
   const chunks = raw
     .split(/\s*,\s*/)
-    .map(v=>v.replace(/§DECIMAL§/g, ",").trim())
+    .map(v => v.replace(/§DECIMAL§/g, ",").trim())
     .filter(Boolean);
+
   const items = [];
   for (let c of chunks) {
+    c = String(c || "")
+      .replace(/^(?:e|de|do|da|dos|das|mais|tamb[eé]m|a[ií])\s+/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!c) continue;
+
     let qty = 1, unit = "unidade", embalagem = "", marca = "", tipo = "";
-    let m = c.match(new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+)$`, "i"));
+
+    let m = c.match(new RegExp(`^(${qtyWords})\\s+de\\s+(.+)$`, "i"));
     if (m) {
-      qty = numberFromPortuguese(m[1]) || 1;
-      unit = normalizeUnitValue(m[2]);
-      c = m[3].trim();
-    } else if ((m = c.match(new RegExp(`^(${qtyWords})\\s+(.+)$`, "i")))) {
-      qty = numberFromPortuguese(m[1]) || 1;
-      c = m[2].trim();
+      const grams = numberFromPortuguese(m[1]);
+      if (Number.isFinite(grams) && grams >= 100 && grams < 1000) {
+        qty = Number((grams / 1000).toFixed(3));
+        unit = "kg";
+        c = m[2].trim();
+      }
     }
-    const pack = extractPackInfoFromText(c); c = pack.text; if (pack.pack) embalagem = pack.pack;
-    const measure = extractMeasureFromText(c); c = measure.text || c; if (measure.measure) embalagem = [embalagem, measure.measure].filter(Boolean).join(" ");
+
+    if (unit === "unidade") {
+      m = c.match(new RegExp(`^(${qtyWords})\\s+(${unitWords})(?:\\s+de)?\\s+(.+)$`, "i"));
+      if (m) {
+        qty = numberFromPortuguese(m[1]) || 1;
+        unit = normalizeUnitValue(m[2]);
+        c = m[3].trim();
+      } else if ((m = c.match(new RegExp(`^(${qtyWords})\\s+(.+)$`, "i")))) {
+        const parsedQty = numberFromPortuguese(m[1]);
+        if (Number.isFinite(parsedQty) && parsedQty >= 100 && parsedQty < 1000) {
+          qty = Number((parsedQty / 1000).toFixed(3));
+          unit = "kg";
+        } else {
+          qty = parsedQty || 1;
+        }
+        c = m[2].trim();
+      }
+    }
+
+    const pack = extractPackInfoFromText(c);
+    c = pack.text;
+    if (pack.pack) embalagem = pack.pack;
+
+    const measure = extractMeasureFromText(c);
+    c = measure.text || c;
+    if (measure.measure) embalagem = [embalagem, measure.measure].filter(Boolean).join(" ");
+
+    c = c
+      .replace(/^(?:e|de|do|da|dos|das|mais|tamb[eé]m|a[ií])\s+/i, "")
+      .replace(/\b(?:de|do|da|dos|das|com)\s*$/i, "")
+      .replace(/\b(?:e\s+)?(?:cem|cento|duzento|duzentos|duzentas|trezento|trezentos|trezentas|quatrocento|quatrocentos|quatrocentas|quinhento|quinhentos|quinhentas|seiscento|seiscentos|seiscentas|setecento|setecentos|setecentas|oitocento|oitocentos|oitocentas|novecento|novecentos|novecentas)\s+de\s+/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
     if (/\bheineken\b/i.test(c)) { marca = "Heineken"; c = c.replace(/\bheineken\b/ig, " "); }
     if (/\blong\s+neck\b/i.test(c)) { tipo = "Long neck"; c = c.replace(/\blong\s+neck\b/ig, " "); }
+
     const name = normalizeProductName(c.replace(/\s+/g," ").trim());
-    if (name && !isQuantityOnlyItemName(name)) items.push(normalizeListItem({ name, marca, tipo, embalagem, detail:embalagem, qty, unit, price:null, checked:false, notFound:false }));
+    if (name && !isQuantityOnlyItemName(name)) {
+      items.push(normalizeListItem({ name, marca, tipo, embalagem, detail:embalagem, qty, unit, price:null, checked:false, notFound:false }));
+    }
   }
+
   return repairAndNormalizeVoiceItems(items);
 }
 
