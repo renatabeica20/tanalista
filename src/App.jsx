@@ -3089,6 +3089,37 @@ function wasListDeletedLocally(list) {
 // ══════════════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════
+
+
+// ── ETAPA 4.5: proteção final para conversão de gramas na lista falada ──
+// Regra: 100g = 0,1kg; 200g = 0,2kg; 900g = 0,9kg.
+// Também corrige casos residuais como 1,001kg quando a fala foi "1 quilo e 100 gramas".
+function normalizeVoiceKgQuantityFinal(value) {
+  const n = Number(String(value || "").replace(",", "."));
+  if (!Number.isFinite(n)) return value;
+
+  // Corrige escala incorreta: 1,001 -> 1,1 | 2,001 -> 2,1
+  const integerPart = Math.trunc(n);
+  const decimal = n - integerPart;
+
+  if (integerPart >= 1 && decimal > 0 && decimal < 0.01) {
+    const correctedDecimal = Math.round(decimal * 100000) / 1000;
+    return Number((integerPart + correctedDecimal).toFixed(2));
+  }
+
+  if (n > 0 && n < 0.01) {
+    return Number((n * 100).toFixed(2));
+  }
+
+  return Number(n.toFixed(2));
+}
+
+function gramsToKgFinal(grams) {
+  const g = Number(String(grams || "").replace(/\D/g, ""));
+  if (!Number.isFinite(g) || g <= 0) return 0;
+  return Number((g / 1000).toFixed(2));
+}
+
 export default function App(){
   const [screen,setScreen]=useState("home");
   const [lists,setLists]=useState(()=>{
