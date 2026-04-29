@@ -4928,6 +4928,7 @@ export default function App(){
             </div>
           </div>
         </div>
+      </div>
 
           {currentList.sharedId&&(
             <div style={{margin:"10px 20px 0",background:"#EEF2FF",border:"1px solid #C4B5FD",borderRadius:18,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,color:"#4C1D95"}}>
