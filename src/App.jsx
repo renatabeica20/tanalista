@@ -3260,6 +3260,53 @@ function gramsToKgFinal(grams) {
 
 // ── ETAPA 6: Histórico de preços e estatísticas ───────────────────────────
 // Mantém histórico local por usuário/dispositivo. Futuramente pode migrar para Supabase.
+
+
+// ── Correção: identidade estável dos itens ────────────────────────────────
+// Evita troca visual/funcional entre itens após organizar, ordenar ou filtrar.
+function ensureStableItemId(item, idx = 0) {
+  if (!item || typeof item !== "object") return `item-${Date.now()}-${idx}`;
+  if (item.id) return item.id;
+  const base = [
+    item.name || item.nome || "",
+    item.category || item.categoria || "",
+    item.quantity || item.quantidade || "",
+    item.unit || item.unidade || "",
+    item.size || item.tamanho || "",
+    idx,
+  ].join("|");
+  let hash = 0;
+  for (let i = 0; i < base.length; i++) {
+    hash = ((hash << 5) - hash + base.charCodeAt(i)) | 0;
+  }
+  return `item-${Math.abs(hash)}-${idx}`;
+}
+
+function normalizeListItemIds(items = []) {
+  return (Array.isArray(items) ? items : []).map((item, idx) => ({
+    ...item,
+    id: ensureStableItemId(item, idx),
+  }));
+}
+
+function normalizeCategoryItemIds(categories = []) {
+  return (Array.isArray(categories) ? categories : []).map((cat, cidx) => ({
+    ...cat,
+    items: normalizeListItemIds(cat.items || []).map((item, idx) => ({
+      ...item,
+      id: item.id || ensureStableItemId(item, `${cidx}-${idx}`),
+    })),
+  }));
+}
+
+function findItemByStableId(categories = [], itemId) {
+  for (const cat of Array.isArray(categories) ? categories : []) {
+    const found = (cat.items || []).find((item) => item.id === itemId);
+    if (found) return found;
+  }
+  return null;
+}
+
 const PRICE_HISTORY_KEY = "tnl_price_history_v1";
 
 function normalizePriceItemName(name) {
@@ -3493,7 +3540,7 @@ function PriceStatsPanel() {
         <div style={{marginTop:12}}>
           <div style={{fontSize:12,fontWeight:900,color:"#374151",marginBottom:6}}>Itens com maior alta</div>
           {stats.topIncreases.map((it, idx) => (
-            <div key={idx} style={{
+            <div key={item.id || item.name || idx} style={{
               display:"flex",
               justifyContent:"space-between",
               gap:10,
@@ -5133,7 +5180,7 @@ const price=Number(item.price||0);
               </div>
               <div style={{marginTop:12,maxHeight:sharedPreviewExpanded?260:158,overflow:"auto",display:"flex",flexDirection:"column",gap:8,paddingRight:4}}>
                 {visibleItems.map((row,idx)=>(
-                  <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
+                  <div key={item.id || item.name || idx} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
                     <span style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.item.name}</span>
                     <span style={{color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(row.item.qty||1,row.item.unit||"unidade")}</span>
                   </div>
@@ -5410,7 +5457,7 @@ const price=Number(item.price||0);
                 {pendingItems.map((item,i)=>{
                   const emb=item.embalagem||"";
                   return(
-                    <div key={i} style={{padding:"11px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
+                    <div key={item.id || item.name || i} style={{padding:"11px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
                       <span style={{fontSize:16}}>🛒</span>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -5605,7 +5652,7 @@ const price=Number(item.price||0);
                       Plano de ajuste até voltar ao orçamento
                     </div>
                     {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"#FFFFFF"}}>
+                      <div key={item.id || item.name || i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"#FFFFFF"}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
@@ -6041,3 +6088,4 @@ const price=Number(item.price||0);
     </div>
   );
 }
+// Etapa 6.1: correção de estabilidade dos itens aplicada.
