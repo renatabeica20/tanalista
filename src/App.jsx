@@ -3228,10 +3228,15 @@ export default function App(){
   };
 
   const makeShareUrl=(sharedId)=>{
+    const encoded=encodeURIComponent(sharedId);
     const origin=window.location?.origin;
-    if(origin && origin!=="null") return `${origin}/l/${encodeURIComponent(sharedId)}`;
-    const href=String(window.location?.href || "").split("?")[0].split("#")[0].replace(/\/+$|\/l\/.*$|\/lista\/.*$/g, "");
-    return `${href}/l/${encodeURIComponent(sharedId)}`;
+    if(origin && origin!=="null") return `${origin}/?lista=${encoded}`;
+    const href=String(window.location?.href || "").split("?")[0].split("#")[0]
+      .replace(/\/l\/.*$/,"/")
+      .replace(/\/lista\/.*$/,"/")
+      .replace(/\/index\.html$/,"/")
+      .replace(/\/+$/,"/");
+    return `${href}?lista=${encoded}`;
   };
 
   const extractSharedIdFromUrl=()=>{
@@ -3410,7 +3415,8 @@ export default function App(){
       if(!getAppUserName()){
         setUserNameModal(true);
       }
-      try { window.history.replaceState({}, document.title, window.location.origin + "/l/" + encodeURIComponent(sharedId)); } catch {}
+      // Mantém o link em formato de query string para evitar 404 em hospedagens SPA/Vercel sem rewrite.
+      try { window.history.replaceState({}, document.title, window.location.origin + "/?lista=" + encodeURIComponent(sharedId)); } catch {}
     }catch(err){
       showToast("⚠️ Não foi possível abrir a lista: "+(err?.message||"erro"),5200);
     }finally{
