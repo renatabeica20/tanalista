@@ -3638,7 +3638,7 @@ function PriceStatsEntryCard({ onClick }) {
         background:"#FFFFFF",
         borderRadius:18,
         padding:"14px 16px",
-        margin:"18px 0 32px",
+        margin:"24px 0 40px",
         boxShadow:"0 8px 18px rgba(17,24,39,0.05)",
         cursor:"pointer",
         fontFamily:"inherit",
@@ -5704,9 +5704,9 @@ const [lists,setLists]=useState(()=>{
           
           <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
 
-          <div style={{marginTop:8}}><div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
+          <div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
             Listas recentes
-          </div></div>
+          </div>
 
 {lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
             </div>
