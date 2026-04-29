@@ -3260,6 +3260,37 @@ function gramsToKgFinal(grams) {
 
 // ── ETAPA 6: Histórico de preços e estatísticas ───────────────────────────
 // Mantém histórico local por usuário/dispositivo. Futuramente pode migrar para Supabase.
+
+
+// ── Etapa 6.1 segura: ID estável para evitar troca entre itens ────────────
+function makeStableItemId(item, index = 0) {
+  if (!item || typeof item !== "object") return `item-${Date.now()}-${index}`;
+  if (item.id) return item.id;
+  const raw = [
+    item.name || item.nome || "",
+    item.category || item.categoria || "",
+    item.quantity || item.quantidade || "",
+    item.unit || item.unidade || "",
+    item.size || item.tamanho || "",
+    index
+  ].join("|");
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  }
+  return `item-${Math.abs(hash)}-${index}`;
+}
+
+function withStableItemIds(categories) {
+  return (Array.isArray(categories) ? categories : []).map((cat, catIndex) => ({
+    ...cat,
+    items: (Array.isArray(cat.items) ? cat.items : []).map((item, itemIndex) => ({
+      ...item,
+      id: item?.id || makeStableItemId(item, `${catIndex}-${itemIndex}`)
+    }))
+  }));
+}
+
 const PRICE_HISTORY_KEY = "tnl_price_history_v1";
 
 function normalizePriceItemName(name) {
@@ -3493,7 +3524,7 @@ function PriceStatsPanel() {
         <div style={{marginTop:12}}>
           <div style={{fontSize:12,fontWeight:900,color:"#374151",marginBottom:6}}>Itens com maior alta</div>
           {stats.topIncreases.map((it, idx) => (
-            <div key={idx} style={{
+            <div key={item?.id || `${item?.name || "item"}-${idx}`} style={{
               display:"flex",
               justifyContent:"space-between",
               gap:10,
@@ -5133,7 +5164,7 @@ const price=Number(item.price||0);
               </div>
               <div style={{marginTop:12,maxHeight:sharedPreviewExpanded?260:158,overflow:"auto",display:"flex",flexDirection:"column",gap:8,paddingRight:4}}>
                 {visibleItems.map((row,idx)=>(
-                  <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
+                  <div key={item?.id || `${item?.name || "item"}-${idx}`} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13,color:"#374151"}}>
                     <span style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.item.name}</span>
                     <span style={{color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(row.item.qty||1,row.item.unit||"unidade")}</span>
                   </div>
