@@ -3355,6 +3355,36 @@ function getPriceComparison(itemName, currentPrice) {
   return { status: "estavel", label: "Preço estável", percent: rounded, previousAverage, currentPrice: current };
 }
 
+
+
+function getItemPriceMemory(itemName) {
+  const key = normalizePriceItemName(itemName);
+  const history = readPriceHistory()
+    .filter((h) => h.itemKey === key)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (!history.length) return null;
+  const last = history[0];
+  const avg = average(history.slice(0, 10).map((h) => h.unitPrice || h.totalPrice));
+  return {
+    lastPrice: Number(last.unitPrice || last.totalPrice || 0),
+    averagePrice: Number((avg || 0).toFixed(2)),
+    lastDate: last.createdAt,
+    count: history.length,
+  };
+}
+
+function PriceMemoryLine({ itemName }) {
+  const memory = getItemPriceMemory(itemName);
+  if (!memory) return null;
+  return (
+    <div style={{fontSize:11,color:"#6B7280",marginTop:4,display:"flex",gap:6,flexWrap:"wrap"}}>
+      <span>Última: <strong>{memory.lastPrice.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong></span>
+      {memory.averagePrice ? <span>· Média: <strong>{memory.averagePrice.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</strong></span> : null}
+    </div>
+  );
+}
+
+
 function getPriceStatsSummary() {
   const history = readPriceHistory();
   if (!history.length) {
@@ -3509,6 +3539,26 @@ function PriceStatsPanel() {
           ))}
         </div>
       ) : null}
+
+      {stats.monthlyTotals.length ? (
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:12,fontWeight:900,color:"#374151",marginBottom:6}}>Evolução mensal registrada</div>
+          {stats.monthlyTotals.slice(-6).map((m, idx) => {
+            const max = Math.max(...stats.monthlyTotals.map(x => Number(x.total || 0)), 1);
+            const width = Math.max(8, Math.round((Number(m.total || 0) / max) * 100));
+            return (
+              <div key={m.month} style={{display:"grid",gridTemplateColumns:"60px 1fr 80px",gap:8,alignItems:"center",fontSize:11,marginTop:6}}>
+                <span style={{fontWeight:800,color:"#4B5563"}}>{m.month}</span>
+                <div style={{height:9,background:"#F3F4F6",borderRadius:999,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${width}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
+                </div>
+                <span style={{fontWeight:900,color:"#111827",textAlign:"right"}}>{m.total.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
     </div>
   );
 }
@@ -4563,9 +4613,7 @@ export default function App(){
 
   const getItemLineTotal=(item)=>{
     if(!item || item.price==null)return 0;
-    
-      try { addPriceHistoryEntry({ itemName: item.name, unitPrice: Number(item.price || 0), totalPrice: Number(item.totalPrice || item.price || 0), quantity: Number(item.quantity || 1), unit: item.unit, listType: currentList?.type || listType, listName: currentList?.name || listName }); } catch {}
-const price=Number(item.price||0);
+    const price=Number(item.price||0);
     const mode=item.priceMode||"unit";
     if(mode==="total")return price;
     if(mode==="perKg"){
@@ -4907,6 +4955,18 @@ const price=Number(item.price||0);
         }
       }
       item.checked=true;
+      try {
+        const totalForHistory = getItemLineTotal(item);
+        addPriceHistoryEntry({
+          itemName: item.name,
+          unitPrice: Number(item.price || 0),
+          totalPrice: Number(totalForHistory || item.price || 0),
+          quantity: Number(item.qty || 1),
+          unit: item.unit || "unidade",
+          listType: currentList?.type || listType,
+          listName: currentList?.name || listName
+        });
+      } catch {}
     }
     updateList(l);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
@@ -5712,7 +5772,7 @@ const price=Number(item.price||0);
                       {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
                         const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
-                        const realII=cat.items.findIndex(it=>it===item);
+                        const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
                         // Monta descrição e linha de preço
@@ -5762,6 +5822,7 @@ const price=Number(item.price||0);
                                   <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
                               </div>
+                              {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
                             <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
                           </div>
@@ -5833,8 +5894,11 @@ const price=Number(item.price||0);
                 const temp={...item,qty:(numberFromText(mQtyText)||mQty),price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
                 const total=getItemLineTotal(temp);
                 return (
-                  <div style={{fontSize:13,fontWeight:800,marginTop:8,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
-                    Total calculado: {fmtR(total)}
+                  <div style={{marginTop:8}}>
+                    <div style={{fontSize:13,fontWeight:800,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
+                      Total calculado: {fmtR(total)}
+                    </div>
+                    <PriceInsightBadge itemName={item.name} price={parseBRL(mPriceText)} />
                   </div>
                 );
               })()}
