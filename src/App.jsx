@@ -3634,43 +3634,73 @@ function PriceStatsEntryCard({ onClick }) {
       style={{
         width:"100%",
         boxSizing:"border-box",
-        border:"1px solid #E9D5FF",
-        background:"linear-gradient(135deg,#FFFFFF,#FAF7FF)",
-        borderRadius:24,
-        padding:"18px 18px",
-        margin:"12px 0 22px",
-        boxShadow:"0 12px 28px rgba(109,40,217,0.08)",
+        border:"1px solid #E5E7EB",
+        background:"#FFFFFF",
+        borderRadius:18,
+        padding:"14px 16px",
+        margin:"18px 0 22px",
+        boxShadow:"0 8px 18px rgba(17,24,39,0.05)",
         cursor:"pointer",
         fontFamily:"inherit",
         textAlign:"left",
         display:"flex",
         alignItems:"center",
         justifyContent:"space-between",
-        gap:14
+        gap:12,
+        clear:"both"
       }}
     >
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
         <div style={{
-          width:46,height:46,borderRadius:16,
-          display:"flex",alignItems:"center",justifyContent:"center",
-          background:"linear-gradient(135deg,#EDE9FE,#F5F3FF)",
+          width:40,
+          height:40,
+          borderRadius:14,
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"center",
+          background:"#F5F3FF",
           color:"#5B21B6",
-          fontSize:24,
+          fontSize:21,
           flexShrink:0
         }}>📊</div>
         <div style={{minWidth:0}}>
-          <div style={{fontWeight:900,color:"#4C1D95",fontSize:18,lineHeight:1.15}}>Estatísticas de preços</div>
-          <div style={{fontSize:13,color:"#6B7280",marginTop:4,lineHeight:1.35}}>Toque para visualizar suas análises de compra</div>
+          <div style={{
+            fontWeight:900,
+            color:"#4C1D95",
+            fontSize:16,
+            lineHeight:1.15,
+            whiteSpace:"nowrap",
+            overflow:"hidden",
+            textOverflow:"ellipsis"
+          }}>
+            Estatísticas de preços
+          </div>
+          <div style={{
+            fontSize:12,
+            color:"#6B7280",
+            marginTop:3,
+            lineHeight:1.3,
+            whiteSpace:"nowrap",
+            overflow:"hidden",
+            textOverflow:"ellipsis"
+          }}>
+            Ver análise de variação dos itens comprados
+          </div>
         </div>
       </div>
       <div style={{
-        width:34,height:34,borderRadius:"50%",
-        display:"flex",alignItems:"center",justifyContent:"center",
-        background:"#FFFFFF",
+        width:30,
+        height:30,
+        borderRadius:12,
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        background:"#F9FAFB",
         border:"1px solid #E5E7EB",
         color:"#6D28D9",
         fontWeight:900,
-        flexShrink:0
+        flexShrink:0,
+        fontSize:18
       }}>›</div>
     </button>
   );
@@ -5671,13 +5701,14 @@ const [lists,setLists]=useState(()=>{
 
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
 
-          <div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
-            <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Listas recentes</div>
-          </div>
+          
           <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
 
+          <div style={{width:"100%",boxSizing:"border-box",clear:"both",display:"block"}}>
+            Listas recentes
+          </div>
 
-              {lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
+{lists.length>0&&<div style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{lists.length} {lists.length===1?"lista":"listas"}</div>}
             </div>
             {lists.length===0?(
               <div style={{textAlign:"center",padding:"28px 20px",color:"#6B7280",background:"#FFFFFF",border:"1px dashed #D1D5DB",borderRadius:24,boxShadow:"0 12px 28px rgba(17,24,39,0.04)"}}>
