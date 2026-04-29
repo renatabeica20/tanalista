@@ -1849,6 +1849,16 @@ function fmtBRL(val) {
     maximumFractionDigits: 2,
   }).format(Number(val));
 }
+
+function formatMoneyInput(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const value = Number(digits) / 100;
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 function fmtR(val) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -5050,11 +5060,12 @@ export default function App(){
               <label style={lbl}>{mPriceMode==="total"?"Preço total pago":mPriceMode==="perKg"?"Preço do kg":mPriceMode==="perLiter"?"Preço do litro":mPriceMode==="package"?"Preço do pacote":"Preço da unidade"}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-                <input value={mPriceText} onChange={e=>setMPriceText(e.target.value.replace(/[^0-9.,]/g,""))}
-                  placeholder="0,00" inputMode="decimal"
+                <input value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
+                  placeholder="0,00" inputMode="numeric"
                   style={inp({paddingLeft:44})}
                   onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
+              <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Digite apenas números. Ex.: 800 vira R$ 8,00.</div>
               {mPriceText&&parseBRL(mPriceText)!=null&&(()=>{
                 const temp={...item,qty:mQty,price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
                 const total=getItemLineTotal(temp);
@@ -5121,7 +5132,7 @@ export default function App(){
             <label style={lbl}>Preço (R$) — opcional</label>
             <div style={{position:"relative"}}>
               <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-              <input value={exPrice} onChange={e=>setExPrice(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="0,00" inputMode="decimal"
+              <input value={exPrice} onChange={e=>setExPrice(formatMoneyInput(e.target.value))} placeholder="0,00" inputMode="numeric"
                 style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
             </div>
           </div>
