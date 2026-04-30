@@ -5319,47 +5319,63 @@ const [lists,setLists]=useState(()=>{
 
   const normalizeUnitForCalc=(unit)=>String(unit||"unidade").trim().toLowerCase();
 
+  const normalizeCalcNumber=(value, fallback=0)=>{
+    if(value==null || value==="")return fallback;
+    if(typeof value==="number")return Number.isFinite(value)?value:fallback;
+    const clean=String(value).replace(/[^0-9,.-]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".");
+    const n=Number(clean);
+    return Number.isFinite(n)?n:fallback;
+  };
+
+  const normalizePriceMode=(mode)=>{
+    const m=String(mode||"").trim();
+    if(["total","perKg","perLiter","package","unit"].includes(m))return m;
+    return "";
+  };
+
   const inferDefaultPriceMode=(item)=>{
     const u=normalizeUnitForCalc(item?.unit);
     const name=normalizePlainText(item?.name||"");
-    if(["kg","g"].includes(u))return "perKg";
-    if(["l","lt","litro","litros","ml"].includes(u))return "perLiter";
-    if(/batata|tomate|cebola|alho|banana|maca|laranja|limao|cenoura|carne|frango|peixe|salmao|picanha|alcatra|patinho|queijo|presunto|mortadela/.test(name))return "perKg";
-    return "total";
+    if(["kg","quilo","quilos","g","grama","gramas"].includes(u))return "perKg";
+    if(["l","lt","litro","litros","ml","mililitro","mililitros"].includes(u))return "perLiter";
+    if(/abacate|abobrinha|alcatra|alho|banana|batata|berinjela|beterraba|brocolis|carne|cebola|cenoura|chuchu|contrafile|costela|couve|file|frango|laranja|limao|maca|mamao|mandioca|manga|melancia|mel[aã]o|mortadela|paleta|patinho|peixe|pepino|picanha|presunto|queijo|repolho|salmao|tomate|uva/.test(name))return "perKg";
+    return "unit";
   };
 
   const qtyToKg=(item)=>{
-    const q=Number(item?.qty||0);
+    const q=normalizeCalcNumber(item?.qty,0);
     const u=normalizeUnitForCalc(item?.unit);
-    if(u==="kg")return q;
-    if(u==="g")return q/1000;
-    const stored=Number(item?.purchaseWeightKg||0);
+    if(["kg","quilo","quilos"].includes(u))return q;
+    if(["g","grama","gramas"].includes(u))return q/1000;
+    const stored=normalizeCalcNumber(item?.purchaseWeightKg,0);
     return stored>0?stored:null;
   };
 
   const qtyToLiter=(item)=>{
-    const q=Number(item?.qty||0);
+    const q=normalizeCalcNumber(item?.qty,0);
     const u=normalizeUnitForCalc(item?.unit);
     if(["l","lt","litro","litros"].includes(u))return q;
-    if(u==="ml")return q/1000;
-    const stored=Number(item?.purchaseVolumeL||0);
+    if(["ml","mililitro","mililitros"].includes(u))return q/1000;
+    const stored=normalizeCalcNumber(item?.purchaseVolumeL,0);
     return stored>0?stored:null;
   };
 
   const getItemLineTotal=(item)=>{
     if(!item || item.price==null)return 0;
-    const price=Number(item.price||0);
-    const mode=item.priceMode||"unit";
-    if(mode==="total")return price;
+    const price=normalizeCalcNumber(item.price,0);
+    if(price<=0)return 0;
+    const mode=normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
+    if(mode==="total")return Number(price.toFixed(2));
     if(mode==="perKg"){
       const kg=qtyToKg(item);
-      return kg!=null?price*kg:price;
+      return Number(((kg!=null?price*kg:price)).toFixed(2));
     }
     if(mode==="perLiter"){
       const liters=qtyToLiter(item);
-      return liters!=null?price*liters:price;
+      return Number(((liters!=null?price*liters:price)).toFixed(2));
     }
-    return price*Number(item.qty||1);
+    const qty=Math.max(1,normalizeCalcNumber(item.qty,1));
+    return Number((price*qty).toFixed(2));
   };
 
   const getPriceDescription=(item)=>{
@@ -5692,7 +5708,7 @@ const [lists,setLists]=useState(()=>{
       if(p!=null&&p>=0){
         item.price=p;
         item.priceRecordedAt=new Date().toISOString();
-        item.priceMode=item.priceMode || inferDefaultPriceMode(item);
+        item.priceMode=normalizePriceMode(mPriceMode) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
         if(item.priceMode==="perKg"){
           const kg=numberFromText(mWeightText);
           if(kg&&kg>0)item.purchaseWeightKg=kg;
