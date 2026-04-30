@@ -880,14 +880,14 @@ function getListOriginMeta(list) {
 }
 
 const LIST_TYPES = [
-  {id:"mercado",   label:"Supermercado"},
-  {id:"festa",     label:"Eventos"},
-  {id:"construcao",label:"Construção"},
-  {id:"eletrico",  label:"Elétrico"},
-  {id:"escolar",   label:"Escolar"},
-  {id:"farmacia",  label:"Farmácia"},
-  {id:"condominio",label:"Condomínio"},
-  {id:"outros",    label:"Outras"},
+  {id:"mercado",   label:"🛒 Supermercado"},
+  {id:"festa",     label:"🎉 Eventos"},
+  {id:"construcao",label:"🏗️ Construção"},
+  {id:"eletrico",  label:"⚡ Elétrico"},
+  {id:"escolar",   label:"🏫 Escolar"},
+  {id:"farmacia",  label:"💊 Farmácia"},
+  {id:"condominio",label:"🏢 Condomínio"},
+  {id:"outros",    label:"📦 Outras"},
 ];
 
 const TYPE_NAMES = {
@@ -2836,10 +2836,13 @@ function demoOrganize(items) {
 
 // ── ESTILOS BASE ───────────────────────────────────────────────────────────
 const inp = (extra={})=>({width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:18,fontSize:16,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",...extra});
-const lbl = {fontWeight:700,fontSize:13,color:"#4A5568",marginBottom:8,display:"block"};
+const lbl = {fontWeight:800,fontSize:12,color:"#374151",marginBottom:9,display:"block",textTransform:"uppercase",letterSpacing:"0.04em"};
 const chip = (sel,bc="#6D28D9",bg="#F5F3FF",tc="#6D28D9")=>({flexShrink:0,padding:"9px 14px",borderRadius:180,border:`2px solid ${sel?bc:"#E5E7EB"}`,background:sel?bg:"white",fontWeight:700,fontSize:13,color:sel?tc:"#6B7280",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"});
 const btnG = {width:"100%",padding:16,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
 const btnGr = {padding:"13px 16px",borderRadius:18,background:"#FFFFFF",border:"2px solid #E5E7EB",color:"#4A5568",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"};
+const createCard = {background:"rgba(255,255,255,0.98)",borderRadius:24,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 14px 30px rgba(17,24,39,0.07)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"};
+const createSecondaryBtn = {width:"100%",minHeight:52,padding:"13px 14px",borderRadius:18,background:"#FFFFFF",border:"1.5px solid #E5E7EB",color:"#374151",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 8px 20px rgba(17,24,39,0.06)"};
+const createPrimaryBtn = {width:"100%",minHeight:58,padding:"16px 18px",borderRadius:22,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:17,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 16px 34px rgba(109,40,217,0.30)"};
 const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E5E7EB",background:"#FFFFFF",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
 
 function ModalSheet({onClose,children}){
@@ -6288,7 +6291,7 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+            <div style={createCard}>
               <label style={lbl}>Orçamento</label>
               <div>
                 <div style={{position:"relative"}}>
@@ -6304,7 +6307,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* NOME DA LISTA */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+            <div style={createCard}>
               <label style={lbl}>Nome da lista</label>
               <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
                 placeholder="Ex: Compras da semana..."
@@ -6315,7 +6318,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* TIPO DE LISTA */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+            <div style={createCard}>
               <label style={lbl}>Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -6325,7 +6328,7 @@ const [lists,setLists]=useState(()=>{
                 <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease"}}>
+            <div style={createCard}>
               <label style={lbl}>Adicionar itens</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
@@ -6338,11 +6341,11 @@ const [lists,setLists]=useState(()=>{
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>setShowPasteModal(true)}
-                  style={{width:"100%",padding:"15px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(109,40,217,0.08)"}}>
+                  style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
                   Colar lista
                 </button>
                 <button onClick={startVoiceInput} disabled={voiceProcessing}
-                  style={{width:"100%",padding:"15px",borderRadius:20,background:voiceListening?"#FEF2F2":"#ECFDF5",border:`2px solid ${voiceListening?"#DC2626":"#16A34A"}`,color:voiceListening?"#DC2626":"#15803D",fontWeight:900,fontSize:15,cursor:voiceProcessing?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(22,163,74,0.08)",opacity:voiceProcessing?0.65:1}}>
+                  style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1}}>
                   {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
                 </button>
               </div>
@@ -6373,7 +6376,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             )}
             <button onClick={organizeList} disabled={loading||pendingItems.length===0}
-              style={{...btnG,padding:18,borderRadius:22,fontSize:17,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 32px rgba(109,40,217,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+              style={{...createPrimaryBtn,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
               {editingListId?"Salvar alterações":"Organizar lista"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
