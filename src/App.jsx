@@ -5746,7 +5746,7 @@ const [lists,setLists]=useState(()=>{
 
   const visibleLists = Array.isArray(lists) ? lists.filter(l=>!wasListDeletedLocally(l)) : [];
   const recentLists = visibleLists.slice(0,1);
-  const historyLists = visibleLists.slice(1);
+  const historyLists = visibleLists;
 
   return(
     <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
@@ -5906,13 +5906,13 @@ const [lists,setLists]=useState(()=>{
               <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>
                 Listas recentes
               </div>
-              {lists.length>0&&(
+              {visibleLists.length>0&&(
                 <div style={{fontSize:12,color:"#6B7280",fontWeight:800,flexShrink:0}}>
-                  {lists.length} {lists.length===1?"lista salva":"listas salvas"}
+                  {visibleLists.length} {visibleLists.length===1?"lista salva":"listas salvas"}
                 </div>
               )}
             </div>
-            {lists.length===0?(
+            {visibleLists.length===0?(
               <div style={{textAlign:"center",padding:"28px 20px",color:"#6B7280",background:"#FFFFFF",border:"1px dashed #D1D5DB",borderRadius:24,boxShadow:"0 12px 28px rgba(17,24,39,0.04)"}}>
                 <p style={{fontSize:15,lineHeight:1.6,fontWeight:900,margin:"0 0 6px",color:"#111827"}}>Nenhuma lista ainda</p>
                 <p style={{fontSize:13,lineHeight:1.5,fontWeight:600,margin:0}}>Entre em Compras para criar sua primeira lista.</p>
