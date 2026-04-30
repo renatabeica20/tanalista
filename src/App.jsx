@@ -880,14 +880,14 @@ function getListOriginMeta(list) {
 }
 
 const LIST_TYPES = [
-  {id:"mercado",   label:"🛒 Supermercado"},
-  {id:"festa",     label:"🎉 Eventos"},
-  {id:"construcao",label:"🏗️ Construção"},
-  {id:"eletrico",  label:"⚡ Elétrico"},
-  {id:"escolar",   label:"🏫 Escolar"},
-  {id:"farmacia",  label:"💊 Farmácia"},
-  {id:"condominio",label:"🏢 Condomínio"},
-  {id:"outros",    label:"📦 Outras"},
+  {id:"mercado",   label:"Supermercado"},
+  {id:"festa",     label:"Eventos"},
+  {id:"construcao",label:"Construção"},
+  {id:"eletrico",  label:"Elétrico"},
+  {id:"escolar",   label:"Escolar"},
+  {id:"farmacia",  label:"Farmácia"},
+  {id:"condominio",label:"Condomínio"},
+  {id:"outros",    label:"Outras"},
 ];
 
 const TYPE_NAMES = {
@@ -1472,6 +1472,46 @@ function getProductConfig(name) {
       tipos:["Pera","Bahia","Lima","Valência","Kinkan"],
       pesos:[],
       unidades:["kg","unidade","saco 3kg"]
+    };
+
+  if (/\bmamão\b|\bmamao\b/.test(n))
+    return {
+      marcas:["Produção regional","Orgânico"],
+      tipos:["Formosa","Papaya","Havaí"],
+      pesos:[],
+      unidades:["kg","unidade","bandeja"]
+    };
+
+  if (/\bmanga\b/.test(n))
+    return {
+      marcas:["Produção regional","Orgânico"],
+      tipos:["Tommy","Palmer","Espada","Rosa"],
+      pesos:[],
+      unidades:["kg","unidade","bandeja"]
+    };
+
+  if (/\buva\b/.test(n))
+    return {
+      marcas:["Produção regional","Importada","Orgânico"],
+      tipos:["Thompson","Niágara","Rubi","Vitória","Sem semente"],
+      pesos:[],
+      unidades:["kg","bandeja","cacho"]
+    };
+
+  if (/\bmelão\b|\bmelao\b/.test(n))
+    return {
+      marcas:["Produção regional"],
+      tipos:["Amarelo","Cantaloupe","Gália","Orange"],
+      pesos:[],
+      unidades:["kg","unidade","metade"]
+    };
+
+  if (/\babacaxi\b/.test(n))
+    return {
+      marcas:["Produção regional"],
+      tipos:["Pérola","Havaí"],
+      pesos:[],
+      unidades:["unidade","kg"]
     };
 
   if (/\babacate\b/.test(n))
@@ -2098,7 +2138,7 @@ async function aiOrganize(items, type) {
 ITENS:
 ${list}
 
-Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior.`;
+Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -2464,7 +2504,7 @@ function splitContinuousVoiceIntoChunks(text) {
   const unitWords = "(?:pacotes?|caixas?|fardos?|latas?|garrafas?|unidades?|un|quilos?|kg|gramas?|g|litros?|l|ml|mililitros?|d[uú]zias?|pares?|pe[çc]as?)";
   const sizeWords = "(?:quilos?|kg|gramas?|g|litros?|l|ml|mililitros?)";
   const productWords = [
-    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","manga","pera","pêra","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
+    "arroz","feijao","feijão","macarrao","macarrão","leite","detergente","carne","frango","cerveja","refrigerante","oleo","óleo","azeite","acucar","açúcar","sal","cafe","café","pao","pão","queijo","presunto","manteiga","margarina","iogurte","tomate","cebola","alho","batata","cenoura","banana","maca","maçã","laranja","limao","limão","alface","mamao","mamão","manga","uva","melão","melao","abacaxi","pera","pêra","sabonete","sabonetes","shampoo","condicionador","desodorante","papel","papel higienico","papel higiênico","sabao","sabão","amaciante","desinfetante","agua sanitaria","água sanitária","agua","água","suco","bolacha","biscoito","chocolate","salgadinho","farinha","fuba","fubá","maionese","ketchup","mostarda","molho","extrato","atum","sardinha","milho","ervilha","aveia","pipoca","vinagre","ovos","ovo","linguica","linguiça","salsicha","picanha","costela","peixe","salmao","salmão","pizza","lasanha","sorvete","fralda","absorvente","creme dental","escova","fio dental","copo","prato","garfo","faca","colher","guardanapo","saco de lixo","lixo"
   ];
   const normalizedProducts = productWords
     .map(w => w.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
@@ -2667,7 +2707,7 @@ async function aiParseShoppingText(text, type = "mercado") {
     "- Exemplo: 'três caixas de leite de um litro' => name 'Leite', qty 3, unit 'caixa', volume '1L', embalagem '1L';",
     "- Exemplo: 'um fardo de cerveja lata 350 ml' => name 'Cerveja', qty 1, unit 'fardo', volume '350ml', embalagem 'lata 350ml';",
     "- Exemplo: 'dois fardos de cerveja Heineken long neck com 24 unidades' => name 'Cerveja', marca 'Heineken', tipo 'Long neck', qty 2, unit 'fardo', embalagem 'com 24 unidades'; não crie item separado para 24 unidades;",
-    "- Manga, pera, maçã, banana, tomate e similares são Hortifruti quando a lista for organizada por categoria;",
+    "- Mamão, manga, pera, maçã, banana, tomate, uva, melão, abacaxi e similares são Hortifruti quando a lista for organizada por categoria;",
     "- name deve conter apenas o produto principal, sem quantidade, sem unidade e sem peso/volume;",
     "- unit deve representar a quantidade comprada: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
     "- peso use apenas g/kg quando houver tamanho/peso da embalagem;",
@@ -2731,7 +2771,7 @@ function isQuantityOnlyItemName(name) {
 function inferPreferredCategoryForItem(item) {
   const n = normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "));
   const rules = [
-    { cat: "Hortifruti", keys: ["manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","tomate","alface","cebola","alho","batata","cenoura","melancia","abacate","brocolis","brócolis","verdura","legume","fruta"] },
+    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","tomate","alface","cebola","alho","batata","cenoura","melancia","abacate","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","berinjela","verdura","legume","fruta"] },
     { cat: "Carnes e Aves", keys: ["carne","frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra"] },
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná"] },
     { cat: "Limpeza", keys: ["detergente","sabao","sabão","desinfetante","amaciante","agua sanitaria","água sanitária","limpador","vassoura","esponja"] },
@@ -2762,7 +2802,7 @@ function demoOrganize(items) {
     [["arroz","feijão","macarrão","farinha","açúcar","sal","azeite","óleo","molho","vinagre","extrato","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
     [["carne","frango","peixe","linguiça","bacon","costela","picanha","bife","filé","salsicha","hambúrguer"],"Carnes e Aves"],
     [["leite","iogurte","queijo","manteiga","requeijão","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru"],"Frios e Laticínios"],
-    [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis","manga","pera","pêra"],"Hortifruti"],
+    [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis","mamão","mamao","manga","uva","melão","melao","abacaxi","abobrinha","beterraba","pepino","repolho","couve","berinjela","pera","pêra"],"Hortifruti"],
     [["pão de queijo","lasanha","pizza","sorvete","batata frita"],"Congelados"],
     [["detergente","sabão","desinfetante","vassoura","esponja","limpador","água sanitária","amaciante","palha","multiuso","rodo"],"Limpeza"],
     [["shampoo","sabonete","creme dental","escova","fio dental","desodorante","condicionador","absorvente","fralda","papel higiênico"],"Higiene e Perfumaria"],
@@ -6047,7 +6087,7 @@ const [lists,setLists]=useState(()=>{
               {getAppUserName()&&(
                 <div style={{alignSelf:"stretch",display:"flex",justifyContent:"center"}}>
                   <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:999,background:"rgba(255,255,255,0.86)",border:"1px solid #DDD6FE",boxShadow:"0 10px 24px rgba(109,40,217,0.08)",fontSize:13,color:"#4C1D95",fontWeight:900}}>
-                    <span>👋</span><span>Olá, {getAppUserName()}</span>
+                    <span>Olá, {getAppUserName()}</span>
                   </div>
                 </div>
               )}
@@ -6242,14 +6282,14 @@ const [lists,setLists]=useState(()=>{
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
-              {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()} 👋</div>)}
+              {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()}</div>)}
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
             </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ORÇAMENTO */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
-              <label style={lbl}>💰 Orçamento</label>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+              <label style={lbl}>Orçamento</label>
               <div>
                 <div style={{position:"relative"}}>
                   <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#6B7280",fontSize:15,pointerEvents:"none",transition:"color .25s ease, font-weight .25s ease"}}>R$</span>
@@ -6264,8 +6304,8 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* NOME DA LISTA */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
-              <label style={lbl}>📝 Nome da lista</label>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+              <label style={lbl}>Nome da lista</label>
               <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
                 placeholder="Ex: Compras da semana..."
                 style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.14)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827",transition:"border-color .25s ease, box-shadow .25s ease, font-weight .25s ease, color .25s ease"})}
@@ -6275,8 +6315,8 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* TIPO DE LISTA */}
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
-              <label style={lbl}>🏷️ Tipo de lista</label>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease, transform .25s ease"}}>
+              <label style={lbl}>Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
                   style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",cursor:"pointer",paddingRight:42}}>
@@ -6285,7 +6325,7 @@ const [lists,setLists]=useState(()=>{
                 <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
-            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1.5px solid #C4B5FD",boxShadow:"0 14px 32px rgba(109,40,217,0.10)",transition:"border-color .25s ease, box-shadow .25s ease"}}>
+            <div style={{background:"rgba(255,255,255,0.98)",borderRadius:22,padding:18,border:"1px solid #E5E7EB",boxShadow:"0 12px 28px rgba(17,24,39,0.06)",transition:"border-color .25s ease, box-shadow .25s ease"}}>
               <label style={lbl}>Adicionar itens</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
@@ -6293,17 +6333,17 @@ const [lists,setLists]=useState(()=>{
                   placeholder="Digite um item da lista"
                   style={inp({height:56})} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 <button onClick={handleAddItem}
-                  style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>＋ Inserir</button>
+                  style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>Inserir</button>
               </div>
-              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>💡 Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
+              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>setShowPasteModal(true)}
                   style={{width:"100%",padding:"15px",borderRadius:20,background:"#F5F3FF",border:"2px solid #6D28D9",color:"#6D28D9",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(109,40,217,0.08)"}}>
-                  📋 Colar lista
+                  Colar lista
                 </button>
                 <button onClick={startVoiceInput} disabled={voiceProcessing}
                   style={{width:"100%",padding:"15px",borderRadius:20,background:voiceListening?"#FEF2F2":"#ECFDF5",border:`2px solid ${voiceListening?"#DC2626":"#16A34A"}`,color:voiceListening?"#DC2626":"#15803D",fontWeight:900,fontSize:15,cursor:voiceProcessing?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 10px 22px rgba(22,163,74,0.08)",opacity:voiceProcessing?0.65:1}}>
-                  {voiceListening?"⏹️ Parar fala":voiceProcessing?"⏳ IA organizando...":"🎤 Falar lista"}
+                  {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
                 </button>
               </div>
             </div>
@@ -6334,7 +6374,7 @@ const [lists,setLists]=useState(()=>{
             )}
             <button onClick={organizeList} disabled={loading||pendingItems.length===0}
               style={{...btnG,padding:18,borderRadius:22,fontSize:17,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 32px rgba(109,40,217,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
-              {editingListId?"💾 Salvar alterações":"✨ Organizar Lista"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+              {editingListId?"Salvar alterações":"Organizar lista"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
         </div>
@@ -6425,7 +6465,7 @@ const [lists,setLists]=useState(()=>{
             <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 54%,#8B5CF6 100%)",borderRadius:28,padding:"18px 18px 20px",boxShadow:"0 22px 48px rgba(91,33,182,0.24)",border:"1px solid rgba(255,255,255,0.28)"}}>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 18% 8%,rgba(255,255,255,0.22),transparent 32%),radial-gradient(circle at 90% 0%,rgba(255,255,255,0.14),transparent 34%)",pointerEvents:"none"}}/>
               <div style={{position:"relative",zIndex:1}}>
-                {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:12,textAlign:"left"}}>Olá, {getAppUserName()} 👋</div>)}
+                {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:12,textAlign:"left"}}>Olá, {getAppUserName()}</div>)}
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>setScreen("home")}
                     style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.28)",borderRadius:"50%",width:38,height:38,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)"}}>←</button>
