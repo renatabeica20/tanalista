@@ -1927,7 +1927,7 @@ function getProductConfig(name) {
       unidades:["pacote","fardo","caixa"]
     };
 
-  if (/len[cç]o[s]? umedecido[s]?|umedecido[s]?/.test(n))
+  if (/len[cç]o[s]?\s*umedecido[s]?|lenco[s]?\s*umedecido[s]?|umedecido[s]?/.test(n))
     return {
       marcas:["Pampers","Huggies","WetKiss","Turma da Mônica","OB","Cottonbaby"],
       tipos:["Bebê sem perfume","Bebê com perfume","Adulto antibacteriano","Íntimo","Facial"],
@@ -2178,6 +2178,14 @@ function normalizePlainText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .trim();
+}
+
+function normalizeTextForCategory(value) {
+  return normalizePlainText(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(pct|pcte|pacote|pacotes|cx|caixa|caixas|un|unid|unidade|unidades|kg|g|ml|l)\b/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -2769,14 +2777,14 @@ function isQuantityOnlyItemName(name) {
 }
 
 function inferPreferredCategoryForItem(item) {
-  const n = normalizePlainText([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
-  const has = (...keys) => keys.some(k => n.includes(normalizePlainText(k)));
+  const n = normalizeTextForCategory([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
+  const has = (...keys) => keys.some(k => n.includes(normalizeTextForCategory(k)));
 
   // Regras específicas primeiro. Isso evita conflitos como "molho de tomate" cair em Hortifruti.
   if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
   if (has("bolacha", "biscoito", "cookie", "oreo", "trakinas", "wafer", "chocolate", "salgadinho", "chips", "pipoca doce")) return "Snacks e Doces";
   if (has("colorau", "páprica", "paprica", "orégano", "oregano", "cominho", "tempero", "sazon", "caldo knorr", "caldo maggi", "alho e sal")) return "Temperos e Condimentos";
-  if (has("lenço umedecido", "lenco umedecido", "lenços umedecidos", "lencos umedecidos", "umedecido", "umedecidos", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
+  if (/\blencos?\s+umedecid/.test(n) || /\bumedecid/.test(n) || has("lenço umedecido", "lenco umedecido", "lenços umedecidos", "lencos umedecidos", "umedecido", "umedecidos", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
   if (has("papel toalha", "guardanapo", "copo descartável", "copo descartavel", "prato descartável", "prato descartavel", "talher descartável", "talher descartavel", "papel alumínio", "papel aluminio", "papel filme", "saco freezer", "saco plástico", "saco plastico")) return "Descartáveis e Embalagens";
   if (has("pilha", "bateria", "lâmpada", "lampada", "tomada", "interruptor", "extensão", "extensao", "cabo elétrico", "cabo eletrico", "fio elétrico", "fio eletrico", "disjuntor")) return "Elétrica";
   if (has("bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
