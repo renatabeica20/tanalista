@@ -1927,7 +1927,7 @@ function getProductConfig(name) {
       unidades:["pacote","fardo","caixa"]
     };
 
-  if (/lenço umedecido/.test(n))
+  if (/len[cç]o[s]?\s*umedecido[s]?|lenco[s]?\s*umedecido[s]?|umedecido[s]?/.test(n))
     return {
       marcas:["Pampers","Huggies","WetKiss","Turma da Mônica","OB","Cottonbaby"],
       tipos:["Bebê sem perfume","Bebê com perfume","Adulto antibacteriano","Íntimo","Facial"],
@@ -2178,6 +2178,14 @@ function normalizePlainText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .trim();
+}
+
+function normalizeTextForCategory(value) {
+  return normalizePlainText(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(pct|pcte|pacote|pacotes|cx|caixa|caixas|un|unid|unidade|unidades|kg|g|ml|l)\b/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -2769,21 +2777,26 @@ function isQuantityOnlyItemName(name) {
 }
 
 function inferPreferredCategoryForItem(item) {
-  const n = normalizePlainText([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
-  const has = (...keys) => keys.some(k => n.includes(normalizePlainText(k)));
+  const n = normalizeTextForCategory([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
+  const has = (...keys) => keys.some(k => n.includes(normalizeTextForCategory(k)));
+  const hasWord = (...keys) => keys.some((k) => {
+    const escaped = normalizeTextForCategory(k).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(n);
+  });
 
-  // Regras específicas primeiro. Isso evita conflitos como "molho de tomate" cair em Hortifruti.
+  // Regras específicas primeiro. Isso evita conflitos como "molho de tomate" cair em Hortifruti
+  // e evita que "macarrão" seja confundido com "maçã".
   if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
+  if (has("farinha de mandioca", "farinha mandioca", "farofa de mandioca", "polvilho", "tapioca")) return "Mercearia";
   if (has("bolacha", "biscoito", "cookie", "oreo", "trakinas", "wafer", "chocolate", "salgadinho", "chips", "pipoca doce")) return "Snacks e Doces";
   if (has("colorau", "páprica", "paprica", "orégano", "oregano", "cominho", "tempero", "sazon", "caldo knorr", "caldo maggi", "alho e sal")) return "Temperos e Condimentos";
-  if (has("lenço umedecido", "lenco umedecido", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
+  if (/\blencos?\s+umedecid/.test(n) || /\bumedecid/.test(n) || has("lenço umedecido", "lenco umedecido", "lenços umedecidos", "lencos umedecidos", "umedecido", "umedecidos", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
   if (has("papel toalha", "guardanapo", "copo descartável", "copo descartavel", "prato descartável", "prato descartavel", "talher descartável", "talher descartavel", "papel alumínio", "papel aluminio", "papel filme", "saco freezer", "saco plástico", "saco plastico")) return "Descartáveis e Embalagens";
   if (has("pilha", "bateria", "lâmpada", "lampada", "tomada", "interruptor", "extensão", "extensao", "cabo elétrico", "cabo eletrico", "fio elétrico", "fio eletrico", "disjuntor")) return "Elétrica";
   if (has("bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
   if (has("pasta de dente", "creme dental", "sabonete", "shampoo", "condicionador", "desodorante", "escova de dente", "fio dental", "papel higiênico", "papel higienico", "absorvente", "barbeador", "aparelho de barbear")) return "Higiene e Perfumaria";
 
   const rules = [
-    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta"] },
     { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","aveia","granola","cereal matinal","leite condensado","creme de leite"] },
     { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
     { cat: "Cafés e Chás", keys: ["cafe","café","cha","chá","achocolatado","nescau","toddy"] },
@@ -2798,8 +2811,10 @@ function inferPreferredCategoryForItem(item) {
     { cat: "Ferragens", keys: ["prego","parafuso","bucha","porca","arruela"] },
   ];
   for (const rule of rules) {
-    if (rule.keys.some(k => n.includes(normalizePlainText(k)))) return rule.cat;
+    if (rule.keys.some(k => n.includes(normalizeTextForCategory(k)))) return rule.cat;
   }
+
+  if (hasWord("mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta")) return "Hortifruti";
   return "";
 }
 
@@ -2822,7 +2837,7 @@ function demoOrganize(items) {
     [["molho de tomate","extrato de tomate","polpa de tomate","tomate pelado"],"Mercearia"],
     [["bolacha","biscoito","cookie","oreo","chocolate","salgadinho","snack","chips","barra","pipoca"],"Snacks e Doces"],
     [["colorau","paprica","páprica","tempero","orégano","oregano","cominho","sazon"],"Temperos e Condimentos"],
-    [["lenço umedecido","lenco umedecido","fralda","pomada bebê","pomada bebe"],"Bebês"],
+    [["lenço umedecido","lenco umedecido","lenços umedecidos","lencos umedecidos","umedecido","umedecidos","umedecid","fralda","pomada bebê","pomada bebe"],"Bebês"],
     [["papel toalha","guardanapo","copo descartável","copo descartavel","prato descartável","prato descartavel","talher","papel alumínio","papel aluminio","papel filme","embalagem"],"Descartáveis e Embalagens"],
     [["pilha","bateria","fio","cabo","tomada","interruptor","disjuntor","lampada","lâmpada","extensao","extensão"],"Elétrica"],
     [["bombril","palha","coala","detergente","sabão","sabao","desinfetante","vassoura","esponja","limpador","água sanitária","agua sanitaria","amaciante","lava roupa","omo","multiuso","rodo","saco de lixo"],"Limpeza"],
