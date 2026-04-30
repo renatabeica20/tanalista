@@ -4870,10 +4870,16 @@ const [lists,setLists]=useState(()=>{
         ? lists.map(l=>l.id===editingOriginal.id?newList:l)
         : [newList,...lists];
       saveLists(nl);
-      setCurrentList(newList);
       setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
-      setScreen("list");setSearch("");setCollapsedCats({});
-      showToast(editingOriginal?"✅ Alterações salvas na lista!":"✅ Lista organizada!");
+      setSearch("");setCollapsedCats({});
+      if(editingOriginal){
+        setCurrentList(null);
+        setScreen("home");
+      }else{
+        setCurrentList(newList);
+        setScreen("list");
+      }
+      showToast(editingOriginal?"✅ Alterações salvas. Voltando para o início.":"✅ Lista organizada!");
     }finally{setLoading(false);}
   };
 
@@ -5972,7 +5978,7 @@ const [lists,setLists]=useState(()=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=Boolean(list.sharedId);
+                  const shared=Boolean(list.isShared || list.sharedAt || list.imported || list.importedFrom || list.sharedMode);
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:24,boxShadow:"0 16px 38px rgba(17,24,39,0.08)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
@@ -6035,7 +6041,7 @@ const [lists,setLists]=useState(()=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=Boolean(list.sharedId);
+                  const shared=Boolean(list.isShared || list.sharedAt || list.imported || list.importedFrom || list.sharedMode);
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:22,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
