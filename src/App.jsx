@@ -2805,9 +2805,8 @@ const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E5E7EB",b
 function ModalSheet({onClose,children}){
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
-      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.52)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{background:"#FFFFFF",borderRadius:"26px 26px 0 0",padding:"20px 20px 48px",width:"100%",maxWidth:430,maxHeight:"90vh",overflowY:"auto"}}>
-        <div style={{width:40,height:4,background:"#E5E7EB",borderRadius:2,margin:"0 auto 20px"}}/>
+      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.46)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:18}}>
+      <div style={{background:"#FFFFFF",borderRadius:24,padding:"20px",width:"100%",maxWidth:420,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 70px rgba(17,24,39,0.24)",border:"1px solid rgba(229,231,235,0.95)"}}>
         {children}
       </div>
     </div>
@@ -3645,22 +3644,28 @@ function PriceMonthBadge({ itemName, price, compact = false, recordedAt = null, 
   if (!comparison) return null;
 
   const colors = {
-    acima: { bg:"#FEE2E2", color:"#991B1B", icon:"🔴" },
-    abaixo: { bg:"#DCFCE7", color:"#166534", icon:"🟢" },
-    estavel: { bg:"#FEF3C7", color:"#92400E", icon:"🟡" },
-    novo: { bg:"#EDE9FE", color:"#5B21B6", icon:"ℹ️" },
+    acima: { bg:"#FEE2E2", color:"#991B1B", icon:"↑" },
+    abaixo: { bg:"#DCFCE7", color:"#166534", icon:"↓" },
+    estavel: { bg:"#FEF3C7", color:"#92400E", icon:"→" },
+    novo: { bg:"#EDE9FE", color:"#5B21B6", icon:"i" },
   };
   const c = colors[comparison.status] || colors.novo;
+  const label = compact
+    ? String(comparison.label || "")
+        .replace(" que a última compra", "")
+        .replace(" que o mês anterior", "")
+        .replace("Mesmo preço da última compra", "Mesmo preço")
+    : comparison.label;
 
   return (
     <div style={{
-      marginTop:compact?4:8,
-      padding:compact?"4px 7px":"8px 10px",
-      borderRadius:compact?999:12,
-      background:c.bg,
+      marginTop:compact?5:8,
+      padding:compact?"0":"8px 10px",
+      borderRadius:compact?0:12,
+      background:compact?"transparent":c.bg,
       color:c.color,
-      fontSize:compact?10:12,
-      fontWeight:900,
+      fontSize:compact?11:12,
+      fontWeight:compact?800:900,
       display:"inline-flex",
       alignItems:"center",
       gap:5,
@@ -3668,8 +3673,8 @@ function PriceMonthBadge({ itemName, price, compact = false, recordedAt = null, 
       lineHeight:1.25,
       flexWrap:"wrap"
     }}>
-      <span>{c.icon}</span>
-      <span>{comparison.label}</span>
+      <span style={{fontWeight:900}}>{c.icon}</span>
+      <span>{label}</span>
       {!compact && comparison.previousPrice ? (
         <span style={{opacity:.85}}>
           · mês anterior {comparison.previousPrice.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
@@ -5367,6 +5372,17 @@ const [lists,setLists]=useState(()=>{
     return `Preço unitário: ${fmtR(item.price)}`;
   };
 
+  const getCompactUnitPriceLabel=(item)=>{
+    if(!item || item.price==null)return "";
+    const mode=item.priceMode || inferDefaultPriceMode(item);
+    const unit=String(item.unit||"unidade").trim();
+    if(mode==="perKg")return `${fmtR(item.price)}/kg`;
+    if(mode==="perLiter")return `${fmtR(item.price)}/L`;
+    if(mode==="package")return `${fmtR(item.price)}/pacote`;
+    if(mode==="unit")return `${fmtR(item.price)}/${unit || "un"}`;
+    return `Total informado`;
+  };
+
   const getProgress=(list)=>{
     if(!list)return{totalItems:0,checkedItems:0,fullTotal:0,notFoundItems:0};
     let t=0,c=0,s=0,nf=0;
@@ -5676,7 +5692,7 @@ const [lists,setLists]=useState(()=>{
       if(p!=null&&p>=0){
         item.price=p;
         item.priceRecordedAt=new Date().toISOString();
-        item.priceMode=mPriceMode||"total";
+        item.priceMode=item.priceMode || inferDefaultPriceMode(item);
         if(item.priceMode==="perKg"){
           const kg=numberFromText(mWeightText);
           if(kg&&kg>0)item.purchaseWeightKg=kg;
@@ -6190,7 +6206,7 @@ const [lists,setLists]=useState(()=>{
       {confirmDelete&&(
         <ModalSheet onClose={()=>setConfirmDelete(null)}>
           <div style={{textAlign:"center",marginBottom:24}}>
-            <div style={{fontSize:48,marginBottom:12}}>🗑️</div>
+            <div style={{fontSize:30,marginBottom:8}}>🗑️</div>
             <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:8}}>Excluir lista?</div>
             <div style={{fontSize:14,color:"#6B7280"}}>Essa ação não pode ser desfeita.</div>
           </div>
@@ -6591,16 +6607,11 @@ const [lists,setLists]=useState(()=>{
 
                         // Monta descrição e linha de preço
                         const descLine=[item.name,item.detail].filter(Boolean).join(" ");
+                        const qtyLabel=formatQtyUnit(item.qty || 1, item.unit || "unidade");
+                        const titleLine=`${qtyLabel} – ${descLine}`;
                         const hasPrice=item.price!=null;
                         const totalItemPrice=hasPrice?fmtR(getItemLineTotal(item)):"";
-                        let priceLine="";
-                        if(hasPrice){
-                          priceLine=`${formatQtyUnit(item.qty||1,item.unit||"unidade")} · ${getPriceDescription(item)}`;
-                        } else {
-                          // Sempre exibe a quantidade completa, inclusive quando for 1 unidade
-                          // ou fração de kg/litro. Ex.: "1 pacote", "1 kg", "0,5 kg".
-                          priceLine=formatQtyUnit(item.qty || 1, item.unit || "unidade");
-                        }
+                        const unitPriceLabel=hasPrice?getCompactUnitPriceLabel(item):"";
 
                         return(
                           <div key={`${ci}-${realII}-${item.name || "item"}`}
@@ -6622,16 +6633,20 @@ const [lists,setLists]=useState(()=>{
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
                               <div style={{fontWeight:700,fontSize:15,color:item.checked?"#9E9E9E":item.notFound?"#92400E":"#111827",textDecoration:item.checked?"line-through":"none",textDecorationColor:item.checked?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
-                                {descLine}
+                                {titleLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>extra</span>}
-                                {item.qtyAdjusted&&<span style={{fontSize:10,fontWeight:800,background:"#EEF2FF",color:"#4C1D95",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>✏️ qtd. ajustada</span>}
-                                {item.notFound&&<span style={{fontSize:10,fontWeight:800,background:"#F59E0B",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>⚠️ em falta</span>}
+                                {item.qtyAdjusted&&<span style={{fontSize:10,fontWeight:800,background:"#EEF2FF",color:"#4C1D95",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>qtd. ajustada</span>}
+                                {item.notFound&&<span style={{fontSize:10,fontWeight:900,background:"#DC2626",color:"white",padding:"2px 7px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>em falta</span>}
                               </div>
-                              {/* Linha 2: qty × preço = total */}
-                              <div style={{fontSize:12,marginTop:4,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                                <span style={{color:"#6B7280"}}>{priceLine}</span>
+                              {/* Linha 2: preço unitário e total */}
+                              <div style={{fontSize:12,marginTop:5,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                                 {hasPrice?(
-                                  <span style={{fontWeight:800,fontSize:14,color:item.checked?"#9E9E9E":theme.header,flexShrink:0}}>{totalItemPrice}</span>
+                                  <span style={{fontWeight:800,fontSize:13,color:item.checked?"#9E9E9E":"#374151"}}>{unitPriceLabel}</span>
+                                ):(
+                                  <span style={{color:"#6B7280"}}>Toque para informar preço</span>
+                                )}
+                                {hasPrice?(
+                                  <span style={{fontWeight:900,fontSize:14,color:item.checked?"#9E9E9E":theme.header,flexShrink:0}}>{totalItemPrice}</span>
                                 ):(
                                   <span style={{fontSize:12,color:"#9CA3AF",flexShrink:0}}>+ preço</span>
                                 )}
@@ -6639,7 +6654,7 @@ const [lists,setLists]=useState(()=>{
                               {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} listId={currentList?.id} itemId={item.id || item.name} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
-                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#F59E0B":"#E5E7EB"),background:item.notFound?"#FFFBEB":"#FFFFFF",color:item.notFound?"#92400E":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
+                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#DC2626":"#E5E7EB"),background:item.notFound?"#FEE2E2":"#FFFFFF",color:item.notFound?"#991B1B":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
                           </div>
                         );
                       })}
@@ -6662,70 +6677,62 @@ const [lists,setLists]=useState(()=>{
         const item=currentList.categories[itemModal.ci]?.items[itemModal.ii];
         if(!item)return null;
         const theme=getCatTheme(currentList.categories[itemModal.ci]?.name);
+        const inferredMode=item.priceMode || inferDefaultPriceMode(item);
+        const qtyOriginal=Number(item.originalQty ?? item.qty ?? 1);
+        const qtyAtual=numberFromText(mQtyText) || Number(mQty||1) || 1;
+        const qtyChanged=Number(qtyAtual)!==Number(qtyOriginal);
+        const tempPrice=parseBRL(mPriceText);
+        const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
+        const total=tempPrice!=null?getItemLineTotal(temp):0;
+        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço por unidade":inferredMode==="package"?"Preço por pacote":"Preço total pago";
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
-            <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
-            <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>{currentList.categories[itemModal.ci]?.name}</div>
-            <div style={{marginBottom:16}}>
-              <label style={lbl}>Quantidade</label>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
+              <div style={{fontSize:13,color:"#6B7280"}}>{currentList.categories[itemModal.ci]?.name}</div>
+            </div>
+
+            <div style={{marginBottom:14,background:qtyChanged?"#EEF2FF":"#F9FAFB",border:`1px solid ${qtyChanged?"#A78BFA":"#E5E7EB"}`,borderRadius:18,padding:12,boxShadow:qtyChanged?"0 0 0 4px rgba(124,58,237,0.08)":"none",transition:"all 0.2s"}}>
+              <label style={{...lbl,marginBottom:10}}>Quantidade</label>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <button onClick={()=>{const next=Math.max(0.001,Math.round(((numberFromText(mQtyText)||Number(mQty)||1)-0.1)*1000)/1000);setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>−</button>
-                <input value={mQtyText} onChange={e=>{const txt=normalizeDecimalInput(e.target.value);setMQtyText(txt);const v=numberFromText(txt);if(v!=null&&v>0)setMQty(v);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:"#E5E7EB"}),width:112}} />
+                <input value={mQtyText} onChange={e=>{const txt=normalizeDecimalInput(e.target.value);setMQtyText(txt);const v=numberFromText(txt);if(v!=null&&v>0)setMQty(v);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:qtyChanged?"#A78BFA":"#E5E7EB"}),width:112}} />
                 <button onClick={()=>{const next=Math.round(((numberFromText(mQtyText)||Number(mQty)||0)+0.1)*1000)/1000;setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>＋</button>
                 <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{item.unit||"un"}</span>
               </div>
+              {qtyChanged&&<div style={{fontSize:12,color:"#4C1D95",fontWeight:800,marginTop:8}}>Quantidade original alterada.</div>}
             </div>
-            <div style={{marginBottom:20}}>
-              <label style={lbl}>Como o preço será informado?</label>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                {[
-                  ["total","Preço total"],
-                  ["perKg","Preço por kg"],
-                  ["unit","Preço por unidade"],
-                  ["package","Preço por pacote"],
-                  ["perLiter","Preço por litro"],
-                ].map(([mode,label])=>(
-                  <button key={mode} onClick={()=>setMPriceMode(mode)} style={chip(mPriceMode===mode,theme.border,theme.bg,theme.header)}>{label}</button>
-                ))}
+
+            {inferredMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(item.unit)) && (
+              <div style={{marginBottom:14}}>
+                <label style={lbl}>Peso total comprado em kg</label>
+                <input value={mWeightText} onChange={e=>setMWeightText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="Ex: 0,700 ou 1,2" inputMode="decimal"
+                  style={inp()} onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
-              {mPriceMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(item.unit)) && (
-                <div style={{marginBottom:12}}>
-                  <label style={lbl}>Peso total comprado em kg</label>
-                  <input value={mWeightText} onChange={e=>setMWeightText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="Ex: 0,700 ou 1,2" inputMode="decimal"
-                    style={inp()} onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-                  <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Necessário quando o item está em unidades, mas o mercado cobra por kg.</div>
-                </div>
-              )}
-              <label style={lbl}>{mPriceMode==="total"?"Preço total pago":mPriceMode==="perKg"?"Preço do kg":mPriceMode==="perLiter"?"Preço do litro":mPriceMode==="package"?"Preço do pacote":"Preço da unidade"}</label>
+            )}
+
+            <div style={{marginBottom:16}}>
+              <label style={lbl}>{unitLabel}</label>
               <div style={{position:"relative"}}>
-                <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
+                <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
                 <input value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
-                  placeholder="0,00" inputMode="numeric"
-                  style={inp({paddingLeft:44})}
+                  placeholder="0,00" inputMode="numeric" autoFocus
+                  style={inp({paddingLeft:44,fontWeight:900,fontSize:18})}
                   onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
               <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Digite apenas números. Ex.: 800 vira R$ 8,00.</div>
-              {mPriceText&&parseBRL(mPriceText)!=null&&(()=>{
-                const temp={...item,qty:(numberFromText(mQtyText)||mQty),price:parseBRL(mPriceText),priceMode:mPriceMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
-                const total=getItemLineTotal(temp);
-                return (
-                  <div style={{marginTop:8}}>
-                    <div style={{fontSize:13,fontWeight:800,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:12,padding:"8px 10px"}}>
-                      Total calculado: {fmtR(total)}
-                    </div>
-                    <PriceMonthBadge itemName={item.name} price={parseBRL(mPriceText)} recordedAt={item.priceRecordedAt || null} listId={currentList?.id} itemId={item.id || item.name} />
-                  </div>
-                );
-              })()}
+              {tempPrice!=null&&mPriceText&&(<div style={{marginTop:10,fontSize:13,fontWeight:900,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:14,padding:"10px 12px",display:"flex",justifyContent:"space-between",gap:12}}>
+                <span>Total calculado</span><span>{fmtR(total)}</span>
+              </div>)}
+              {tempPrice!=null&&mPriceText&&<PriceMonthBadge itemName={item.name} price={tempPrice} recordedAt={item.priceRecordedAt || null} listId={currentList?.id} itemId={item.id || item.name} />}
             </div>
 
-
             <div style={{display:"flex",gap:10}}>
-              <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:18,background:"#FFE8E8",border:"none",color:"#FF4444",fontWeight:700,fontSize:16,cursor:"pointer"}}>🗑</button>
+              <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:18,background:"#FEE2E2",border:"none",color:"#B91C1C",fontWeight:800,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
-                disabled={!mNotFound&&!mPriceText.trim()}
-                style={{flex:1,padding:14,borderRadius:18,background:mNotFound?"#EF4444":`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mNotFound&&!mPriceText.trim())?0.5:1,cursor:(!mNotFound&&!mPriceText.trim())?"not-allowed":"pointer"}}>
-                {mNotFound?"✗ Não encontrado":!mPriceText.trim()?"Informe o preço":"✓ Confirmar"}
+                disabled={!mPriceText.trim()}
+                style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mPriceText.trim())?0.5:1,cursor:(!mPriceText.trim())?"not-allowed":"pointer"}}>
+                {!mPriceText.trim()?"Informe o preço":"Confirmar"}
               </button>
             </div>
           </ModalSheet>
@@ -6735,50 +6742,23 @@ const [lists,setLists]=useState(()=>{
       {/* MODAL: EXTRA */}
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>⭐ Item extra</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:20}}>Fora da lista original — ficará destacado em laranja</div>
-          <div style={{marginBottom:10}}>
-            <label style={lbl}>Produto</label>
-            <div style={{display:"flex",gap:8}}>
-              <input value={exName} onChange={e=>setExName(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
-                placeholder="Nome do produto..."
-                style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-              <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
-                disabled={!exName.trim()}
-                style={{padding:"0 16px",borderRadius:18,background:exName.trim()?"#FF7043":"#F0F2F5",border:"none",color:exName.trim()?"white":"#6B7280",fontSize:14,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
-                Inserir IA
-              </button>
-            </div>
-            <div style={{fontSize:12,color:"#E65100",marginTop:6,background:"#FFF3E0",borderRadius:8,padding:"6px 10px"}}>
-              💡 A IA vai sugerir marca, tipo e tamanho antes de adicionar.
-            </div>
-          </div>
-          <div style={{display:"flex",gap:10,marginBottom:12}}>
-            <div style={{flex:1}}>
-              <label style={lbl}>Quantidade</label>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setExQty(q=>Math.max(1,q-1))} style={{...qBtn,width:38,height:38,fontSize:18}}>−</button>
-                <span style={{fontWeight:800,fontSize:20,minWidth:28,textAlign:"center"}}>{exQty}</span>
-                <button onClick={()=>setExQty(q=>q+1)} style={{...qBtn,width:38,height:38,fontSize:18}}>＋</button>
-              </div>
-            </div>
-            <div style={{flex:1}}>
-              <label style={lbl}>Unidade</label>
-              <select value={exUnit} onChange={e=>setExUnit(e.target.value)} style={{...inp(),padding:"10px 12px",height:44}}>
-                {["unidade","pacote","caixa","kg","g","L","ml","fardo","lata","garrafa","dúzia","par","peça"].map(u=><option key={u}>{u}</option>)}
-              </select>
-            </div>
-          </div>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Adicionar item extra</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Informe o item para detalhar quantidade, unidade, embalagem e preço na próxima tela.</div>
           <div style={{marginBottom:16}}>
-            <label style={lbl}>Preço (R$) — opcional</label>
-            <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-              <input value={exPrice} onChange={e=>setExPrice(formatMoneyInput(e.target.value))} placeholder="0,00" inputMode="numeric"
-                style={inp({paddingLeft:44})} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-            </div>
+            <label style={lbl}>Item</label>
+            <input value={exName} onChange={e=>setExName(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
+              placeholder="Ex: cenoura, arroz, detergente..."
+              style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
           </div>
-          <button onClick={addExtra} style={btnG}>＋ Adicionar à lista</button>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>setExtraModal(false)} style={{...btnGr,flex:1}}>Cancelar</button>
+            <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
+              disabled={!exName.trim()}
+              style={{flex:1.4,padding:14,borderRadius:18,background:exName.trim()?"linear-gradient(135deg,#F97316,#EA580C)":"#F0F2F5",border:"none",color:exName.trim()?"white":"#6B7280",fontSize:15,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit"}}>
+              Inserir
+            </button>
+          </div>
         </ModalSheet>
       )}
 
