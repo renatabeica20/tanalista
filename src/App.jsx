@@ -160,10 +160,14 @@ async function getSharedListsForUser(userId, name) {
   const byName = name ? await getSharedListsByOwnerName(name) : [];
   const map = new Map();
   [...byUser, ...byName].forEach(record => {
-    const key = record?.id || record?.data?.sharedId || record?.data?.id || JSON.stringify(record);
-    if (key && !map.has(key)) map.set(key, record);
+    if (!record) return;
+    const key = record?.data?.id ? `id:${String(record.data.id)}` : (record?.id || record?.data?.sharedId || JSON.stringify(record));
+    const prev = map.get(key);
+    const prevStamp = getListComparableStamp(prev || {});
+    const nextStamp = getListComparableStamp({ ...(record || {}), ...(record?.data || {}) });
+    if (key && (!prev || nextStamp >= prevStamp)) map.set(key, record);
   });
-  return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  return Array.from(map.values()).sort((a, b) => getListComparableStamp({ ...(b || {}), ...(b?.data || {}) }) - getListComparableStamp({ ...(a || {}), ...(a?.data || {}) }));
 }
 
 function sharedRecordToLocalList(record) {
@@ -3321,6 +3325,49 @@ function isSharedRecordHiddenForCurrentUser(record) {
     wasListDeletedLocally(record)
   );
 }
+
+
+function getListIdentityKey(list) {
+  if (!list) return "";
+  const data = list.data && typeof list.data === "object" ? list.data : null;
+  const id = data?.id || list.id || "";
+  // data.id/list.id é a identidade real da lista. sharedId/record.id muda quando o bug cria duplicatas no Supabase.
+  if (id) return `id:${String(id)}`;
+  const created = data?.createdAt || data?.created_at || list.createdAt || list.created_at || "";
+  const owner = data?.userId || list.userId || list.user_id || data?.ownerName || data?.remetente || list.ownerName || list.remetente || "";
+  const name = data?.name || list.name || list.title || "";
+  return ["fallback", owner, name, created].map(v => String(v || "").trim().toLowerCase()).join(":");
+}
+
+function getListComparableStamp(list) {
+  const data = list?.data && typeof list.data === "object" ? list.data : null;
+  const candidates = [
+    list?.lastSyncedAt, data?.lastSyncedAt,
+    list?.lastLocalUpdateAt, data?.lastLocalUpdateAt,
+    list?.updatedAt, data?.updatedAt,
+    list?.createdAt, data?.createdAt,
+    list?.created_at, data?.created_at,
+  ];
+  for (const value of candidates) {
+    const t = value ? new Date(value).getTime() : 0;
+    if (Number.isFinite(t) && t > 0) return t;
+  }
+  return 0;
+}
+
+function mergeUniqueLists(items) {
+  const source = Array.isArray(items) ? items : [];
+  const map = new Map();
+  for (const list of source) {
+    if (!list || wasListDeletedLocally(list)) continue;
+    const key = getListIdentityKey(list) || `random:${Math.random()}`;
+    const prev = map.get(key);
+    if (!prev || getListComparableStamp(list) >= getListComparableStamp(prev)) {
+      map.set(key, list);
+    }
+  }
+  return Array.from(map.values()).sort((a,b)=>getListComparableStamp(b)-getListComparableStamp(a));
+}
 // ══════════════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════
@@ -4064,7 +4111,7 @@ export default function App(){
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      return Array.isArray(stored)?stored.filter(l=>!wasListDeletedLocally(l)):[];
+      return Array.isArray(stored)?mergeUniqueLists(stored):[];
     }catch{return[]}
   });
   const [currentList,setCurrentList]=useState(null);
@@ -4283,7 +4330,7 @@ const [lists,setLists]=useState(()=>{
   }, [dlgQty, dlgUnit, itemDialog, dlgPeso, dlgVolume, isDecimalManualUnit]);
 
   const saveLists=(nl)=>{
-    const safe=(Array.isArray(nl)?nl:[]).filter(l=>!wasListDeletedLocally(l));
+    const safe=mergeUniqueLists(Array.isArray(nl)?nl:[]);
     setLists(safe);
     localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
@@ -4308,7 +4355,7 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!restored.length)return current;
-        const merged=[...restored,...current].filter(l=>!wasListDeletedLocally(l));
+        const merged=mergeUniqueLists([...restored,...current]);
         try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
         if(!silent)showToast(`${restored.length} lista(s) recuperada(s)`);
         return merged;
@@ -4391,7 +4438,9 @@ const [lists,setLists]=useState(()=>{
       registerAppUser(existingName).then(async userId=>{
         if(userId){
           await restoreUserListsFromCloud(userId,existingName,{silent:true});
-          await persistLocalListsToCloud();
+          // Não migrar automaticamente listas antigas sem sharedId a cada login.
+          // Essa rotina era a origem da duplicação contínua no Supabase/localStorage.
+          // Listas novas já são persistidas no organizeList().
         }
       });
     }else{
@@ -5744,9 +5793,9 @@ const [lists,setLists]=useState(()=>{
   // ─────────────────────────────────────────────────────────────────────
   if(showPriceStatsScreen) return <PriceStatsScreen onBack={()=>setShowPriceStatsScreen(false)} />;
 
-  const visibleLists = Array.isArray(lists) ? lists.filter(l=>!wasListDeletedLocally(l)) : [];
+  const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
   const recentLists = visibleLists.slice(0,1);
-  const historyLists = visibleLists;
+  const historyLists = visibleLists.slice(1);
 
   return(
     <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
@@ -5979,7 +6028,7 @@ const [lists,setLists]=useState(()=>{
             )}
             {historyLists.length>0&&(<div style={{marginTop:18}}>
               <button onClick={()=>setShowHistory(v=>!v)} style={{width:"100%",padding:"14px 16px",borderRadius:18,background:"#FFFFFF",border:"1px solid #E5E7EB",color:"#111827",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 10px 24px rgba(17,24,39,0.05)"}}>
-                <span>Histórico</span><span style={{color:"#6D28D9"}}>{showHistory?"Ocultar":"Ver"} ({historyLists.length})</span>
+                <span>Histórico</span><span style={{color:"#6D28D9"}}>{showHistory?"Ocultar histórico":"Ver histórico"} ({historyLists.length})</span>
               </button>
               {showHistory&&(<div style={{display:"flex",flexDirection:"column",gap:12,marginTop:12}}>
                 {historyLists.map(list=>{
