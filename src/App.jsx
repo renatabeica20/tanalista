@@ -4318,19 +4318,87 @@ const [lists,setLists]=useState(()=>{
     }
   },[showToast]);
 
+
+
+  const persistListRecordToCloud=useCallback(async(list,{silent=true}={})=>{
+    if(!list || !hasSupabaseConfig())return list;
+    try{
+      const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
+      const userId=await registerAppUser(ownerName,{force:true});
+      const base={
+        ...list,
+        userId:userId || list.userId || getAppUserId() || null,
+        ownerName,
+        remetente:ownerName,
+        lastSyncedAt:new Date().toISOString(),
+        cloudPersisted:true,
+      };
+
+      if(base.sharedId){
+        const record=await updateSharedListRecord(base.sharedId,base);
+        return markListCloudSynced({
+          ...base,
+          userId:record?.user_id || base.userId || null,
+          ownerName:record?.remetente || ownerName,
+          remetente:record?.remetente || ownerName,
+        },record?.data || base);
+      }
+
+      const record=await createSharedListRecord(base);
+      if(!record?.id)return base;
+      return markListCloudSynced({
+        ...base,
+        sharedId:record.id,
+        userId:record.user_id || base.userId || null,
+        ownerName:record.remetente || ownerName,
+        remetente:record.remetente || ownerName,
+      },record?.data || base);
+    }catch(err){
+      console.warn("Nao foi possivel salvar lista na nuvem:",err);
+      if(!silent)showToast("⚠️ Lista salva neste aparelho, mas ainda não sincronizada na nuvem.",4200);
+      return list;
+    }
+  },[senderName,userNameInput,showToast]);
+
+  const persistLocalListsToCloud=useCallback(async()=>{
+    const currentName=getAppUserName();
+    if(!currentName || !hasSupabaseConfig())return;
+    const localLists=Array.isArray(lists)?lists:[];
+    const toPersist=localLists.filter(l=>l && !l.sharedId && !wasListDeletedLocally(l));
+    if(!toPersist.length)return;
+
+    let changed=false;
+    const updated=[];
+    for(const list of localLists){
+      if(list && !list.sharedId && !wasListDeletedLocally(list)){
+        const persisted=await persistListRecordToCloud(list,{silent:true});
+        updated.push(persisted);
+        if(persisted?.sharedId)changed=true;
+      }else{
+        updated.push(list);
+      }
+    }
+    if(changed){
+      saveLists(updated);
+      showToast("☁️ Listas locais sincronizadas com sua conta",2200);
+    }
+  },[lists,persistListRecordToCloud,showToast]);
   useEffect(()=>{
     const existingName=getAppUserName();
     if(existingName){
       setSenderName(prev=>prev||existingName);
       setUserNameInput(existingName);
-      registerAppUser(existingName).then(userId=>{
-        if(userId)restoreUserListsFromCloud(userId,existingName,{silent:true});
+      registerAppUser(existingName).then(async userId=>{
+        if(userId){
+          await restoreUserListsFromCloud(userId,existingName,{silent:true});
+          await persistLocalListsToCloud();
+        }
       });
     }else{
       const existingUserId=getAppUserId();
       if(existingUserId)restoreUserListsFromCloud(existingUserId,getAppUserName(),{silent:true});
     }
-  },[restoreUserListsFromCloud]);
+  },[restoreUserListsFromCloud,persistLocalListsToCloud]);
 
   const confirmAppUserName=async()=>{
     const clean=saveAppUserName(userNameInput);
@@ -4741,9 +4809,14 @@ const [lists,setLists]=useState(()=>{
       if(editingOriginal){
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
-      const newList=editingOriginal
+      let newList=editingOriginal
         ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0}
         : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
+
+      // Toda lista criada pelo usuário passa a ser salva também na nuvem.
+      // Assim ela aparece no computador e no celular com o mesmo nome de usuário.
+      newList=await persistListRecordToCloud(newList,{silent:false});
+
       const nl=editingOriginal
         ? lists.map(l=>l.id===editingOriginal.id?newList:l)
         : [newList,...lists];
