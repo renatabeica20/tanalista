@@ -1927,7 +1927,7 @@ function getProductConfig(name) {
       unidades:["pacote","fardo","caixa"]
     };
 
-  if (/lenço umedecido/.test(n))
+  if (/len[cç]o[s]? umedecido[s]?|umedecido[s]?/.test(n))
     return {
       marcas:["Pampers","Huggies","WetKiss","Turma da Mônica","OB","Cottonbaby"],
       tipos:["Bebê sem perfume","Bebê com perfume","Adulto antibacteriano","Íntimo","Facial"],
@@ -2776,7 +2776,7 @@ function inferPreferredCategoryForItem(item) {
   if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
   if (has("bolacha", "biscoito", "cookie", "oreo", "trakinas", "wafer", "chocolate", "salgadinho", "chips", "pipoca doce")) return "Snacks e Doces";
   if (has("colorau", "páprica", "paprica", "orégano", "oregano", "cominho", "tempero", "sazon", "caldo knorr", "caldo maggi", "alho e sal")) return "Temperos e Condimentos";
-  if (has("lenço umedecido", "lenco umedecido", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
+  if (has("lenço umedecido", "lenco umedecido", "lenços umedecidos", "lencos umedecidos", "umedecido", "umedecidos", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
   if (has("papel toalha", "guardanapo", "copo descartável", "copo descartavel", "prato descartável", "prato descartavel", "talher descartável", "talher descartavel", "papel alumínio", "papel aluminio", "papel filme", "saco freezer", "saco plástico", "saco plastico")) return "Descartáveis e Embalagens";
   if (has("pilha", "bateria", "lâmpada", "lampada", "tomada", "interruptor", "extensão", "extensao", "cabo elétrico", "cabo eletrico", "fio elétrico", "fio eletrico", "disjuntor")) return "Elétrica";
   if (has("bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
@@ -2822,7 +2822,7 @@ function demoOrganize(items) {
     [["molho de tomate","extrato de tomate","polpa de tomate","tomate pelado"],"Mercearia"],
     [["bolacha","biscoito","cookie","oreo","chocolate","salgadinho","snack","chips","barra","pipoca"],"Snacks e Doces"],
     [["colorau","paprica","páprica","tempero","orégano","oregano","cominho","sazon"],"Temperos e Condimentos"],
-    [["lenço umedecido","lenco umedecido","fralda","pomada bebê","pomada bebe"],"Bebês"],
+    [["lenço umedecido","lenco umedecido","lenços umedecidos","lencos umedecidos","umedecido","umedecidos","fralda","pomada bebê","pomada bebe"],"Bebês"],
     [["papel toalha","guardanapo","copo descartável","copo descartavel","prato descartável","prato descartavel","talher","papel alumínio","papel aluminio","papel filme","embalagem"],"Descartáveis e Embalagens"],
     [["pilha","bateria","fio","cabo","tomada","interruptor","disjuntor","lampada","lâmpada","extensao","extensão"],"Elétrica"],
     [["bombril","palha","coala","detergente","sabão","sabao","desinfetante","vassoura","esponja","limpador","água sanitária","agua sanitaria","amaciante","lava roupa","omo","multiuso","rodo","saco de lixo"],"Limpeza"],
