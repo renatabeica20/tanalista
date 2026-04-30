@@ -103,14 +103,22 @@ async function findAppUserByDeviceId(deviceId) {
 async function findAppUserByName(name) {
   const clean = String(name || "").trim();
   if (!clean || !hasSupabaseConfig()) return null;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?nome=eq.${encodeURIComponent(clean)}&select=id,nome,device_id&limit=1`, {
+
+  const tryFetch = async (filter) => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?${filter}&select=id,nome,device_id&limit=1`, {
       method: "GET",
       headers: supabaseHeaders(),
     });
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data) ? data[0] : null;
+  };
+
+  try {
+    return (
+      await tryFetch(`nome=eq.${encodeURIComponent(clean)}`) ||
+      await tryFetch(`nome=ilike.${encodeURIComponent(clean)}`)
+    );
   } catch {
     return null;
   }
@@ -129,6 +137,33 @@ async function getSharedListsByUserId(userId) {
   } catch {
     return [];
   }
+}
+
+async function getSharedListsByOwnerName(name) {
+  const clean = String(name || "").trim();
+  if (!clean || !hasSupabaseConfig()) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?remetente=ilike.${encodeURIComponent(clean)}&select=*&order=created_at.desc`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getSharedListsForUser(userId, name) {
+  const byUser = userId ? await getSharedListsByUserId(userId) : [];
+  const byName = name ? await getSharedListsByOwnerName(name) : [];
+  const map = new Map();
+  [...byUser, ...byName].forEach(record => {
+    const key = record?.id || record?.data?.sharedId || record?.data?.id || JSON.stringify(record);
+    if (key && !map.has(key)) map.set(key, record);
+  });
+  return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
 function sharedRecordToLocalList(record) {
@@ -155,6 +190,16 @@ async function registerAppUser(name, { force = false } = {}) {
   if (!force && alreadyRegistered === device_id && existingUserId) return existingUserId;
 
   try {
+    // Quando o usuário informa o nome no login, o nome passa a ser a identidade principal.
+    // O device_id continua apenas como identificação auxiliar do aparelho.
+    const foundByNameFirst = force ? await findAppUserByName(clean) : null;
+    if (foundByNameFirst?.id) {
+      saveAppUserId(foundByNameFirst.id);
+      setStoredValue(APP_USER_REGISTERED_KEY, device_id);
+      if (foundByNameFirst.nome) saveAppUserName(foundByNameFirst.nome);
+      return foundByNameFirst.id;
+    }
+
     const found = await findAppUserByDeviceId(device_id);
     if (found?.id) {
       saveAppUserId(found.id);
@@ -163,8 +208,8 @@ async function registerAppUser(name, { force = false } = {}) {
       return found.id;
     }
 
-    // Se o armazenamento local foi perdido, tenta recuperar pelo nome
-    // antes de criar um novo cadastro.
+    // Se o armazenamento local foi perdido ou o acesso veio de outro aparelho,
+    // recupera pelo nome antes de criar novo cadastro.
     const foundByName = await findAppUserByName(clean);
     if (foundByName?.id) {
       saveAppUserId(foundByName.id);
@@ -4243,10 +4288,10 @@ const [lists,setLists]=useState(()=>{
     localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
 
-  const restoreUserListsFromCloud=useCallback(async(userId,{silent=false}={})=>{
-    if(!userId)return;
+  const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
+    if(!userId && !userName)return;
     try{
-      const records=await getSharedListsByUserId(userId);
+      const records=await getSharedListsForUser(userId, userName || getAppUserName());
       if(!records.length)return;
       setLists(prev=>{
         const current=Array.isArray(prev)?prev:[];
@@ -4279,11 +4324,11 @@ const [lists,setLists]=useState(()=>{
       setSenderName(prev=>prev||existingName);
       setUserNameInput(existingName);
       registerAppUser(existingName).then(userId=>{
-        if(userId)restoreUserListsFromCloud(userId,{silent:true});
+        if(userId)restoreUserListsFromCloud(userId,existingName,{silent:true});
       });
     }else{
       const existingUserId=getAppUserId();
-      if(existingUserId)restoreUserListsFromCloud(existingUserId,{silent:true});
+      if(existingUserId)restoreUserListsFromCloud(existingUserId,getAppUserName(),{silent:true});
     }
   },[restoreUserListsFromCloud]);
 
@@ -4293,7 +4338,7 @@ const [lists,setLists]=useState(()=>{
     setSenderName(clean);
     setUserNameModal(false);
     const userId=await registerAppUser(clean,{force:true});
-    if(userId)await restoreUserListsFromCloud(userId);
+    if(userId)await restoreUserListsFromCloud(userId,clean);
     showToast(userId?"Usuario reconhecido!":"Nome salvo neste aparelho; verifique as permissoes do Supabase.", userId?2200:4200);
   };
 
