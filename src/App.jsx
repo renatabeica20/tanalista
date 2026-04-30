@@ -342,15 +342,18 @@ async function hideSharedListRecordForCurrentUser(id) {
 
     const deviceId = getAppDeviceId();
     const userId = getAppUserId();
+    const userName = getAppUserName();
     const data = record?.data && typeof record.data === "object" ? record.data : {};
     const hiddenForDeviceIds = Array.from(new Set([...(Array.isArray(data.hiddenForDeviceIds) ? data.hiddenForDeviceIds : []), deviceId].filter(Boolean)));
     const hiddenForUserIds = Array.from(new Set([...(Array.isArray(data.hiddenForUserIds) ? data.hiddenForUserIds : []), userId].filter(Boolean)));
+    const hiddenForNames = Array.from(new Set([...(Array.isArray(data.hiddenForNames) ? data.hiddenForNames : []), userName].filter(Boolean).map(v => String(v).trim().toLowerCase())));
 
     const payload = {
       data: {
         ...data,
         hiddenForDeviceIds,
         hiddenForUserIds,
+        hiddenForNames,
         lastHiddenAt: new Date().toISOString(),
       },
     };
@@ -370,6 +373,49 @@ async function hideSharedListRecordForCurrentUser(id) {
     return true;
   } catch (err) {
     console.warn("Erro ao ocultar lista compartilhada para o usuário:", err);
+    return false;
+  }
+}
+
+async function softDeleteSharedListRecord(id, list = null) {
+  if (!id || !hasSupabaseConfig()) return false;
+
+  try {
+    const record = await getSharedListRecord(id);
+    if (!record) return false;
+
+    const now = new Date().toISOString();
+    const data = record?.data && typeof record.data === "object" ? record.data : {};
+    const userId = getAppUserId() || list?.userId || data?.userId || record?.user_id || null;
+    const userName = getAppUserName() || list?.ownerName || list?.remetente || data?.ownerName || data?.remetente || record?.remetente || "";
+
+    const payload = {
+      data: {
+        ...data,
+        isDeleted: true,
+        deletedAt: now,
+        deletedByUserId: userId,
+        deletedByName: userName || null,
+        deletedListKeys: getListPersistenceKeys({ ...(list || {}), ...record, data }),
+        lastSyncedAt: now,
+      },
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn("Não foi possível marcar lista como excluída no Supabase:", res.status, text);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("Erro ao marcar lista como excluída no Supabase:", err);
     return false;
   }
 }
@@ -3215,16 +3261,21 @@ function isSharedRecordHiddenForCurrentUser(record) {
   const data = record?.data && typeof record.data === "object" ? record.data : {};
   const deviceId = getAppDeviceId();
   const userId = getAppUserId();
+  const userName = String(getAppUserName() || "").trim().toLowerCase();
   const hiddenDevices = Array.isArray(data.hiddenForDeviceIds) ? data.hiddenForDeviceIds : [];
   const hiddenUsers = Array.isArray(data.hiddenForUserIds) ? data.hiddenForUserIds : [];
+  const hiddenNames = Array.isArray(data.hiddenForNames) ? data.hiddenForNames.map(v => String(v).trim().toLowerCase()) : [];
 
   return Boolean(
+    data.isDeleted ||
+    data.deletedAt ||
+    data.status === "deleted" ||
     (deviceId && hiddenDevices.includes(deviceId)) ||
     (userId && hiddenUsers.includes(userId)) ||
+    (userName && hiddenNames.includes(userName)) ||
     wasListDeletedLocally(record)
   );
 }
-
 // ══════════════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════
@@ -5474,10 +5525,20 @@ const [lists,setLists]=useState(()=>{
     // Se for lista recebida, ou se o DELETE for bloqueado por RLS, oculta a lista para este usuário/dispositivo.
     if(target.sharedId){
       let removedFromCloud=false;
+      let persistedDeletion=false;
+
+      // Primeiro grava uma marca de exclusão no próprio registro remoto.
+      // Assim, mesmo que o usuário limpe o histórico/cache ou troque de aba/dispositivo,
+      // a lista não volta a ser restaurada no login seguinte.
+      persistedDeletion=await softDeleteSharedListRecord(target.sharedId,target);
+
+      // Depois tenta o DELETE físico. Se o Supabase/RLS bloquear, a marca remota acima
+      // continua sendo a fonte de verdade para não recarregar a lista excluída.
       if(!target.imported){
         removedFromCloud=await deleteSharedListRecord(target.sharedId);
       }
-      if(!removedFromCloud){
+
+      if(!removedFromCloud && !persistedDeletion){
         await hideSharedListRecordForCurrentUser(target.sharedId);
         showToast("🗑 Lista removida da sua conta",1800);
       }
