@@ -4505,13 +4505,27 @@ const [lists,setLists]=useState(()=>{
     return href.replace(/\/l\/.*$/,"/").replace(/\/lista\/.*$/,"/").replace(/\/index\.html$/,"/").replace(/\/$/,"");
   };
 
-  const openWhatsAppDirect=(text,preparedWindow=null)=>{
+  const openWhatsAppDirect=(text)=>{
     const encoded=encodeURIComponent(text);
     const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||"");
     const url=isMobile
       ? `whatsapp://send?text=${encoded}`
       : `https://web.whatsapp.com/send?text=${encoded}`;
-    openShareWindow(url,preparedWindow);
+
+    // Evita a antiga aba intermediária about:blank.
+    // No celular, abre o app do WhatsApp na própria navegação; no desktop, abre o WhatsApp Web em nova aba.
+    if(isMobile){
+      window.location.href=url;
+      return true;
+    }
+
+    const opened=window.open(url,"_blank","noopener,noreferrer");
+    if(!opened){
+      window.location.href=url;
+      return false;
+    }
+    opened.focus?.();
+    return true;
   };
 
   const shareAppWhatsApp=()=>{
@@ -4923,35 +4937,92 @@ const [lists,setLists]=useState(()=>{
   };
 
   // ── Importar texto colado / foto ───────────────────────────────────────
+  const normalizePastedShoppingLines=(text)=>{
+    const raw=String(text||"")
+      .replace(/\r/g,"\n")
+      .replace(/[\u2022\u25CF\u25E6\u2043]/g,"\n• ")
+      .replace(/[✅☑️✔️]/g,"\n")
+      .replace(/[🛒📌📍]/g," ");
+
+    const firstPass=raw
+      .split(/\n+/)
+      .map(line=>line.trim())
+      .filter(Boolean);
+
+    const expanded=[];
+    for(const originalLine of firstPass){
+      let line=originalLine
+        .replace(/^[-–—*•]+\s*/,"")
+        .replace(/^\d{1,3}[.)-]\s*/,"")
+        .replace(/^\[[ xX]?\]\s*/,"")
+        .trim();
+
+      if(!line)continue;
+      if(/^(lista|compras?|mercado|supermercado|orçamento|total|observa[cç][aã]o)/i.test(line) && line.length<35)continue;
+      if(/^https?:\/\//i.test(line))continue;
+
+      // Se o WhatsApp colou vários itens na mesma linha, separa antes de cada nova quantidade/unidade.
+      const inlineParts=line
+        .replace(/\s+(?=\d+[,.]?\d*\s*(?:kg|g|l|lt|litro|litros|ml|un|und|unidade|unidades|pct|pacote|pacotes|cx|caixa|caixas|lata|latas|garrafa|garrafas|fardo|fardos)\b)/gi,"\n")
+        .split(/\n+/)
+        .map(p=>p.trim())
+        .filter(Boolean);
+
+      const parts=inlineParts.length>1 ? inlineParts : [line];
+      for(const part of parts){
+        // Só divide por ponto e vírgula ou barra vertical. Vírgula é preservada para não quebrar decimais nem nomes.
+        const semiParts=part.split(/\s*[;|]\s*/).map(p=>p.trim()).filter(Boolean);
+        expanded.push(...semiParts);
+      }
+    }
+
+    return expanded
+      .map(line=>line.replace(/\s{2,}/g," ").trim())
+      .filter(line=>line.length>1);
+  };
+
   const parseListTextToItems=(text)=>{
-    const lines=String(text||"").split("\n").map(l=>l.trim()).filter(l=>l.length>1);
+    const lines=normalizePastedShoppingLines(text);
     return lines.map(line=>{
       let clean=line.trim();
       let qty=1,unit="unidade";
-      // Tenta extrair quantidade ANTES de remover prefixos de lista
+
       const qPatterns=[
         /^(\d+[,.]?\d*)\s*[xX]\s+(.+)$/,
-        /^(\d+[,.]?\d*)\s*(kg|g|L|ml|un|unidade|pacote|caixa|lata|garrafa|fardo)\s+(.+)$/i,
+        /^(\d+[,.]?\d*)\s*(kg|g|l|lt|litro|litros|ml|un|und|unidade|unidades|pct|pacote|pacotes|cx|caixa|caixas|lata|latas|garrafa|garrafas|fardo|fardos)\b\s*(.+)$/i,
+        /^(.+?)\s+[-–—]?\s*(\d+[,.]?\d*)\s*(kg|g|l|lt|litro|litros|ml|un|und|unidade|unidades|pct|pacote|pacotes|cx|caixa|caixas|lata|latas|garrafa|garrafas|fardo|fardos)\b$/i,
         /^(\d+[,.]?\d*)\s+(.+)$/,
       ];
-      let matched=false;
+
       for(const p of qPatterns){
         const m=clean.match(p);
-        if(m){
-          const n=parseFloat(m[1].replace(",","."));
-          if(!isNaN(n)&&n>0&&n<1000){
+        if(!m)continue;
+
+        if(p===qPatterns[2]){
+          const n=parseFloat(m[2].replace(",","."));
+          if(!isNaN(n)&&n>0&&n<10000){
+            clean=m[1].trim();
             qty=n;
-            if(m.length===4){unit=m[2].toLowerCase();clean=m[3].trim();}
+            unit=normalizeUnitValue(m[3]);
+            break;
+          }
+        }else{
+          const n=parseFloat(m[1].replace(",","."));
+          if(!isNaN(n)&&n>0&&n<10000){
+            qty=n;
+            if(m.length===4){unit=normalizeUnitValue(m[2]);clean=m[3].trim();}
             else{clean=m[2].trim();}
-            matched=true;break;
+            break;
           }
         }
       }
-      // Se não encontrou quantidade, remove prefixos de lista (-, •, 1., 2) etc)
-      if(!matched){
-        clean=clean.replace(/^[\s•\-\*]+/,"").trim();
-        clean=clean.replace(/^\d+[.):]\s*/,"").trim();
-      }
+
+      clean=clean
+        .replace(/^[-–—*•]+\s*/,"")
+        .replace(/^\d{1,3}[.)-]\s*/,"")
+        .replace(/\s{2,}/g," ")
+        .trim();
+
       return normalizeListItem({name:clean,marca:"",tipo:"",embalagem:"",peso:"",volume:"",qty,unit,price:null,checked:false,notFound:false});
     }).filter(i=>i.name.length>0);
   };
@@ -5002,7 +5073,24 @@ const [lists,setLists]=useState(()=>{
     }
   };
 
-  const parsePastedText=()=>importTextAsPendingItemsWithAI(pasteText,{closePaste:true,source:"texto"});
+  const parsePastedText=()=>{
+    const clean=String(pasteText||"").trim();
+    if(!clean){showToast("⚠️ Nenhum item informado");return;}
+
+    // Para listas coladas do WhatsApp, o parser local é mais seguro: preserva as quebras de linha e evita a IA juntar vários itens.
+    const localItems=parseListTextToItems(clean);
+    const hasListShape=/\n|;|\||^[\s•\-*\d.)]+/m.test(clean);
+    if(hasListShape && localItems.length>=2){
+      const normalizedItems=applyUserMemoryToItems(localItems).map(normalizeListItem);
+      setPendingItems(prev=>[...prev,...normalizedItems]);
+      setPasteText("");
+      setShowPasteModal(false);
+      showToast(`✅ ${normalizedItems.length} item(ns) importados da lista colada`,2800);
+      return;
+    }
+
+    importTextAsPendingItemsWithAI(clean,{closePaste:true,source:"texto"});
+  };
 
   const stopVoiceSilenceTimer=()=>{
     if(voiceSilenceTimerRef.current){
@@ -5762,15 +5850,13 @@ const [lists,setLists]=useState(()=>{
   const shareWhatsApp=async(listArg=null)=>{
     const list=withSender(listArg||shareTargetList||currentList);
     if(!list)return;
-    const preparedWindow=window.open("about:blank","_blank");
     try{
       showToast("🔗 Gerando link da lista...");
       const{link,list:published}=await publishSharedList(list);
       const text=buildShareInviteText(published,link);
-      openWhatsAppDirect(text,preparedWindow);
-      showToast("✅ Link da lista pronto para envio pelo WhatsApp!");
+      openWhatsAppDirect(text);
+      showToast("✅ WhatsApp aberto para envio da lista.",3200);
     }catch(err){
-      if(preparedWindow&&!preparedWindow.closed)preparedWindow.close();
       console.error("Erro ao compartilhar no WhatsApp:",err);
       showToast("⚠️ Não foi possível gerar o link curto. Verifique as variáveis do Supabase e as permissões da tabela.",7500);
     }
