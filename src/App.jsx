@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+// Etapa 7.24 - Visual premium integrado à versão completa
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -733,6 +734,47 @@ const CAT_THEME = {
 
 function getCatTheme(name) {
   return CAT_THEME[name] || { bg:"#FAFAFA", border:"#BDBDBD", header:"#424242", icon:"📦" };
+}
+
+function hexToRgba(hex, alpha = 1) {
+  try {
+    const clean = String(hex || "").replace("#", "");
+    const value = clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean;
+    const num = parseInt(value, 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    return `rgba(${r},${g},${b},${alpha})`;
+  } catch {
+    return `rgba(17,24,39,${alpha})`;
+  }
+}
+
+function getPremiumSectionStyle(theme, { isExtraCat = false, allDone = false } = {}) {
+  const border = isExtraCat ? "#F97316" : allDone ? "#22C55E" : theme.border;
+  return {
+    marginBottom: 18,
+    borderRadius: 22,
+    overflow: "hidden",
+    border: `1.5px solid ${hexToRgba(border, 0.58)}`,
+    background: "rgba(255,255,255,0.96)",
+    boxShadow: `0 18px 42px ${hexToRgba(border, 0.12)}, 0 2px 8px rgba(15,23,42,0.05)`,
+    transition: "border-color 0.25s, box-shadow 0.25s, transform 0.18s",
+  };
+}
+
+function getPremiumSectionHeaderStyle(theme, { isExtraCat = false, allDone = false, isCollapsed = false } = {}) {
+  const base = isExtraCat ? "#F97316" : allDone ? "#22C55E" : theme.border;
+  return {
+    background: `linear-gradient(135deg, ${hexToRgba(base, 0.14)}, ${hexToRgba(base, 0.055)})`,
+    padding: "14px 16px",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    cursor: "pointer",
+    userSelect: "none",
+    borderBottom: isCollapsed ? "none" : `1px solid ${hexToRgba(base, 0.18)}`,
+  };
 }
 
 function AppLogo({ size = 48, radius = 16, shadow = true }) {
@@ -6680,12 +6722,12 @@ const [lists,setLists]=useState(()=>{
               });
 
               return(
-                <div key={ci} style={{marginBottom:12,borderRadius:18,overflow:"hidden",border:`2px solid ${isExtraCat?"#E64A19":allDone?"#6D28D9":theme.border}`,boxShadow:isExtraCat?"0 10px 26px rgba(230,74,25,0.14)":"0 2px 8px rgba(0,0,0,0.06)",transition:"border-color 0.3s, box-shadow 0.3s"}}>
+                <div key={ci} style={getPremiumSectionStyle(theme,{isExtraCat,allDone})}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
-                    style={{background:isExtraCat?"linear-gradient(135deg,#FFF7ED,#FFEDD5)":allDone?"#E8F5E9":theme.bg,padding:"12px 14px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",borderBottom:isCollapsed?"none":`1px solid ${theme.border}40`}}>
-                    <span style={{fontSize:20}}>{theme.icon}</span>
-                    <span style={{fontWeight:800,fontSize:14,color:allDone?"#2E7D32":theme.header,flex:1}}>
+                    style={getPremiumSectionHeaderStyle(theme,{isExtraCat,allDone,isCollapsed})}>
+                    <span style={{width:34,height:34,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.72)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.9), 0 8px 18px rgba(15,23,42,0.08)",fontSize:20,flexShrink:0}}>{theme.icon}</span>
+                    <span style={{fontWeight:900,fontSize:16,color:allDone?"#15803D":theme.header,flex:1,letterSpacing:"-0.2px"}}>
                       {cat.name}
                       {allDone&&<span style={{marginLeft:8,fontSize:12,color:"#43A047"}}>✓ Completo</span>}
                     </span>
@@ -6715,22 +6757,22 @@ const [lists,setLists]=useState(()=>{
                           <div key={`${ci}-${realII}-${item.name || "item"}`}
                             onClick={()=>{if(item.notFound)return;openItemModal(ci,realII);if(search)setSearch("");}}
                             style={{
-                              display:"flex",alignItems:"center",gap:12,
-                              padding:"13px 14px",
-                              borderBottom:isLast?"none":`1px solid ${theme.bg}`,
-                              background:hl?"#FFFDE7":item.notFound?"#FFFBEB":item.checked?theme.bg+"80":"white",
+                              display:"flex",alignItems:"center",gap:13,
+                              padding:"15px 16px",
+                              borderBottom:isLast?"none":`1px solid ${hexToRgba(theme.border,0.10)}`,
+                              background:hl?"#FFFDE7":item.notFound?"#FFFBEB":item.checked?hexToRgba(theme.border,0.055):"rgba(255,255,255,0.98)",
                               opacity:item.notFound?0.46:(item.checked?0.62:1),filter:item.notFound?"grayscale(0.15)":"none",cursor:item.notFound?"not-allowed":"pointer",
                               transition:"background 0.15s",
                             }}>
                             {/* Checkbox com cor da categoria */}
                             <div onClick={e=>{e.stopPropagation();if(item.notFound){showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");return;}toggleCheck(ci,realII);if(search)setSearch("");}}
-                              style={{width:28,height:28,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:(item.notFound?"#F59E0B":"#E5E7EB")}`,background:item.checked?theme.border:(item.notFound?"#FEF3C7":"white"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,color:"white",cursor:item.notFound?"not-allowed":"pointer",transition:"all 0.2s"}}>
+                              style={{width:34,height:34,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:(item.notFound?"#F59E0B":"#E5E7EB")}`,background:item.checked?theme.border:(item.notFound?"#FEF3C7":"white"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:15,color:"white",cursor:item.notFound?"not-allowed":"pointer",transition:"all 0.2s",boxShadow:item.checked?`0 8px 18px ${hexToRgba(theme.border,0.22)}`:"0 3px 10px rgba(15,23,42,0.04)"}}>
                               {item.checked?"✓":""}
                             </div>
                             {/* Conteúdo */}
                             <div style={{flex:1,minWidth:0}}>
                               {/* Linha 1: descrição */}
-                              <div style={{fontWeight:700,fontSize:15,color:item.checked?"#9E9E9E":item.notFound?"#92400E":"#111827",textDecoration:item.checked?"line-through":"none",textDecorationColor:item.checked?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontWeight:800,fontSize:16,color:item.checked?"#9E9E9E":item.notFound?"#92400E":"#0F172A",textDecoration:item.checked?"line-through":"none",textDecorationColor:item.checked?"#EF4444":"inherit",textDecorationThickness:"2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6,letterSpacing:"-0.25px"}}>
                                 {titleLine}
                                 {isExtra&&<span style={{fontSize:10,fontWeight:700,background:"#FF7043",color:"white",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>extra</span>}
                                 {item.qtyAdjusted&&<span style={{fontSize:10,fontWeight:800,background:"#EEF2FF",color:"#4C1D95",padding:"2px 6px",borderRadius:180,textTransform:"uppercase",flexShrink:0}}>qtd. ajustada</span>}
@@ -6752,7 +6794,7 @@ const [lists,setLists]=useState(()=>{
                               {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} listId={currentList?.id} itemId={item.id || item.name} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
-                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:34,height:34,borderRadius:"50%",border:"2px solid "+(item.notFound?"#DC2626":"#E5E7EB"),background:item.notFound?"#FEE2E2":"#FFFFFF",color:item.notFound?"#991B1B":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>{item.notFound?"!":"∅"}</button>
+                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:38,height:38,borderRadius:"50%",border:"2px solid "+(item.notFound?"#DC2626":"#E5E7EB"),background:item.notFound?"#FEE2E2":"#FFFFFF",color:item.notFound?"#991B1B":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:17,fontWeight:900,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 12px rgba(15,23,42,0.06)"}}>{item.notFound?"!":"∅"}</button>
                           </div>
                         );
                       })}
