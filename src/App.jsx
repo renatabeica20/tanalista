@@ -3188,11 +3188,14 @@ function getListPersistenceKeys(listOrId) {
   if (listOrId.sharedId) keys.push(`shared:${String(listOrId.sharedId)}`);
   if (data?.id) keys.push(`id:${String(data.id)}`);
   if (data?.sharedId) keys.push(`shared:${String(data.sharedId)}`);
-  if (listOrId.user_id && listOrId.title) keys.push(`user:${String(listOrId.user_id)}:${normalizeDeletedKeyPart(listOrId.title)}`);
-  if (listOrId.userId && listOrId.name) keys.push(`user:${String(listOrId.userId)}:${normalizeDeletedKeyPart(listOrId.name)}`);
-  if (data?.userId && data?.name) keys.push(`user:${String(data.userId)}:${normalizeDeletedKeyPart(data.name)}`);
-  if (listOrId.remetente && listOrId.title) keys.push(`owner:${normalizeDeletedKeyPart(listOrId.remetente)}:${normalizeDeletedKeyPart(listOrId.title)}`);
-  if (listOrId.ownerName && listOrId.name) keys.push(`owner:${normalizeDeletedKeyPart(listOrId.ownerName)}:${normalizeDeletedKeyPart(listOrId.name)}`);
+  const createdPart = normalizeDeletedKeyPart(listOrId.created_at || listOrId.createdAt || data?.createdAt || data?.created_at || "");
+  // Chaves por nome/título sem data causavam exclusão em lote quando havia listas com o mesmo nome.
+  // Agora elas só entram com data de criação como complemento de segurança.
+  if (createdPart && listOrId.user_id && listOrId.title) keys.push(`user:${String(listOrId.user_id)}:${normalizeDeletedKeyPart(listOrId.title)}:${createdPart}`);
+  if (createdPart && listOrId.userId && listOrId.name) keys.push(`user:${String(listOrId.userId)}:${normalizeDeletedKeyPart(listOrId.name)}:${createdPart}`);
+  if (createdPart && data?.userId && data?.name) keys.push(`user:${String(data.userId)}:${normalizeDeletedKeyPart(data.name)}:${createdPart}`);
+  if (createdPart && listOrId.remetente && listOrId.title) keys.push(`owner:${normalizeDeletedKeyPart(listOrId.remetente)}:${normalizeDeletedKeyPart(listOrId.title)}:${createdPart}`);
+  if (createdPart && listOrId.ownerName && listOrId.name) keys.push(`owner:${normalizeDeletedKeyPart(listOrId.ownerName)}:${normalizeDeletedKeyPart(listOrId.name)}:${createdPart}`);
 
   return Array.from(new Set(keys.filter(Boolean)));
 }
@@ -3961,6 +3964,7 @@ export default function App(){
   const [screen,setScreen]=useState("home");
   
   const [showPriceStatsScreen, setShowPriceStatsScreen] = useState(false);
+  const [showHistory,setShowHistory]=useState(false);
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
@@ -5449,12 +5453,17 @@ const [lists,setLists]=useState(()=>{
     markListAsDeletedLocally(target);
 
     const targetKeys=new Set(getListPersistenceKeys(target));
-    const nl=lists.filter(l=>!getListPersistenceKeys(l).some(key=>targetKeys.has(key)));
+    const sameList=(l)=>(
+      (target.id && l.id===target.id) ||
+      (target.sharedId && l.sharedId===target.sharedId) ||
+      getListPersistenceKeys(l).some(key=>targetKeys.has(key))
+    );
+    const nl=lists.filter(l=>!sameList(l));
     saveLists(nl);
     setConfirmDelete(null);
     setListMenuId(null);
 
-    if(currentList && getListPersistenceKeys(currentList).some(key=>targetKeys.has(key))){
+    if(currentList && sameList(currentList)){
       setCurrentList(null);
       setScreen("home");
     }
@@ -5555,6 +5564,10 @@ const [lists,setLists]=useState(()=>{
 
   // ─────────────────────────────────────────────────────────────────────
   if(showPriceStatsScreen) return <PriceStatsScreen onBack={()=>setShowPriceStatsScreen(false)} />;
+
+  const visibleLists = Array.isArray(lists) ? lists.filter(l=>!wasListDeletedLocally(l)) : [];
+  const recentLists = visibleLists.slice(0,1);
+  const historyLists = visibleLists.slice(1);
 
   return(
     <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
@@ -5716,7 +5729,7 @@ const [lists,setLists]=useState(()=>{
               </div>
               {lists.length>0&&(
                 <div style={{fontSize:12,color:"#6B7280",fontWeight:800,flexShrink:0}}>
-                  {lists.length} {lists.length===1?"lista":"listas"}
+                  {lists.length} {lists.length===1?"lista salva":"listas salvas"}
                 </div>
               )}
             </div>
@@ -5727,7 +5740,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {lists.map(list=>{
+                {recentLists.map(list=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
@@ -5739,25 +5752,31 @@ const [lists,setLists]=useState(()=>{
                         style={{display:"flex",alignItems:"flex-start",gap:14,padding:"16px 16px 12px",cursor:"pointer"}}>
                         <div style={{width:46,height:46,borderRadius:18,background:"linear-gradient(135deg,#F5F3FF,#EEF2FF)",border:"1px solid #DDD6FE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{icons[list.type]||"📦"}</div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                            <div style={{fontWeight:900,fontSize:15,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name||"Lista sem nome"}</div>
-                            {shared&&<span style={{fontSize:10,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"3px 7px",whiteSpace:"nowrap"}}>Compartilhada</span>}
+                          <div style={{textAlign:"center",minWidth:0}}>
+                            <div style={{fontWeight:900,fontSize:16,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name||"Lista sem nome"}</div>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexWrap:"wrap",marginTop:6}}>
+                              <span style={{fontSize:11,fontWeight:900,color:finished?"#B91C1C":"#047857",background:finished?"#FEE2E2":"#ECFDF5",border:"1px solid "+(finished?"#FCA5A5":"#A7F3D0"),borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>{finished?"Finalizada":"Em aberto"}</span>
+                              {shared&&<span style={{fontSize:10,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Compartilhada</span>}
+                            </div>
                           </div>
-                          <div style={{fontSize:12,color:"#6B7280",marginTop:4,fontWeight:700}}>{formatListDate(list.createdAt)} · {stats.checkedItems}/{stats.totalItems} itens comprados</div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
-                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 10px"}}>
+                          <div style={{fontSize:12,color:"#6B7280",marginTop:7,fontWeight:700,textAlign:"center"}}>{formatListDate(list.createdAt)}</div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
+                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
                               <div style={{fontSize:10,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Orçamento</div>
-                              <div style={{fontSize:13,color:"#111827",fontWeight:900,marginTop:2}}>{stats.budget>0?fmtR(stats.budget):"Não definido"}</div>
+                              <div style={{fontSize:12,color:"#111827",fontWeight:900,marginTop:2}}>{stats.budget>0?fmtR(stats.budget):"Não definido"}</div>
                             </div>
-                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 10px"}}>
+                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
                               <div style={{fontSize:10,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Gasto</div>
-                              <div style={{fontSize:13,color:"#111827",fontWeight:900,marginTop:2}}>{fmtR(stats.fullTotal||list.total||0)}</div>
+                              <div style={{fontSize:12,color:"#111827",fontWeight:900,marginTop:2}}>{fmtR(stats.fullTotal||list.total||0)}</div>
+                            </div>
+                            <div style={{background:stats.balanceBg,border:"1px solid "+stats.balanceBorder,borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
+                              <div style={{fontSize:10,color:stats.balanceColor,fontWeight:900,textTransform:"uppercase"}}>Resultado</div>
+                              <div style={{fontSize:12,color:stats.balanceColor,fontWeight:900,marginTop:2}}>{stats.budget>0?(stats.balance>=0?fmtR(stats.balance):fmtR(Math.abs(stats.balance))):"Sem orçamento"}</div>
                             </div>
                           </div>
-                          <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:10}}>
-                            <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,background:stats.balanceBg,border:"1px solid "+stats.balanceBorder,color:stats.balanceColor,fontSize:11,fontWeight:900}}>{stats.budget>0?(stats.balance>=0?"✅":"⚠️"):"ℹ️"} {stats.balanceText}</span>
-                            {originMeta&&<span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,background:originMeta.type==="received"?"#EEF2FF":"#ECFDF5",border:"1px solid "+(originMeta.type==="received"?"#C4B5FD":"#A7F3D0"),color:originMeta.type==="received"?"#4C1D95":"#047857",fontSize:11,fontWeight:900}}><span>{originMeta.icon}</span><span>{originMeta.text}</span></span>}
-                          </div>
+                          {originMeta&&<div style={{display:"flex",justifyContent:"center",marginTop:10}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,background:originMeta.type==="received"?"#EEF2FF":"#ECFDF5",border:"1px solid "+(originMeta.type==="received"?"#C4B5FD":"#A7F3D0"),color:originMeta.type==="received"?"#4C1D95":"#047857",fontSize:11,fontWeight:900}}><span>{originMeta.icon}</span><span>{originMeta.text}</span></span>
+                          </div>}
                         </div>
                         <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                           <button onClick={()=>setListMenuId(listMenuId===list.id?null:list.id)}
@@ -5779,10 +5798,49 @@ const [lists,setLists]=useState(()=>{
                 })}
               </div>
             )}
+            {historyLists.length>0&&(<div style={{marginTop:18}}>
+              <button onClick={()=>setShowHistory(v=>!v)} style={{width:"100%",padding:"14px 16px",borderRadius:18,background:"#FFFFFF",border:"1px solid #E5E7EB",color:"#111827",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 10px 24px rgba(17,24,39,0.05)"}}>
+                <span>Histórico</span><span style={{color:"#6D28D9"}}>{showHistory?"Ocultar":"Ver"} ({historyLists.length})</span>
+              </button>
+              {showHistory&&(<div style={{display:"flex",flexDirection:"column",gap:12,marginTop:12}}>
+                {historyLists.map(list=>{
+                  const stats=getListCardStats(list);
+                  const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
+                  const originMeta=getListOriginMeta(list);
+                  const shared=Boolean(list.sharedId);
+                  const finished=isListFinished(list);
+                  return(
+                    <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:22,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
+                      <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}} style={{display:"flex",alignItems:"center",gap:12,padding:"14px",cursor:"pointer"}}>
+                        <div style={{width:42,height:42,borderRadius:16,background:"linear-gradient(135deg,#F5F3FF,#EEF2FF)",border:"1px solid #DDD6FE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{icons[list.type]||"📦"}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:900,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name||"Lista sem nome"}</div>
+                          <div style={{fontSize:12,color:"#6B7280",marginTop:3,fontWeight:700}}>{formatListDate(list.createdAt)} · {finished?"Finalizada":"Em aberto"} · {fmtR(stats.fullTotal||list.total||0)}</div>
+                          {originMeta&&<div style={{fontSize:11,color:originMeta.type==="received"?"#4C1D95":"#047857",fontWeight:800,marginTop:4}}>{originMeta.icon} {originMeta.text}</div>}
+                        </div>
+                        <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                          <button onClick={()=>setListMenuId(listMenuId===list.id?null:list.id)} style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:12,padding:"7px 11px",cursor:"pointer",fontWeight:900,fontSize:18,color:"#4B5563",fontFamily:"inherit",lineHeight:1}}>⋯</button>
+                          {listMenuId===list.id&&(
+                            <div style={{position:"absolute",right:0,top:42,background:"#FFFFFF",borderRadius:20,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",border:"1px solid #E5E7EB",zIndex:500,minWidth:230,overflow:"hidden"}}>
+                              {!finished&&<button onClick={()=>openListForEdit(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>✏️ Editar lista</button>}
+                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar lista</button>
+                              <button onClick={()=>duplicateList(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📄 Fazer cópia</button>
+                              {shared&&<button onClick={()=>stopListSharing(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#6D28D9",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔒 Encerrar compartilhamento</button>}
+                              <div style={{height:1,background:"#F3F4F6"}}/>
+                              <button onClick={()=>{setConfirmDelete(list.id);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#DC2626",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🗑 Excluir lista</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>)}
+            </div>)}
             <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
               <button onClick={shareAppWhatsApp}
                 style={{width:"100%",padding:"15px 16px",borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 12px 28px rgba(37,211,102,0.22)"}}>
-                💬 Compartilhar o Tá na Lista
+                🟢 Compartilhe o Tá na Lista
               </button>
               <div style={{fontSize:12,color:"#6B7280",textAlign:"center",fontWeight:600,lineHeight:1.4}}>Convide outras pessoas para organizar listas e controlar o orçamento.</div>
             </div>
