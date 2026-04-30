@@ -2769,22 +2769,30 @@ function isQuantityOnlyItemName(name) {
 }
 
 function inferPreferredCategoryForItem(item) {
-  const n = normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "));
+  const n = normalizePlainText([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
+  const has = (...keys) => keys.some(k => n.includes(normalizePlainText(k)));
+
+  // Regras específicas primeiro. Isso evita conflitos como "molho de tomate" cair em Hortifruti.
+  if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
+  if (has("bolacha", "biscoito", "cookie", "oreo", "trakinas", "wafer", "chocolate", "salgadinho", "chips", "pipoca doce")) return "Snacks e Doces";
+  if (has("colorau", "páprica", "paprica", "orégano", "oregano", "cominho", "tempero", "sazon", "caldo knorr", "caldo maggi", "alho e sal")) return "Temperos e Condimentos";
+  if (has("lenço umedecido", "lenco umedecido", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
+  if (has("papel toalha", "guardanapo", "copo descartável", "copo descartavel", "prato descartável", "prato descartavel", "talher descartável", "talher descartavel", "papel alumínio", "papel aluminio", "papel filme", "saco freezer", "saco plástico", "saco plastico")) return "Descartáveis e Embalagens";
+  if (has("pilha", "bateria", "lâmpada", "lampada", "tomada", "interruptor", "extensão", "extensao", "cabo elétrico", "cabo eletrico", "fio elétrico", "fio eletrico", "disjuntor")) return "Elétrica";
+  if (has("bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
+  if (has("pasta de dente", "creme dental", "sabonete", "shampoo", "condicionador", "desodorante", "escova de dente", "fio dental", "papel higiênico", "papel higienico", "absorvente", "barbeador", "aparelho de barbear")) return "Higiene e Perfumaria";
+
   const rules = [
     { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta"] },
-    { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","molho","extrato","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","tempero","colorau","paprica","páprica","oregano","orégano","cominho"] },
+    { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","aveia","granola","cereal matinal","leite condensado","creme de leite"] },
     { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
     { cat: "Cafés e Chás", keys: ["cafe","café","cha","chá","achocolatado","nescau","toddy"] },
-    { cat: "Frios e Laticínios", keys: ["ovo","ovos","leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","creme de leite","leite condensado","presunto","mortadela","salame","peito de peru"] },
+    { cat: "Frios e Laticínios", keys: ["ovo","ovos","leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","presunto","mortadela","salame","peito de peru"] },
     { cat: "Carnes e Aves", keys: ["carne","frango","coxinha da asa","asa de frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
-    { cat: "Limpeza", keys: ["bombril","palha de aço","aco","aço","detergente","sabao","sabão","desinfetante","amaciante","lava roupa","lava roupas","omo","coala","agua sanitaria","água sanitária","limpador","vassoura","esponja","rodo","multiuso","alvejante","cloro","saco de lixo"] },
-    { cat: "Higiene e Perfumaria", keys: ["sabonete","shampoo","condicionador","desodorante","creme dental","pasta de dente","escova","fio dental","absorvente","papel higienico","papel higiênico","fralda"] },
-    { cat: "Descartáveis e Embalagens", keys: ["copo descartavel","copo descartável","prato descartavel","prato descartável","talher descartavel","talher descartável","guardanapo","papel aluminio","papel alumínio","papel filme","embalagem"] },
     { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
     { cat: "Material de Escrita", keys: ["lapis","lápis","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
     { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","vitamina","xarope","soro fisiologico","soro fisiológico"] },
-    { cat: "Elétrica", keys: ["fio","cabo","tomada","interruptor","disjuntor","lampada","lâmpada","extensao","extensão"] },
     { cat: "Hidráulica", keys: ["cano","tubo","conexao","conexão","registro","torneira","chuveiro","ralo","sifao","sifão"] },
     { cat: "Ferramentas", keys: ["martelo","chave de fenda","alicate","furadeira","parafusadeira"] },
     { cat: "Ferragens", keys: ["prego","parafuso","bucha","porca","arruela"] },
@@ -2809,28 +2817,32 @@ function enforceKnownCategoryRules(categories) {
 }
 
 function demoOrganize(items) {
-  // Categorias alinhadas ao Atacadão
+  // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
   const map = [
-    [["arroz","feijão","macarrão","farinha","açúcar","sal","azeite","óleo","molho","vinagre","extrato","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
-    [["carne","frango","coxinha da asa","asa de frango","peixe","linguiça","bacon","costela","picanha","bife","filé","salsicha","hambúrguer"],"Carnes e Aves"],
-    [["leite","iogurte","queijo","manteiga","requeijão","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru"],"Frios e Laticínios"],
-    [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis","mamão","mamao","manga","uva","melão","melao","abacaxi","abobrinha","beterraba","pepino","repolho","couve","berinjela","pera","pêra"],"Hortifruti"],
+    [["molho de tomate","extrato de tomate","polpa de tomate","tomate pelado"],"Mercearia"],
+    [["bolacha","biscoito","cookie","oreo","chocolate","salgadinho","snack","chips","barra","pipoca"],"Snacks e Doces"],
+    [["colorau","paprica","páprica","tempero","orégano","oregano","cominho","sazon"],"Temperos e Condimentos"],
+    [["lenço umedecido","lenco umedecido","fralda","pomada bebê","pomada bebe"],"Bebês"],
+    [["papel toalha","guardanapo","copo descartável","copo descartavel","prato descartável","prato descartavel","talher","papel alumínio","papel aluminio","papel filme","embalagem"],"Descartáveis e Embalagens"],
+    [["pilha","bateria","fio","cabo","tomada","interruptor","disjuntor","lampada","lâmpada","extensao","extensão"],"Elétrica"],
+    [["bombril","palha","coala","detergente","sabão","sabao","desinfetante","vassoura","esponja","limpador","água sanitária","agua sanitaria","amaciante","lava roupa","omo","multiuso","rodo","saco de lixo"],"Limpeza"],
+    [["pasta de dente","creme dental","shampoo","sabonete","escova","fio dental","desodorante","condicionador","absorvente","papel higiênico","papel higienico"],"Higiene e Perfumaria"],
+    [["arroz","feijão","feijao","macarrão","macarrao","farinha","açúcar","acucar","sal","azeite","óleo","oleo","vinagre","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
+    [["carne","frango","coxinha da asa","asa de frango","peixe","linguiça","linguica","bacon","costela","picanha","bife","filé","file","salsicha","hambúrguer","hamburguer"],"Carnes e Aves"],
+    [["leite","iogurte","queijo","manteiga","requeijão","requeijao","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru","ovo","ovos"],"Frios e Laticínios"],
+    [["alface","tomate","cebola","alho","batata","cenoura","mandioca","aipim","cheiro verde","cheiro-verde","limão","limao","banana","maçã","maca","laranja","fruta","legume","verdura","melancia","abacate","brócolis","brocolis","mamão","mamao","manga","uva","melão","melao","abacaxi","abobrinha","beterraba","pepino","repolho","couve","berinjela","pera","pêra"],"Hortifruti"],
     [["pão de queijo","lasanha","pizza","sorvete","batata frita"],"Congelados"],
-    [["detergente","sabão","desinfetante","vassoura","esponja","limpador","água sanitária","amaciante","palha","multiuso","rodo"],"Limpeza"],
-    [["shampoo","sabonete","creme dental","escova","fio dental","desodorante","condicionador","absorvente","fralda","papel higiênico"],"Higiene e Perfumaria"],
-    [["café","chá","achocolatado","nescau"],"Cafés e Chás"],
-    [["cerveja","refrigerante","suco","água","energético","água de coco"],"Bebidas"],
+    [["café","cafe","chá","cha","achocolatado","nescau"],"Cafés e Chás"],
+    [["cerveja","refrigerante","suco","água","agua","energético","energetico","água de coco","agua de coco"],"Bebidas"],
     [["vinho","cachaça","vodka","whisky","rum","gin"],"Bebidas Alcoólicas"],
-    [["biscoito","salgadinho","chocolate","bolacha","snack","chips","barra","pipoca"],"Snacks e Doces"],
-    [["pão","torrada","cereal","aveia","granola"],"Padaria e Matinais"],
-    [["copo descartável","prato descartável","talher","papel alumínio","papel filme","embalagem"],"Descartáveis e Embalagens"],
+    [["pão","pao","torrada","cereal","aveia","granola"],"Padaria e Matinais"],
   ];
   const cats = {};
   items.forEach(item=>{
-    const n=item.name.toLowerCase();
+    const n=normalizePlainText(item.name);
     let found=false;
     for (const [keys,cat] of map) {
-      if (keys.some(k=>n.includes(k))) {
+      if (keys.some(k=>n.includes(normalizePlainText(k)))) {
         if (!cats[cat]) cats[cat]=[];
         const detail=[item.marca,item.tipo,item.embalagem||item.peso||item.volume].filter(Boolean).join(" ");
         cats[cat].push(normalizeListItem({name:item.name,detail,qty:item.qty,unit:item.unit,price:null,checked:false,notFound:false}));
