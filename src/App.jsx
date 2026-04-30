@@ -2771,14 +2771,14 @@ function isQuantityOnlyItemName(name) {
 function inferPreferredCategoryForItem(item) {
   const n = normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "));
   const rules = [
-    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta"] },
-    { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","molho","extrato","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","tempero"] },
+    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta"] },
+    { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","molho","extrato","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","tempero","colorau","paprica","páprica","oregano","orégano","cominho"] },
     { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
     { cat: "Cafés e Chás", keys: ["cafe","café","cha","chá","achocolatado","nescau","toddy"] },
-    { cat: "Frios e Laticínios", keys: ["leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","creme de leite","leite condensado","presunto","mortadela","salame","peito de peru"] },
-    { cat: "Carnes e Aves", keys: ["carne","frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
+    { cat: "Frios e Laticínios", keys: ["ovo","ovos","leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","creme de leite","leite condensado","presunto","mortadela","salame","peito de peru"] },
+    { cat: "Carnes e Aves", keys: ["carne","frango","coxinha da asa","asa de frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
-    { cat: "Limpeza", keys: ["detergente","sabao","sabão","desinfetante","amaciante","agua sanitaria","água sanitária","limpador","vassoura","esponja","rodo","multiuso","alvejante","cloro","saco de lixo"] },
+    { cat: "Limpeza", keys: ["bombril","palha de aço","aco","aço","detergente","sabao","sabão","desinfetante","amaciante","lava roupa","lava roupas","omo","coala","agua sanitaria","água sanitária","limpador","vassoura","esponja","rodo","multiuso","alvejante","cloro","saco de lixo"] },
     { cat: "Higiene e Perfumaria", keys: ["sabonete","shampoo","condicionador","desodorante","creme dental","pasta de dente","escova","fio dental","absorvente","papel higienico","papel higiênico","fralda"] },
     { cat: "Descartáveis e Embalagens", keys: ["copo descartavel","copo descartável","prato descartavel","prato descartável","talher descartavel","talher descartável","guardanapo","papel aluminio","papel alumínio","papel filme","embalagem"] },
     { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
@@ -2812,7 +2812,7 @@ function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão
   const map = [
     [["arroz","feijão","macarrão","farinha","açúcar","sal","azeite","óleo","molho","vinagre","extrato","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
-    [["carne","frango","peixe","linguiça","bacon","costela","picanha","bife","filé","salsicha","hambúrguer"],"Carnes e Aves"],
+    [["carne","frango","coxinha da asa","asa de frango","peixe","linguiça","bacon","costela","picanha","bife","filé","salsicha","hambúrguer"],"Carnes e Aves"],
     [["leite","iogurte","queijo","manteiga","requeijão","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru"],"Frios e Laticínios"],
     [["alface","tomate","cebola","alho","batata","cenoura","limão","banana","maçã","laranja","fruta","legume","verdura","melancia","abacate","brócolis","mamão","mamao","manga","uva","melão","melao","abacaxi","abobrinha","beterraba","pepino","repolho","couve","berinjela","pera","pêra"],"Hortifruti"],
     [["pão de queijo","lasanha","pizza","sorvete","batata frita"],"Congelados"],
@@ -4943,7 +4943,7 @@ const [lists,setLists]=useState(()=>{
       const itemsWithMemory=applyUserMemoryToItems(pendingItems);
       try{categories=await aiOrganize(itemsWithMemory,listType);}
       catch{categories=demoOrganize(itemsWithMemory);showToast("⚠️ IA indisponível — organização básica");}
-      categories=sanitizeCategories(categories);
+      categories=enforceKnownCategoryRules(categories);
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
