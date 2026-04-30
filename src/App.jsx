@@ -2771,11 +2771,23 @@ function isQuantityOnlyItemName(name) {
 function inferPreferredCategoryForItem(item) {
   const n = normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "));
   const rules = [
-    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","tomate","alface","cebola","alho","batata","cenoura","melancia","abacate","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","berinjela","verdura","legume","fruta"] },
-    { cat: "Carnes e Aves", keys: ["carne","frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra"] },
-    { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná"] },
-    { cat: "Limpeza", keys: ["detergente","sabao","sabão","desinfetante","amaciante","agua sanitaria","água sanitária","limpador","vassoura","esponja"] },
-    { cat: "Higiene e Perfumaria", keys: ["sabonete","shampoo","condicionador","desodorante","creme dental","escova","fio dental","absorvente"] },
+    { cat: "Hortifruti", keys: ["mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta"] },
+    { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","molho","extrato","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","tempero"] },
+    { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
+    { cat: "Cafés e Chás", keys: ["cafe","café","cha","chá","achocolatado","nescau","toddy"] },
+    { cat: "Frios e Laticínios", keys: ["leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","creme de leite","leite condensado","presunto","mortadela","salame","peito de peru"] },
+    { cat: "Carnes e Aves", keys: ["carne","frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
+    { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
+    { cat: "Limpeza", keys: ["detergente","sabao","sabão","desinfetante","amaciante","agua sanitaria","água sanitária","limpador","vassoura","esponja","rodo","multiuso","alvejante","cloro","saco de lixo"] },
+    { cat: "Higiene e Perfumaria", keys: ["sabonete","shampoo","condicionador","desodorante","creme dental","pasta de dente","escova","fio dental","absorvente","papel higienico","papel higiênico","fralda"] },
+    { cat: "Descartáveis e Embalagens", keys: ["copo descartavel","copo descartável","prato descartavel","prato descartável","talher descartavel","talher descartável","guardanapo","papel aluminio","papel alumínio","papel filme","embalagem"] },
+    { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
+    { cat: "Material de Escrita", keys: ["lapis","lápis","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
+    { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","vitamina","xarope","soro fisiologico","soro fisiológico"] },
+    { cat: "Elétrica", keys: ["fio","cabo","tomada","interruptor","disjuntor","lampada","lâmpada","extensao","extensão"] },
+    { cat: "Hidráulica", keys: ["cano","tubo","conexao","conexão","registro","torneira","chuveiro","ralo","sifao","sifão"] },
+    { cat: "Ferramentas", keys: ["martelo","chave de fenda","alicate","furadeira","parafusadeira"] },
+    { cat: "Ferragens", keys: ["prego","parafuso","bucha","porca","arruela"] },
   ];
   for (const rule of rules) {
     if (rule.keys.some(k => n.includes(normalizePlainText(k)))) return rule.cat;
