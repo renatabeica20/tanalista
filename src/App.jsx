@@ -838,6 +838,23 @@ function ModuleIcon({ type="compras", size=72, active=false }) {
   );
 }
 
+function WhatsAppIcon({ size = 20 }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "inline-block", flexShrink: 0 }}
+    >
+      <path fill="#25D366" d="M16 3C8.82 3 3 8.6 3 15.5c0 2.38.7 4.6 1.9 6.5L3.3 29l7.17-1.86A13.38 13.38 0 0 0 16 28c7.18 0 13-5.6 13-12.5S23.18 3 16 3Z"/>
+      <path fill="#FFFFFF" d="M22.98 19.14c-.28-.14-1.66-.8-1.92-.9-.26-.1-.45-.14-.64.14-.2.28-.74.9-.91 1.08-.17.19-.34.21-.62.07-.28-.14-1.2-.43-2.28-1.34-.84-.72-1.4-1.6-1.57-1.88-.17-.28-.02-.43.13-.57.13-.13.28-.34.43-.5.14-.17.19-.28.28-.47.1-.19.05-.35-.02-.5-.07-.14-.64-1.5-.88-2.05-.23-.54-.47-.46-.64-.47h-.55c-.19 0-.5.07-.76.35-.26.28-1 1-1 2.43s1.03 2.81 1.17 3c.14.19 2.03 3 4.9 4.2.69.29 1.22.46 1.64.59.69.21 1.31.18 1.8.11.55-.08 1.66-.66 1.9-1.3.23-.64.23-1.18.16-1.3-.07-.12-.26-.19-.54-.32Z"/>
+    </svg>
+  );
+}
+
 function getListOriginMeta(list) {
   if (!list) return null;
   const currentName = getAppUserName();
@@ -6018,7 +6035,7 @@ const [lists,setLists]=useState(()=>{
                           {listMenuId===list.id&&(
                             <div style={{position:"absolute",right:0,top:42,background:"#FFFFFF",borderRadius:20,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",border:"1px solid #E5E7EB",zIndex:500,minWidth:230,overflow:"hidden"}}>
                               {!finished&&<button onClick={()=>openListForEdit(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>✏️ Editar lista</button>}
-                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar lista</button>
+                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}><WhatsAppIcon size={18} /> Enviar lista</button>
                               <button onClick={()=>duplicateList(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📄 Fazer cópia</button>
                               {shared&&<button onClick={()=>stopListSharing(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#6D28D9",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔒 Encerrar compartilhamento</button>}
                               <div style={{height:1,background:"#F3F4F6"}}/>
@@ -6057,7 +6074,7 @@ const [lists,setLists]=useState(()=>{
                           {listMenuId===list.id&&(
                             <div style={{position:"absolute",right:0,top:42,background:"#FFFFFF",borderRadius:20,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",border:"1px solid #E5E7EB",zIndex:500,minWidth:230,overflow:"hidden"}}>
                               {!finished&&<button onClick={()=>openListForEdit(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>✏️ Editar lista</button>}
-                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📤 Enviar lista</button>
+                              <button onClick={()=>{setCurrentList(list);setShareTargetList(list);setShareModal(true);setListMenuId(null);}} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#25D366",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}><WhatsAppIcon size={18} /> Enviar lista</button>
                               <button onClick={()=>duplicateList(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>📄 Fazer cópia</button>
                               {shared&&<button onClick={()=>stopListSharing(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:800,color:"#6D28D9",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>🔒 Encerrar compartilhamento</button>}
                               <div style={{height:1,background:"#F3F4F6"}}/>
@@ -6074,7 +6091,7 @@ const [lists,setLists]=useState(()=>{
             <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
               <button onClick={shareAppWhatsApp}
                 style={{width:"100%",padding:"15px 16px",borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 12px 28px rgba(37,211,102,0.22)"}}>
-                🟢 Compartilhe o Tá na Lista
+                <WhatsAppIcon size={19} /> Compartilhe o Tá na Lista
               </button>
               <div style={{fontSize:12,color:"#6B7280",textAlign:"center",fontWeight:600,lineHeight:1.4}}>Convide outras pessoas para organizar listas e controlar o orçamento.</div>
             </div>
@@ -6298,7 +6315,7 @@ const [lists,setLists]=useState(()=>{
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
                   </div>
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)"}}>💬 Enviar lista</button>
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)"}}><WhatsAppIcon size={17} /> Enviar lista</button>
                 </div>
                 <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -6719,7 +6736,7 @@ const [lists,setLists]=useState(()=>{
             <button onClick={async()=>{const saved=getAppUserName();const clean=saveAppUserName(senderName||saved);if(!clean){showToast("⚠️ Informe seu nome antes de enviar a lista.");return;}await registerAppUser(clean);const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
               style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              WhatsApp
+              <WhatsAppIcon size={20} /> WhatsApp
             </button>          </div>
         </ModalSheet>
       )}
