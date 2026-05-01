@@ -36,7 +36,7 @@ function ensureMobileViewport() {
       meta.setAttribute("name", "viewport");
       document.head.appendChild(meta);
     }
-    meta.setAttribute("content", "width=device-width, initial-scale=1.0, viewport-fit=cover");
+    meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
 
     let style = document.getElementById("tnl-mobile-fit-style");
     if (!style) {
@@ -49,22 +49,31 @@ function ensureMobileViewport() {
         width: 100%;
         min-width: 0;
         max-width: 100%;
+        min-height: 100%;
         overflow-x: hidden;
         margin: 0;
         padding: 0;
         box-sizing: border-box;
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+        overscroll-behavior-x: none;
+        touch-action: manipulation;
+      }
+      body {
+        min-height: 100dvh;
+        position: relative;
       }
       *, *::before, *::after {
         box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
       }
       input, select, textarea, button {
         font-size: 16px;
         touch-action: manipulation;
       }
-      body {
-        touch-action: manipulation;
+      input, textarea, select {
+        -webkit-user-select: text;
+        user-select: text;
       }
       img, svg, video, canvas {
         max-width: 100%;
@@ -3180,8 +3189,8 @@ const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E5E7EB",b
 function ModalSheet({onClose,children}){
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
-      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.46)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:18}}>
-      <div style={{background:"#FFFFFF",borderRadius:24,padding:"20px",width:"100%",maxWidth:420,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 70px rgba(17,24,39,0.24)",border:"1px solid rgba(229,231,235,0.95)"}}>
+      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.46)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom))",overflowY:"auto",overscrollBehavior:"contain",touchAction:"manipulation"}}>
+      <div style={{background:"#FFFFFF",borderRadius:24,padding:"20px",width:"100%",maxWidth:420,maxHeight:"calc(100dvh - 32px)",overflowY:"auto",WebkitOverflowScrolling:"touch",boxShadow:"0 24px 70px rgba(17,24,39,0.24)",border:"1px solid rgba(229,231,235,0.95)"}}>
         {children}
       </div>
     </div>
@@ -5204,7 +5213,6 @@ const [lists,setLists]=useState(()=>{
   const [userNameInput,setUserNameInput]=useState(()=>getAppUserName()||"");
   const [userPinInput,setUserPinInput]=useState("");
   const [userPinConfirmInput,setUserPinConfirmInput]=useState("");
-  const [authLoading,setAuthLoading]=useState(false);
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
@@ -5262,6 +5270,8 @@ const [lists,setLists]=useState(()=>{
         const target = String(event?.targetName || "").trim().toLowerCase();
         const actor = String(event?.actorName || "").trim().toLowerCase();
         if (target && target !== currentName) return;
+        // Quem executou a ação não recebe notificação da própria ação.
+        // A notificação fica direcionada ao remetente/dono da lista.
         if (actor && actor === currentName) return;
         const notification = eventToNotification(event);
         if (notification) events.push(notification);
@@ -5317,26 +5327,6 @@ const [lists,setLists]=useState(()=>{
   useEffect(() => {
     syncNotificationsFromLists(lists);
   }, [lists, syncNotificationsFromLists]);
-
-
-  useEffect(() => {
-    const refreshCloudState = async () => {
-      const name = getAppUserName();
-      const userId = getAppUserId();
-      if (!name || !isPinSessionVerified(name) || !userId || !hasSupabaseConfig()) return;
-      await restoreUserListsFromCloud(userId, name, { silent: true });
-    };
-
-    const timer = setInterval(refreshCloudState, 25000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") refreshCloudState();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [restoreUserListsFromCloud]);
 
 
   const resetPantryFlow = useCallback(() => {
@@ -5594,7 +5584,7 @@ const [lists,setLists]=useState(()=>{
     }
 
     try{
-      setAuthLoading(true);
+      setLoading(true);
       const pinResult=await verifyOrCreateUserPin(clean,userPinInput,userPinConfirmInput);
       if(!pinResult.ok){
         showToast(pinResult.message,3600);
@@ -5607,9 +5597,6 @@ const [lists,setLists]=useState(()=>{
       setUserNameModal(false);
       setUserPinInput("");
       setUserPinConfirmInput("");
-      try{document.activeElement?.blur?.();}catch{}
-      ensureMobileViewport();
-      setTimeout(()=>window.scrollTo({top:0,left:0,behavior:"auto"}),80);
 
       const userId=await registerAppUser(savedName,{force:true});
       if(userId)await restoreUserListsFromCloud(userId,savedName);
@@ -5618,7 +5605,7 @@ const [lists,setLists]=useState(()=>{
     }catch(err){
       showToast(err?.message || "Não foi possível validar seu acesso.",5200);
     }finally{
-      setAuthLoading(false);
+      setLoading(false);
     }
   };
 
@@ -6899,7 +6886,14 @@ const [lists,setLists]=useState(()=>{
         }
       }
 
-      const payload={...list,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      const remoteBeforeSave=await getSharedListRecord(sharedId).catch(()=>null);
+      const remoteDataBeforeSave=remoteBeforeSave?.data && typeof remoteBeforeSave.data === "object" ? remoteBeforeSave.data : {};
+      const remoteEvents=Array.isArray(remoteDataBeforeSave.sharedEvents) ? remoteDataBeforeSave.sharedEvents : [];
+      const localEvents=Array.isArray(list?.sharedEvents) ? list.sharedEvents : [];
+      const eventMap=new Map();
+      [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
+      const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
+      const payload={...remoteDataBeforeSave,...list,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
       const record=await updateSharedListRecord(sharedId,payload);
       const synced=markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
@@ -7076,34 +7070,28 @@ const [lists,setLists]=useState(()=>{
     if (!mNotFound && !l.startedAt) {
       l.startedAt = new Date().toISOString();
       if (isReallyShared) {
-        const targetName = l.ownerName || l.remetente || l.sharedOwner || "";
-        if (String(targetName || "").trim().toLowerCase() !== String(actorName || "").trim().toLowerCase()) {
-          appendSharedListEvent(l.sharedId, {
-            type:"started",
-            actorName,
-            targetName,
-            listName:l.name || "Lista",
-            listId:l.id,
-            message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
-          });
-        }
+        appendSharedListEvent(l.sharedId, {
+          type:"started",
+          actorName,
+          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          listName:l.name || "Lista",
+          listId:l.id,
+          message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
+        });
       }
     }
 
     if (allDone && !l.finishedAt) {
       l.finishedAt = new Date().toISOString();
       if (isReallyShared) {
-        const targetName = l.ownerName || l.remetente || l.sharedOwner || "";
-        if (String(targetName || "").trim().toLowerCase() !== String(actorName || "").trim().toLowerCase()) {
-          appendSharedListEvent(l.sharedId, {
-            type:"finished",
-            actorName,
-            targetName,
-            listName:l.name || "Lista",
-            listId:l.id,
-            message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
-          });
-        }
+        appendSharedListEvent(l.sharedId, {
+          type:"finished",
+          actorName,
+          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          listName:l.name || "Lista",
+          listId:l.id,
+          message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
+        });
       }
     }
 
@@ -8333,14 +8321,14 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
-            <input value={userNameInput} autoFocus onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu"
+            <input value={userNameInput} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu" autoFocus
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>PIN de acesso</label>
-            <input value={userPinInput} onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
+            <input value={userPinInput} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
@@ -8348,7 +8336,7 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN <span style={{fontWeight:700,color:"#9CA3AF"}}>(somente no primeiro acesso)</span></label>
-            <input value={userPinConfirmInput} onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
+            <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
