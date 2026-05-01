@@ -4477,87 +4477,80 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
       top:0,
       zIndex:120,
       width:"100%",
-      background:"rgba(255,255,255,0.94)",
-      backdropFilter:"blur(12px)",
-      WebkitBackdropFilter:"blur(12px)",
+      background:"#FFFFFF",
       borderBottom:"1px solid #E5E7EB",
-      boxShadow:"0 8px 24px rgba(17,24,39,0.06)",
       padding:"10px 12px",
-      boxSizing:"border-box"
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"space-between",
+      boxSizing:"border-box",
+      boxShadow:"0 8px 22px rgba(17,24,39,0.04)"
     }}>
       <div style={{
-        maxWidth:430,
-        width:"100%",
-        margin:"0 auto",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"space-between",
-        gap:10
+        fontSize:14,
+        fontWeight:900,
+        color:"#111827",
+        overflow:"hidden",
+        textOverflow:"ellipsis",
+        whiteSpace:"nowrap",
+        paddingRight:10
       }}>
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{fontSize:12,fontWeight:800,color:"#6B7280",lineHeight:1}}>Usuário</div>
-          <div style={{fontSize:14,fontWeight:900,color:"#111827",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            Olá, {userName}
-          </div>
-        </div>
+        Olá, {userName}
+      </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <button onClick={onNotifications} aria-label="Notificações" style={{
-            position:"relative",
-            border:"1px solid #DDD6FE",
-            background:"#F5F3FF",
-            color:"#6D28D9",
-            borderRadius:999,
-            width:38,
-            height:34,
-            fontSize:17,
-            fontWeight:900,
-            cursor:"pointer",
-            fontFamily:"inherit",
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            boxShadow:"0 8px 18px rgba(109,40,217,0.10)"
-          }}>
-            🔔
-            {unreadCount > 0 && (
-              <span style={{
-                position:"absolute",
-                top:-6,
-                right:-6,
-                minWidth:18,
-                height:18,
-                borderRadius:999,
-                background:"#DC2626",
-                color:"#FFFFFF",
-                fontSize:10,
-                fontWeight:900,
-                display:"flex",
-                alignItems:"center",
-                justifyContent:"center",
-                border:"2px solid #FFFFFF"
-              }}>
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <button onClick={onNotifications} aria-label="Notificações" style={{
+          position:"relative",
+          border:"1px solid #DDD6FE",
+          background:"#F5F3FF",
+          color:"#6D28D9",
+          borderRadius:999,
+          width:34,
+          height:34,
+          cursor:"pointer",
+          fontSize:16,
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"center",
+          boxShadow:"0 8px 18px rgba(109,40,217,0.10)"
+        }}>
+          🔔
+          {unreadCount > 0 && (
+            <span style={{
+              position:"absolute",
+              top:-4,
+              right:-4,
+              minWidth:17,
+              height:17,
+              background:"#DC2626",
+              color:"#FFF",
+              borderRadius:"50%",
+              fontSize:10,
+              fontWeight:900,
+              display:"flex",
+              alignItems:"center",
+              justifyContent:"center",
+              border:"2px solid #FFFFFF"
+            }}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
 
-          <button onClick={onSwitchUser} style={{
-            border:"1px solid #E5E7EB",
-            background:"#FFFFFF",
-            color:"#6D28D9",
-            borderRadius:999,
-            padding:"8px 10px",
-            fontSize:11,
-            fontWeight:900,
-            cursor:"pointer",
-            fontFamily:"inherit",
-            whiteSpace:"nowrap",
-            boxShadow:"0 8px 18px rgba(17,24,39,0.06)"
-          }}>
-            Trocar usuário
-          </button>
-        </div>
+        <button onClick={onSwitchUser} style={{
+          border:"1px solid #E5E7EB",
+          background:"#FFF",
+          color:"#6D28D9",
+          borderRadius:999,
+          padding:"7px 12px",
+          fontSize:12,
+          fontWeight:900,
+          cursor:"pointer",
+          fontFamily:"inherit",
+          boxShadow:"0 8px 18px rgba(17,24,39,0.06)"
+        }}>
+          Sair
+        </button>
       </div>
     </div>
   );
@@ -7228,13 +7221,6 @@ const [lists,setLists]=useState(()=>{
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
             <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-              {getAppUserName()&&(
-                <div style={{alignSelf:"stretch",display:"flex",justifyContent:"center"}}>
-                  <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:999,background:"rgba(255,255,255,0.86)",border:"1px solid #DDD6FE",boxShadow:"0 10px 24px rgba(109,40,217,0.08)",fontSize:13,color:"#4C1D95",fontWeight:900}}>
-                    <span>Olá, {getAppUserName()}</span>
-                  </div>
-                </div>
-              )}
               <div style={{textAlign:"center",background:"rgba(255,255,255,0.58)",border:"1px solid rgba(221,214,254,0.72)",borderRadius:28,padding:"18px 18px 16px",width:"100%",boxShadow:"0 18px 42px rgba(109,40,217,0.08)",backdropFilter:"blur(8px)"}}>
                 <BrandWordmark />
                 <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
@@ -7426,7 +7412,6 @@ const [lists,setLists]=useState(()=>{
             <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
-              {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()}</div>)}
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
             </div>
           </div>
@@ -7787,7 +7772,6 @@ const [lists,setLists]=useState(()=>{
             <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 54%,#8B5CF6 100%)",borderRadius:28,padding:"18px 18px 20px",boxShadow:"0 22px 48px rgba(91,33,182,0.24)",border:"1px solid rgba(255,255,255,0.28)"}}>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 18% 8%,rgba(255,255,255,0.22),transparent 32%),radial-gradient(circle at 90% 0%,rgba(255,255,255,0.14),transparent 34%)",pointerEvents:"none"}}/>
               <div style={{position:"relative",zIndex:1}}>
-                {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:12,textAlign:"left"}}>Olá, {getAppUserName()}</div>)}
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>setScreen("home")}
                     title="Voltar para a tela inicial"
