@@ -4257,6 +4257,94 @@ function PriceStatsPanel() {
   );
 }
 
+
+// ── DESPENSA: fluxo integrado ao módulo Compras ───────────────────────────
+const PANTRY_STORAGE_KEY = "tnl_pantry_lists";
+
+function loadPantryLists() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PANTRY_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function countCategoryItems(categories) {
+  return (Array.isArray(categories) ? categories : []).reduce((sum, cat) => sum + (Array.isArray(cat.items) ? cat.items.length : 0), 0);
+}
+
+function flattenCategoryItems(categories) {
+  return (Array.isArray(categories) ? categories : []).flatMap(cat =>
+    (Array.isArray(cat.items) ? cat.items : []).map(item => ({ ...item, category: cat.name }))
+  );
+}
+
+function pantryItemKey(item) {
+  return normalizePlainText([item?.name, item?.detail].filter(Boolean).join(" "))
+    .replace(/\b(pct|pcte|pacote|pacotes|cx|caixa|caixas|unidade|unidades|kg|g|ml|l|litro|litros|quilo|quilos)\b/g, " ")
+    .replace(/\b\d+[,.]?\d*\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findMatchingPantryItem(item, pantryItems) {
+  const key = pantryItemKey(item);
+  if (!key) return null;
+  return pantryItems.find(p => {
+    const pk = pantryItemKey(p);
+    return pk && (pk === key || pk.includes(key) || key.includes(pk));
+  }) || null;
+}
+
+function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
+  const pantryItems = flattenCategoryItems(pantryCategories);
+  const removed = [];
+  const adjusted = [];
+  const kept = [];
+
+  const nextItems = (Array.isArray(pendingItems) ? pendingItems : []).flatMap(original => {
+    const item = normalizeListItem(original);
+    const match = findMatchingPantryItem(item, pantryItems);
+    if (!match) {
+      kept.push(item);
+      return [item];
+    }
+
+    const sameUnit = normalizeUnitValue(item.unit) === normalizeUnitValue(match.unit);
+    const itemQty = Number(item.qty || 1);
+    const pantryQty = Number(match.qty || 1);
+    const pantryNote = `Já tem na despensa: ${formatQtyUnit(match.qty, match.unit)}`;
+
+    if (sameUnit && Number.isFinite(itemQty) && Number.isFinite(pantryQty)) {
+      if (pantryQty >= itemQty) {
+        removed.push({ item, pantry: match, reason: pantryNote });
+        return [];
+      }
+      const newQty = Number((itemQty - pantryQty).toFixed(2));
+      const changed = { ...item, qty: newQty, pantryCompared: true, pantryNote: `${pantryNote}. Comprar complemento: ${formatQtyUnit(newQty, item.unit)}` };
+      adjusted.push({ before: item, after: changed, pantry: match });
+      return [changed];
+    }
+
+    const marked = { ...item, pantryCompared: true, pantryNote };
+    adjusted.push({ before: item, after: marked, pantry: match });
+    return [marked];
+  });
+
+  return { items: nextItems, removed, adjusted, kept };
+}
+
+function formatPantryDate(value) {
+  try {
+    const d = new Date(value);
+    if (!Number.isFinite(d.getTime())) return "";
+    return d.toLocaleDateString("pt-BR") + " · " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 export default function App(){
   const [screen,setScreen]=useState("home");
   
@@ -4283,6 +4371,12 @@ const [lists,setLists]=useState(()=>{
   const [budgetEnabled,setBudgetEnabled]=useState(false);
   const [budgetText,setBudgetText]=useState("");
   const [pendingItems,setPendingItems]=useState([]);
+  const [pantryLists,setPantryLists]=useState(()=>loadPantryLists());
+  const [pantryPendingItems,setPantryPendingItems]=useState([]);
+  const [pantryInput,setPantryInput]=useState("");
+  const [pantryReviewCategories,setPantryReviewCategories]=useState([]);
+  const [pantryComparison,setPantryComparison]=useState(null);
+  const [pantryCompared,setPantryCompared]=useState(false);
   const [currentInput,setCurrentInput]=useState("");
   const [editingListId,setEditingListId]=useState(null);
 
@@ -4305,6 +4399,8 @@ const [lists,setLists]=useState(()=>{
   const listNameSavedTimer=useRef(null);
   const [showPasteModal,setShowPasteModal]=useState(false);
   const [pasteText,setPasteText]=useState("");
+  const [pasteTarget,setPasteTarget]=useState("list");
+  const [voiceTarget,setVoiceTarget]=useState("list");
   const [showPhotoModal,setShowPhotoModal]=useState(false);
   const [ocrLoading,setOcrLoading]=useState(false);
   const [ocrProgress,setOcrProgress]=useState(0);
@@ -4377,6 +4473,28 @@ const [lists,setLists]=useState(()=>{
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
+
+
+  const savePantryLists = useCallback((next) => {
+    const safe = Array.isArray(next) ? next : [];
+    setPantryLists(safe);
+    try { localStorage.setItem(PANTRY_STORAGE_KEY, JSON.stringify(safe)); } catch {}
+  }, []);
+
+  const activePantry = pantryLists.find(p => p.status === "ativa") || null;
+
+  const resetPantryFlow = useCallback(() => {
+    setPantryPendingItems([]);
+    setPantryInput("");
+    setPantryReviewCategories([]);
+  }, []);
+
+  const openPantryCreator = useCallback(() => {
+    setPantryPendingItems([]);
+    setPantryInput("");
+    setPantryReviewCategories([]);
+    setScreen("pantry_create");
+  }, []);
 
   const getManualDialogUnits = useCallback(() => {
     const base = ["unidade", "pacote", "kg", "L", "caixa", "fardo"];
@@ -4941,6 +5059,19 @@ const [lists,setLists]=useState(()=>{
         localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
       }
     } catch {}
+    if (itemDialogMode === "pantry") {
+      if (editPendingIdx != null) {
+        setPantryPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
+        setEditPendingIdx(null);
+      } else {
+        setPantryPendingItems(prev=>[...prev,newItem]);
+      }
+      setItemDialog(null);
+      setItemDialogMode("pending");
+      setPantryInput("");
+      showToast("✅ Item adicionado à despensa");
+      return;
+    }
     if (itemDialogMode === "extra" && currentList) {
       const l = JSON.parse(JSON.stringify(currentList));
       let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText("Itens Extras"));
@@ -4974,6 +5105,74 @@ const [lists,setLists]=useState(()=>{
     setEditPendingIdx(idx);
     openProductDialog(pendingItems[idx].name,pendingItems[idx]);
   };
+
+  const handleAddPantryItem = async () => {
+    const name = pantryInput.trim();
+    if (!name) return;
+    await openProductDialog(name, null, { mode: "pantry" });
+  };
+
+  const editPantryPendingItem = (idx) => {
+    setEditPendingIdx(idx);
+    openProductDialog(pantryPendingItems[idx].name, pantryPendingItems[idx], { mode: "pantry" });
+  };
+
+  const organizePantry = async () => {
+    if (pantryPendingItems.length === 0) { showToast("⚠️ Adicione itens à despensa"); return; }
+    setLoading(true);
+    try {
+      let categories;
+      const itemsWithMemory = applyUserMemoryToItems(pantryPendingItems);
+      try { categories = await aiOrganize(itemsWithMemory, "mercado"); }
+      catch { categories = demoOrganize(itemsWithMemory); }
+      categories = enforceKnownCategoryRules(categories);
+      setPantryReviewCategories(categories);
+      setScreen("pantry_review");
+    } finally { setLoading(false); }
+  };
+
+  const savePantryFromReview = () => {
+    if (!pantryReviewCategories.length) { showToast("⚠️ Organize a despensa antes de salvar"); return; }
+    const now = new Date().toISOString();
+    const newPantry = {
+      id: `pantry-${Date.now()}`,
+      createdAt: now,
+      status: "ativa",
+      categories: pantryReviewCategories,
+      itemCount: countCategoryItems(pantryReviewCategories),
+    };
+    const updated = [newPantry, ...pantryLists.map(p => p.status === "ativa" ? { ...p, status: "concluida", replacedAt: now } : p)];
+    savePantryLists(updated);
+    resetPantryFlow();
+    setPantryCompared(false);
+    setPantryComparison(null);
+    setScreen("create");
+    showToast("✅ Despensa salva e ativa");
+  };
+
+  const compareWithActivePantry = () => {
+    if (!activePantry) { showToast("⚠️ Nenhuma despensa ativa"); return; }
+    if (pendingItems.length === 0) { showToast("⚠️ Faça sua pré-lista antes de comparar"); return; }
+    const result = comparePendingItemsWithPantry(pendingItems, activePantry.categories);
+    setPendingItems(result.items);
+    setPantryComparison(result);
+    setPantryCompared(true);
+    setScreen("pantry_compare_result");
+  };
+
+  const markActivePantryAsCompleted = useCallback((sourceList=null) => {
+    const active = pantryLists.find(p => p.status === "ativa");
+    if (!active) return;
+    const now = new Date().toISOString();
+    savePantryLists(pantryLists.map(p => p.id === active.id ? {
+      ...p,
+      status: "concluida",
+      concludedAt: now,
+      usedByListId: sourceList?.id || p.usedByListId || null,
+      usedByListName: sourceList?.name || p.usedByListName || null,
+    } : p));
+  }, [pantryLists, savePantryLists]);
+
 
   const preserveEditedListStatus=(oldList,newCategories)=>{
     if(!oldList)return newCategories;
@@ -5186,8 +5385,10 @@ const [lists,setLists]=useState(()=>{
       items=repairAndNormalizeVoiceItems(items).map(normalizeListItem);
       items=applyUserMemoryToItems(items).map(normalizeListItem);
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
-      setPendingItems(prev=>[...prev,...items]);
-      if(closePaste){setPasteText("");setShowPasteModal(false);}
+      const target = source === "voz" ? voiceTarget : pasteTarget;
+      if (target === "pantry") setPantryPendingItems(prev=>[...prev,...items]);
+      else setPendingItems(prev=>[...prev,...items]);
+      if(closePaste){setPasteText("");setShowPasteModal(false);setPasteTarget("list");}
       showToast(source==="voz" ? `🎤 ${items.length} item(ns) adicionados por voz` : `✅ ${items.length} item(ns) interpretados pela IA`,2800);
     }finally{
       setVoiceProcessing(false);
@@ -5204,9 +5405,11 @@ const [lists,setLists]=useState(()=>{
     const hasListShape=/\n|;|\||^[\s•\-*\d.)]+/m.test(clean);
     if(hasListShape && localItems.length>=2){
       const normalizedItems=applyUserMemoryToItems(localItems).map(normalizeListItem);
-      setPendingItems(prev=>[...prev,...normalizedItems]);
+      if (pasteTarget === "pantry") setPantryPendingItems(prev=>[...prev,...normalizedItems]);
+      else setPendingItems(prev=>[...prev,...normalizedItems]);
       setPasteText("");
       setShowPasteModal(false);
+      setPasteTarget("list");
       showToast(`✅ ${normalizedItems.length} item(ns) importados da lista colada`,2800);
       return;
     }
@@ -5656,6 +5859,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const closeFinishedModal=()=>{
+    markActivePantryAsCompleted(currentList);
     setShowFinished(false);
     setScreen("home");
     setCurrentList(null);
@@ -6145,7 +6349,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             )}
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>{setShowFinished(false);shareWhatsApp();}}
+              <button onClick={()=>{markActivePantryAsCompleted(currentList);setShowFinished(false);shareWhatsApp();}}
                 style={{flex:1,padding:14,borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
                 💬 WhatsApp
               </button>
@@ -6363,7 +6567,7 @@ const [lists,setLists]=useState(()=>{
       {screen==="create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);}}
+            <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
               {getAppUserName()&&(<div style={{fontSize:12,color:"#4C1D95",fontWeight:900,textAlign:"left",marginBottom:2}}>Olá, {getAppUserName()}</div>)}
@@ -6371,6 +6575,25 @@ const [lists,setLists]=useState(()=>{
             </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
+            {/* MINHA DESPENSA */}
+            <div style={{...createCard,borderColor:activePantry?"#86EFAC":"#DDD6FE",background:activePantry?"#F0FDF4":"#FAF9FF"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:44,height:44,borderRadius:16,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:"0 12px 24px rgba(109,40,217,0.18)"}}>🧺</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{fontWeight:900,fontSize:15,color:"#111827"}}>Minha Despensa</div>
+                    <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?"Ativa":"Opcional"}</span>
+                  </div>
+                  <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:4,lineHeight:1.35}}>
+                    {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Monte sua despensa antes de criar a lista de compras."}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:12}}>
+                {activePantry&&(<button onClick={()=>{setPantryReviewCategories(activePantry.categories||[]);setScreen("pantry_review");}} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver despensa</button>)}
+                <button onClick={openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6"}}>{activePantry?"Criar nova despensa":"Criar despensa"}</button>
+              </div>
+            </div>
             {/* ORÇAMENTO */}
             <div style={createCard}>
               <label style={lbl}>Orçamento</label>
@@ -6421,11 +6644,11 @@ const [lists,setLists]=useState(()=>{
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
-                <button onClick={()=>setShowPasteModal(true)}
+                <button onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
                   style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
                   Colar lista
                 </button>
-                <button onClick={startVoiceInput} disabled={voiceProcessing}
+                <button onClick={()=>{setVoiceTarget("list");startVoiceInput();}} disabled={voiceProcessing}
                   style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1}}>
                   {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
                 </button>
@@ -6456,10 +6679,134 @@ const [lists,setLists]=useState(()=>{
                 })}
               </div>
             )}
-            <button onClick={organizeList} disabled={loading||pendingItems.length===0}
-              style={{...createPrimaryBtn,boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
-              {editingListId?"Salvar alterações":"Organizar lista"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+            {activePantry && pendingItems.length>0 && !pantryCompared && !editingListId && (
+              <div style={{background:"#ECFDF5",border:"1px solid #86EFAC",borderRadius:20,padding:14,color:"#166534",display:"flex",gap:10,alignItems:"flex-start"}}>
+                <div style={{fontSize:18}}>✅</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:900,fontSize:14}}>Despensa ativa detectada</div>
+                  <div style={{fontSize:12,fontWeight:700,lineHeight:1.4,marginTop:3}}>Sua pré-lista pode ser comparada com a despensa antes de organizar.</div>
+                </div>
+              </div>
+            )}
+            <button onClick={(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?compareWithActivePantry:organizeList} disabled={loading||pendingItems.length===0}
+              style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+              {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?"Comparar com a Despensa":(editingListId?"Salvar alterações":"Organizar lista")} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* ════════════════════════════════════
+          DESPENSA: CRIAR / EDITAR
+      ════════════════════════════════════ */}
+      {screen==="pantry_create"&&(
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
+          <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+            <button onClick={()=>{resetPantryFlow();setScreen("create");}}
+              style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{flex:1,textAlign:"center"}}>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827"}}>Criar/Editar Despensa</div>
+              <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Itens que você já tem em casa</div>
+            </div>
+            <div style={{width:36}} />
+          </div>
+          <div style={{padding:20,display:"flex",flexDirection:"column",gap:14,paddingBottom:42}}>
+            <div style={createCard}>
+              <label style={lbl}>Adicionar itens na despensa</label>
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
+                <input value={pantryInput} onChange={e=>setPantryInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddPantryItem()} placeholder="Digite um item da despensa" style={inp({height:56})}/>
+                <button onClick={handleAddPantryItem} style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>Inserir</button>
+              </div>
+              <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale os itens existentes em casa. Você poderá editar antes de salvar.</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+                <button onClick={()=>{setPasteTarget("pantry");setShowPasteModal(true);}} style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>Colar lista</button>
+                <button onClick={()=>{setVoiceTarget("pantry");startVoiceInput();}} disabled={voiceProcessing} style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",opacity:voiceProcessing?0.65:1}}>{voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}</button>
+              </div>
+            </div>
+            {pantryPendingItems.length>0&&(
+              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+                <div style={{padding:"10px 14px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",fontSize:12,fontWeight:800,color:"#6B7280",display:"flex",justifyContent:"space-between"}}>
+                  <span>{pantryPendingItems.length} {pantryPendingItems.length===1?"item inserido":"itens inseridos"}</span>
+                  <button onClick={()=>setPantryPendingItems([])} style={{background:"none",border:"none",color:"#FF4444",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Limpar tudo</button>
+                </div>
+                {pantryPendingItems.map((item,i)=>(
+                  <div key={i} style={{padding:"12px 14px",borderBottom:i<pantryPendingItems.length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:16}}>🧺</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{formatQtyUnit(item.qty,item.unit)} – {item.name}</div>
+                      {item.detail&&<div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>{item.detail}</div>}
+                    </div>
+                    <button onClick={()=>editPantryPendingItem(i)} style={{background:"#F5F3FF",border:"none",borderRadius:6,padding:"4px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14}}>✏️</button>
+                    <button onClick={()=>setPantryPendingItems(prev=>prev.filter((_,j)=>j!==i))} style={{background:"#FFE8E8",border:"none",borderRadius:6,padding:"4px 10px",color:"#FF4444",cursor:"pointer",fontSize:14}}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={organizePantry} disabled={loading||pantryPendingItems.length===0} style={{...createPrimaryBtn,opacity:(loading||pantryPendingItems.length===0)?0.5:1,cursor:(loading||pantryPendingItems.length===0)?"not-allowed":"pointer"}}>Organizar despensa {pantryPendingItems.length>0&&`(${pantryPendingItems.length})`}</button>
+          </div>
+        </div>
+      )}
+
+      {/* DESPENSA: CONFERÊNCIA */}
+      {screen==="pantry_review"&&(
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
+          <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+            <button onClick={()=>setScreen("create")} style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{flex:1,textAlign:"center"}}>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827"}}>Minha Despensa</div>
+              <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Conferência por seções, sem preços</div>
+            </div>
+            <div style={{width:36}} />
+          </div>
+          <div style={{padding:20,paddingBottom:42,display:"flex",flexDirection:"column",gap:14}}>
+            {(pantryReviewCategories||[]).map((cat,ci)=>{const th=getCatTheme(cat.name);return(
+              <div key={cat.name+ci} style={{border:`2px solid ${th.border}`,borderRadius:22,overflow:"hidden",background:"#FFFFFF",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
+                <div style={{background:th.bg,padding:"13px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${th.border}33`}}>
+                  <span style={{fontSize:20}}>{th.icon}</span>
+                  <div style={{flex:1,fontWeight:900,color:th.header,fontSize:16}}>{cat.name}</div>
+                  <div style={{fontSize:12,fontWeight:900,color:th.header}}>{cat.items?.length||0} itens</div>
+                </div>
+                {(cat.items||[]).map((item,i)=>(
+                  <div key={i} style={{padding:"12px 16px",borderBottom:i<(cat.items||[]).length-1?"1px solid #F0F2F5":"none",display:"flex",justifyContent:"space-between",gap:10}}>
+                    <div style={{fontWeight:800,color:"#111827"}}>{item.name}</div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(item.qty,item.unit)}</div>
+                  </div>
+                ))}
+              </div>
+            );})}
+            <div style={{background:"#F8FAFC",border:"1px solid #E5E7EB",borderRadius:18,padding:12,fontSize:12,color:"#6B7280",fontWeight:700,lineHeight:1.45}}>A despensa serve apenas como base de comparação para a próxima lista. Ela ficará ativa até a compra da lista comparada ser finalizada.</div>
+            <button onClick={savePantryFromReview} style={createPrimaryBtn}>Salvar despensa</button>
+          </div>
+        </div>
+      )}
+
+      {/* DESPENSA: RESULTADO DA COMPARAÇÃO */}
+      {screen==="pantry_compare_result"&&(
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
+          <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+            <button onClick={()=>setScreen("create")} style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{flex:1,textAlign:"center"}}>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827"}}>Comparação concluída</div>
+              <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Sua pré-lista foi ajustada</div>
+            </div>
+            <div style={{width:36}} />
+          </div>
+          <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{...createCard,textAlign:"center",borderColor:"#BBF7D0",background:"#F0FDF4"}}>
+              <div style={{width:68,height:68,borderRadius:"50%",background:"#22C55E",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,fontWeight:900,margin:"0 auto 12px"}}>✓</div>
+              <div style={{fontWeight:900,fontSize:18,color:"#166534",marginBottom:6}}>Despensa confrontada</div>
+              <div style={{fontSize:13,color:"#166534",fontWeight:700,lineHeight:1.45}}>Mantivemos na pré-lista somente o que ainda precisa ser comprado ou complementado.</div>
+            </div>
+            <div style={createCard}>
+              <label style={lbl}>Resumo da comparação</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
+                <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#B91C1C",fontSize:18}}>{pantryComparison?.removed?.length||0}</div><div style={{fontSize:11,color:"#7F1D1D",fontWeight:800}}>removidos</div></div>
+                <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#B45309",fontSize:18}}>{pantryComparison?.adjusted?.length||0}</div><div style={{fontSize:11,color:"#92400E",fontWeight:800}}>ajustados</div></div>
+                <div style={{background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#4338CA",fontSize:18}}>{pendingItems.length}</div><div style={{fontSize:11,color:"#3730A3",fontWeight:800}}>na lista</div></div>
+              </div>
+            </div>
+            <button onClick={()=>setScreen("create")} style={createPrimaryBtn}>Continuar e organizar lista</button>
           </div>
         </div>
       )}
