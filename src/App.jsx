@@ -6075,6 +6075,55 @@ const [lists,setLists]=useState(()=>{
     return Number((price*qty).toFixed(2));
   };
 
+
+  const rebuildLocalPriceHistoryFromLists=useCallback((sourceLists=lists)=>{
+    try{
+      const current=readPriceHistory();
+      const byKey=new Map();
+      for(const h of current){
+        const key=[h.listId||"",h.itemId||"",h.itemKey||normalizePriceItemName(h.itemName),h.createdAt||"",Number(h.unitPrice||h.totalPrice||0)].join("|");
+        byKey.set(key,h);
+      }
+      (Array.isArray(sourceLists)?sourceLists:[]).forEach(list=>{
+        (Array.isArray(list?.categories)?list.categories:[]).forEach(cat=>{
+          (Array.isArray(cat?.items)?cat.items:[]).forEach(item=>{
+            const price=Number(item?.price||0);
+            if(!item?.name || !Number.isFinite(price) || price<=0)return;
+            const recordedAt=item.priceRecordedAt || item.updatedAt || list.updatedAt || list.lastSyncedAt || list.createdAt || new Date().toISOString();
+            const itemKey=normalizePriceItemName(item.name);
+            const listId=list.id || list.sharedId || "";
+            const itemId=item.id || item.name || "";
+            const key=[listId,itemId,itemKey,recordedAt,Number(price.toFixed(2))].join("|");
+            if(byKey.has(key))return;
+            const entry={
+              id: typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`price-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              itemName:String(item.name).trim(),
+              itemKey,
+              unitPrice:Number(price.toFixed(2)),
+              totalPrice:Number(getItemLineTotal(item).toFixed(2)),
+              quantity:Number(item.qty||1),
+              unit:item.unit||"unidade",
+              listType:list.type||"geral",
+              listName:list.name||"",
+              listId,
+              itemId,
+              createdAt:recordedAt,
+              monthKey:new Date(recordedAt).toISOString().slice(0,7),
+            };
+            byKey.set(key,entry);
+          });
+        });
+      });
+      savePriceHistory(Array.from(byKey.values()).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))));
+    }catch(err){
+      console.warn("Nao foi possivel reconstruir historico de precos",err);
+    }
+  },[lists,getItemLineTotal]);
+
+  useEffect(()=>{
+    rebuildLocalPriceHistoryFromLists(lists);
+  },[lists,rebuildLocalPriceHistoryFromLists]);
+
   const getPriceDescription=(item)=>{
     if(!item || item.price==null)return "";
     const mode=item.priceMode||"unit";
@@ -6231,11 +6280,17 @@ const [lists,setLists]=useState(()=>{
   const closeFinishedModal=()=>{
     markActivePantryAsCompleted(currentList);
     setShowFinished(false);
-    setScreen("home");
-    setCurrentList(null);
-    setSearch("");
-    setCollapsedCats({});
   };
+
+
+  useEffect(()=>{
+    if(!showFinished)return;
+    const timer=setTimeout(()=>{
+      markActivePantryAsCompleted(currentList);
+      setShowFinished(false);
+    },3200);
+    return()=>clearTimeout(timer);
+  },[showFinished,currentList]);
 
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
     const sharedId=list?.sharedId;
@@ -6649,6 +6704,8 @@ const [lists,setLists]=useState(()=>{
         </div>
       )}
 
+      <style>{`@keyframes tnlPulseBack{0%,100%{transform:scale(1);box-shadow:0 12px 28px rgba(17,24,39,0.24)}50%{transform:scale(1.10);box-shadow:0 18px 40px rgba(255,255,255,0.32),0 12px 28px rgba(17,24,39,0.24)}}`}</style>
+
       {/* TOAST */}
       <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
         {toast.msg}
@@ -6718,15 +6775,8 @@ const [lists,setLists]=useState(()=>{
                 {fullTotal>budget?`⚠️ Acima do orçamento em ${fmtR(fullTotal-budget)}`:`✅ Dentro do orçamento! Economizou ${fmtR(budget-fullTotal)}`}
               </div>
             )}
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>{markActivePantryAsCompleted(currentList);setShowFinished(false);shareWhatsApp();}}
-                style={{flex:1,padding:14,borderRadius:18,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
-                💬 WhatsApp
-              </button>
-              <button onClick={closeFinishedModal}
-                style={{flex:1,padding:14,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
-                Fechar
-              </button>
+            <div style={{fontSize:13,color:"#6B7280",fontWeight:800,lineHeight:1.45,background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:16,padding:"12px 14px"}}>
+              Esta mensagem fechará automaticamente. Use a seta em destaque no topo da lista para voltar à tela inicial.
             </div>
           </div>
         </div>
@@ -6780,7 +6830,7 @@ const [lists,setLists]=useState(()=>{
               ))}
             </div>
 
-            <PriceStatsEntryCard onClick={()=>setShowPriceStatsScreen(true)} />
+            <PriceStatsEntryCard onClick={()=>{rebuildLocalPriceHistoryFromLists(lists);setShowPriceStatsScreen(true);}} />
 
             <div style={{
               display:"flex",
@@ -7304,7 +7354,8 @@ const [lists,setLists]=useState(()=>{
                 {getAppUserName()&&(<div style={{fontSize:13,color:"rgba(255,255,255,0.88)",fontWeight:900,marginBottom:12,textAlign:"left"}}>Olá, {getAppUserName()}</div>)}
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>setScreen("home")}
-                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.28)",borderRadius:"50%",width:38,height:38,color:"white",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)"}}>←</button>
+                    title="Voltar para a tela inicial"
+                    style={{background:"rgba(255,255,255,0.96)",border:"2px solid rgba(255,255,255,0.92)",borderRadius:"50%",width:44,height:44,color:"#4C1D95",fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",boxShadow:"0 12px 28px rgba(17,24,39,0.24)",animation:showFinished?"tnlPulseBack 1.2s ease-in-out infinite":"none"}}>←</button>
                   <div style={{flex:1,minWidth:0,textAlign:"center"}}>
                     <div style={{fontWeight:900,fontSize:20,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentList.name}</div>
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
@@ -7337,7 +7388,7 @@ const [lists,setLists]=useState(()=>{
         </div>
       </div>
 
-          {currentList.sharedId&&(
+          {(currentList.isShared || currentList.sharedAt || currentList.imported || currentList.importedFrom || currentList.sharedMode)&&(
             <div style={{margin:"10px 20px 0",background:"#EEF2FF",border:"1px solid #C4B5FD",borderRadius:18,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,color:"#4C1D95"}}>
               <span style={{fontSize:18}}>🤝</span>
               <div style={{flex:1,minWidth:0}}>
