@@ -76,6 +76,8 @@ const APP_USER_NAME_KEY = "tnl_user_name";
 const APP_DEVICE_ID_KEY = "tnl_device_id";
 const APP_USER_REGISTERED_KEY = "tnl_user_registered_device_id";
 const APP_USER_ID_KEY = "tnl_user_id";
+const APP_PIN_SESSION_NAME_KEY = "tnl_pin_verified_name";
+const APP_PIN_SESSION_AT_KEY = "tnl_pin_verified_at";
 
 function getStoredValue(key) {
   try {
@@ -170,7 +172,7 @@ async function findAppUserByName(name) {
 async function getSharedListsByUserId(userId) {
   if (!userId || !hasSupabaseConfig()) return [];
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?user_id=eq.${encodeURIComponent(userId)}&list_type=neq.auth_profile&select=*&order=created_at.desc`, {
       method: "GET",
       headers: supabaseHeaders(),
     });
@@ -186,7 +188,7 @@ async function getSharedListsByOwnerName(name) {
   const clean = String(name || "").trim();
   if (!clean || !hasSupabaseConfig()) return [];
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?remetente=ilike.${encodeURIComponent(clean)}&select=*&order=created_at.desc`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?remetente=ilike.${encodeURIComponent(clean)}&list_type=neq.auth_profile&select=*&order=created_at.desc`, {
       method: "GET",
       headers: supabaseHeaders(),
     });
@@ -510,6 +512,138 @@ async function softDeleteSharedListRecord(id, list = null) {
     console.warn("Erro ao marcar lista como excluída no Supabase:", err);
     return false;
   }
+}
+
+
+
+function isPinSessionVerified(name) {
+  const clean = String(name || "").trim().toLowerCase();
+  const verified = getStoredValue(APP_PIN_SESSION_NAME_KEY).trim().toLowerCase();
+  return Boolean(clean && verified && clean === verified);
+}
+
+function markPinSessionVerified(name) {
+  const clean = String(name || "").trim();
+  if (!clean) return;
+  setStoredValue(APP_PIN_SESSION_NAME_KEY, clean);
+  setStoredValue(APP_PIN_SESSION_AT_KEY, new Date().toISOString());
+}
+
+function clearPinSession() {
+  try {
+    localStorage.removeItem(APP_PIN_SESSION_NAME_KEY);
+    localStorage.removeItem(APP_PIN_SESSION_AT_KEY);
+  } catch {}
+}
+
+function normalizeAuthName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+async function hashUserPin(name, pin) {
+  const cleanName = normalizeAuthName(name);
+  const cleanPin = String(pin || "").trim();
+  const raw = `ta-na-lista:v1:${cleanName}:${cleanPin}`;
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const data = new TextEncoder().encode(raw);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  // Fallback simples para navegadores antigos. Preferencialmente, todos os navegadores modernos usarão SHA-256.
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) {
+    h = Math.imul(31, h) + raw.charCodeAt(i) | 0;
+  }
+  return `fallback-${Math.abs(h)}`;
+}
+
+function normalizePin(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 6);
+}
+
+function isValidPin(value) {
+  const pin = normalizePin(value);
+  return pin.length >= 4 && pin.length <= 6;
+}
+
+async function findUserAuthProfile(name) {
+  const clean = String(name || "").trim();
+  if (!clean || !hasSupabaseConfig()) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?list_type=eq.auth_profile&remetente=ilike.${encodeURIComponent(clean)}&select=*&order=created_at.asc&limit=1`, {
+      method: "GET",
+      headers: supabaseHeaders({ "Cache-Control": "no-store" }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function createUserAuthProfile(name, pinHash) {
+  const clean = String(name || "").trim();
+  if (!clean || !pinHash || !hasSupabaseConfig()) return null;
+  const payload = {
+    title: `Perfil de acesso - ${clean}`,
+    list_type: "auth_profile",
+    budget: 0,
+    remetente: clean,
+    user_id: null,
+    data: {
+      authProfile: true,
+      name: clean,
+      pinHash,
+      pinVersion: "sha256-v1",
+      createdAt: new Date().toISOString(),
+    },
+  };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
+    method: "POST",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Não foi possível criar PIN de acesso (${res.status}) ${detail}`.trim());
+  }
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function verifyOrCreateUserPin(name, pin, pinConfirm = "") {
+  const clean = String(name || "").trim();
+  const safePin = normalizePin(pin);
+  const safeConfirm = normalizePin(pinConfirm);
+
+  if (!clean) return { ok: false, message: "Informe seu nome para continuar." };
+  if (!isValidPin(safePin)) return { ok: false, message: "Informe um PIN de 4 a 6 dígitos." };
+
+  const existing = await findUserAuthProfile(clean);
+  const hash = await hashUserPin(clean, safePin);
+
+  if (existing?.data?.pinHash) {
+    if (existing.data.pinHash !== hash) {
+      return { ok: false, message: "PIN incorreto para este usuário." };
+    }
+    return { ok: true, mode: "login", profile: existing };
+  }
+
+  if (!safeConfirm) {
+    return { ok: false, message: "Primeiro acesso: confirme o PIN para criar seu cadastro." };
+  }
+  if (safePin !== safeConfirm) {
+    return { ok: false, message: "Os PINs informados não conferem." };
+  }
+
+  const created = await createUserAuthProfile(clean, hash);
+  return { ok: true, mode: "created", profile: created };
 }
 
 
@@ -5151,6 +5285,9 @@ const [lists,setLists]=useState(()=>{
     setCurrentList(null);
     setSenderName("");
     setUserNameInput("");
+    setUserPinInput("");
+    setUserPinConfirmInput("");
+    clearPinSession();
     setUserNameModal(true);
     setScreen("home");
     setShowPriceStatsScreen(false);
@@ -5400,7 +5537,7 @@ const [lists,setLists]=useState(()=>{
   },[lists,persistListRecordToCloud,showToast]);
   useEffect(()=>{
     const existingName=getAppUserName();
-    if(existingName){
+    if(existingName && isPinSessionVerified(existingName)){
       setSenderName(prev=>prev||existingName);
       setUserNameInput(existingName);
       registerAppUser(existingName).then(async userId=>{
@@ -5412,19 +5549,47 @@ const [lists,setLists]=useState(()=>{
         }
       });
     }else{
-      const existingUserId=getAppUserId();
-      if(existingUserId)restoreUserListsFromCloud(existingUserId,getAppUserName(),{silent:true});
+      if(existingName){
+        setUserNameInput(existingName);
+        setUserNameModal(true);
+      }else{
+        setUserNameModal(true);
+      }
     }
   },[restoreUserListsFromCloud,persistLocalListsToCloud]);
 
   const confirmAppUserName=async()=>{
-    const clean=saveAppUserName(userNameInput);
+    const clean=String(userNameInput||"").trim();
     if(!clean){showToast("Informe seu nome para continuar.");return;}
-    setSenderName(clean);
-    setUserNameModal(false);
-    const userId=await registerAppUser(clean,{force:true});
-    if(userId)await restoreUserListsFromCloud(userId,clean);
-    showToast(userId?"Usuario reconhecido!":"Nome salvo neste aparelho; verifique as permissoes do Supabase.", userId?2200:4200);
+    if(!hasSupabaseConfig()){
+      showToast("Configuração do Supabase não encontrada. Não é possível validar o PIN.",4200);
+      return;
+    }
+
+    try{
+      setLoading(true);
+      const pinResult=await verifyOrCreateUserPin(clean,userPinInput,userPinConfirmInput);
+      if(!pinResult.ok){
+        showToast(pinResult.message,3600);
+        return;
+      }
+
+      const savedName=saveAppUserName(clean);
+      markPinSessionVerified(savedName);
+      setSenderName(savedName);
+      setUserNameModal(false);
+      setUserPinInput("");
+      setUserPinConfirmInput("");
+
+      const userId=await registerAppUser(savedName,{force:true});
+      if(userId)await restoreUserListsFromCloud(userId,savedName);
+
+      showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
+    }catch(err){
+      showToast(err?.message || "Não foi possível validar seu acesso.",5200);
+    }finally{
+      setLoading(false);
+    }
   };
 
   const scrollToListTop=useCallback(()=>{
@@ -8131,20 +8296,35 @@ const [lists,setLists]=useState(()=>{
           <div style={{textAlign:"center",marginBottom:16}}>
             <div style={{fontSize:34,marginBottom:8}}>👋</div>
             <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:6}}>{sharedLandingRecord?"Identifique-se para acessar a lista":"Bem-vindo ao Tá na Lista"}</div>
-            <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45}}>{sharedLandingRecord?"Informe seu nome para abrir a lista recebida e registrar seu acesso ao app.":"Informe seu nome para identificar suas listas compartilhadas e ajudar a mensurar os usuários do app."}</div>
+            <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45}}>{sharedLandingRecord?"Informe seu nome e PIN para abrir a lista recebida com segurança.":"Informe seu nome e PIN para acessar suas listas com segurança."}</div>
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
             <input value={userNameInput} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu"
-              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:15,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
+              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
+              onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+            />
+          </div>
+          <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>PIN de acesso</label>
+            <input value={userPinInput} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
+              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
+              onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+            />
+            <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>Se for seu primeiro acesso, informe e confirme um PIN para proteger suas listas.</div>
+          </div>
+          <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN <span style={{fontWeight:700,color:"#9CA3AF"}}>(somente no primeiro acesso)</span></label>
+            <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
+              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
           </div>
           <button onClick={confirmAppUserName}
             style={{width:"100%",padding:16,borderRadius:20,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
-            Continuar
+            Entrar
           </button>
-          {!sharedLandingRecord&&(<button onClick={()=>setUserNameModal(false)}
+          {false&&(<button onClick={()=>setUserNameModal(false)}
             style={{width:"100%",padding:12,borderRadius:18,background:"transparent",border:"none",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
             Agora não
           </button>)}
