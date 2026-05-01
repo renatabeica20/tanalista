@@ -4477,87 +4477,61 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
       top:0,
       zIndex:120,
       width:"100%",
-      background:"rgba(255,255,255,0.94)",
-      backdropFilter:"blur(12px)",
-      WebkitBackdropFilter:"blur(12px)",
+      background:"#FFFFFF",
       borderBottom:"1px solid #E5E7EB",
-      boxShadow:"0 8px 24px rgba(17,24,39,0.06)",
       padding:"10px 12px",
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"space-between",
       boxSizing:"border-box"
     }}>
       <div style={{
-        maxWidth:430,
-        width:"100%",
-        margin:"0 auto",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"space-between",
-        gap:10
+        fontSize:14,
+        fontWeight:900,
+        color:"#111827"
       }}>
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{fontSize:12,fontWeight:800,color:"#6B7280",lineHeight:1}}>Usuário</div>
-          <div style={{fontSize:14,fontWeight:900,color:"#111827",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            Olá, {userName}
-          </div>
-        </div>
+        Olá, {userName}
+      </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <button onClick={onNotifications} aria-label="Notificações" style={{
-            position:"relative",
-            border:"1px solid #DDD6FE",
-            background:"#F5F3FF",
-            color:"#6D28D9",
-            borderRadius:999,
-            width:38,
-            height:34,
-            fontSize:17,
-            fontWeight:900,
-            cursor:"pointer",
-            fontFamily:"inherit",
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            boxShadow:"0 8px 18px rgba(109,40,217,0.10)"
-          }}>
-            🔔
-            {unreadCount > 0 && (
-              <span style={{
-                position:"absolute",
-                top:-6,
-                right:-6,
-                minWidth:18,
-                height:18,
-                borderRadius:999,
-                background:"#DC2626",
-                color:"#FFFFFF",
-                fontSize:10,
-                fontWeight:900,
-                display:"flex",
-                alignItems:"center",
-                justifyContent:"center",
-                border:"2px solid #FFFFFF"
-              }}>
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={onNotifications} style={{
+          position:"relative",
+          border:"1px solid #DDD6FE",
+          background:"#F5F3FF",
+          borderRadius:999,
+          width:34,
+          height:34,
+          cursor:"pointer",
+          fontSize:16
+        }}>
+          🔔
+          {unreadCount > 0 && (
+            <span style={{
+              position:"absolute",
+              top:-4,
+              right:-4,
+              background:"#DC2626",
+              color:"#FFF",
+              borderRadius:"50%",
+              fontSize:10,
+              padding:"2px 5px"
+            }}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
 
-          <button onClick={onSwitchUser} style={{
-            border:"1px solid #E5E7EB",
-            background:"#FFFFFF",
-            color:"#6D28D9",
-            borderRadius:999,
-            padding:"8px 10px",
-            fontSize:11,
-            fontWeight:900,
-            cursor:"pointer",
-            fontFamily:"inherit",
-            whiteSpace:"nowrap",
-            boxShadow:"0 8px 18px rgba(17,24,39,0.06)"
-          }}>
-            Trocar usuário
-          </button>
-        </div>
+        <button onClick={onSwitchUser} style={{
+          border:"1px solid #E5E7EB",
+          background:"#FFF",
+          borderRadius:999,
+          padding:"6px 10px",
+          fontSize:11,
+          fontWeight:800,
+          cursor:"pointer"
+        }}>
+          Trocar
+        </button>
       </div>
     </div>
   );
