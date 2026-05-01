@@ -643,6 +643,66 @@ async function createUserAuthProfile(name, pinHash) {
   return Array.isArray(data) ? data[0] : data;
 }
 
+async function resetUserAuthPin(name, newPin, newPinConfirm = "") {
+  const clean = String(name || "").trim();
+  const safePin = normalizePin(newPin);
+  const safeConfirm = normalizePin(newPinConfirm);
+
+  if (!clean) return { ok: false, message: "Informe seu nome para recuperar o acesso." };
+  if (!hasSupabaseConfig()) return { ok: false, message: "Configuração do Supabase não encontrada." };
+  if (!isValidPin(safePin)) return { ok: false, message: "Informe um novo PIN de 4 a 6 dígitos." };
+  if (!safeConfirm) return { ok: false, message: "Confirme o novo PIN para redefinir o acesso." };
+  if (safePin !== safeConfirm) return { ok: false, message: "Os PINs informados não conferem." };
+
+  const profile = await findUserAuthProfile(clean);
+  if (!profile?.id || !profile?.data?.pinHash) {
+    return { ok: false, message: "Não encontrei PIN cadastrado para este nome. Use o primeiro acesso para criar um PIN." };
+  }
+
+  // Recuperação simples e segura para esta fase: permite redefinir somente no aparelho já reconhecido.
+  const deviceId = getAppDeviceId();
+  const storedUserId = getAppUserId();
+  const storedName = normalizeAuthName(getAppUserName());
+  const appUser = await findAppUserByName(clean);
+  const deviceMatches = Boolean(appUser?.device_id && appUser.device_id === deviceId);
+  const localUserMatches = Boolean(storedUserId && appUser?.id && storedUserId === appUser.id);
+  const localNameMatches = Boolean(storedName && storedName === normalizeAuthName(clean));
+
+  if (!deviceMatches && !localUserMatches && !localNameMatches) {
+    return {
+      ok: false,
+      message: "Por segurança, a recuperação do PIN precisa ser feita no aparelho já usado por este usuário.",
+    };
+  }
+
+  const pinHash = await hashUserPin(clean, safePin);
+  const payload = {
+    data: {
+      ...(profile.data || {}),
+      authProfile: true,
+      name: clean,
+      pinHash,
+      pinVersion: "sha256-v1",
+      resetAt: new Date().toISOString(),
+      resetDeviceId: deviceId,
+    },
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(profile.id)}`, {
+    method: "PATCH",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Não foi possível redefinir o PIN (${res.status}) ${detail}`.trim());
+  }
+
+  const data = await res.json().catch(() => []);
+  return { ok: true, profile: Array.isArray(data) ? data[0] : data };
+}
+
 async function verifyOrCreateUserPin(name, pin, pinConfirm = "") {
   const clean = String(name || "").trim();
   const safePin = normalizePin(pin);
@@ -5270,6 +5330,7 @@ const [lists,setLists]=useState(()=>{
   const [isFirstAccessMode,setIsFirstAccessMode]=useState(false);
   const [authCheckingName,setAuthCheckingName]=useState(false);
   const [authCheckedName,setAuthCheckedName]=useState("");
+  const [isRecoverPinMode,setIsRecoverPinMode]=useState(false);
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
@@ -5638,6 +5699,7 @@ const [lists,setLists]=useState(()=>{
     setUserPinConfirmInput("");
     setAuthCheckedName("");
     setIsFirstAccessMode(false);
+    setIsRecoverPinMode(false);
     if(clean.length<2){
       setAuthCheckingName(false);
       return;
@@ -5690,6 +5752,7 @@ const [lists,setLists]=useState(()=>{
       setUserPinInput("");
       setUserPinConfirmInput("");
       setIsFirstAccessMode(false);
+      setIsRecoverPinMode(false);
       setAuthCheckingName(false);
       setAuthCheckedName(savedName);
 
@@ -5702,6 +5765,49 @@ const [lists,setLists]=useState(()=>{
     }finally{
       setLoading(false);
     }
+  };
+
+  const recoverAppUserPin=async()=>{
+    const clean=String(userNameInput||"").trim();
+    if(!clean){showToast("Informe seu nome para recuperar o acesso.");return;}
+    if(!hasSupabaseConfig()){
+      showToast("Configuração do Supabase não encontrada. Não é possível redefinir o PIN.",4200);
+      return;
+    }
+
+    try{
+      setLoading(true);
+      const result=await resetUserAuthPin(clean,userPinInput,userPinConfirmInput);
+      if(!result.ok){
+        showToast(result.message,5200);
+        return;
+      }
+
+      const savedName=saveAppUserName(clean);
+      markPinSessionVerified(savedName);
+      setSenderName(savedName);
+      setUserNameModal(false);
+      setUserPinInput("");
+      setUserPinConfirmInput("");
+      setIsFirstAccessMode(false);
+      setIsRecoverPinMode(false);
+      setAuthCheckingName(false);
+      setAuthCheckedName(savedName);
+
+      const userId=await registerAppUser(savedName,{force:true});
+      if(userId)await restoreUserListsFromCloud(userId,savedName);
+
+      showToast("PIN redefinido com sucesso!",2600);
+    }catch(err){
+      showToast(err?.message || "Não foi possível redefinir o PIN.",5600);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  const submitAuthForm=()=>{
+    if(isRecoverPinMode) return recoverAppUserPin();
+    return confirmAppUserName();
   };
 
   const scrollToListTop=useCallback(()=>{
@@ -7406,30 +7512,34 @@ const [lists,setLists]=useState(()=>{
           <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
           <input value={userNameInput} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu" autoFocus
             style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"13px 13px",fontSize:16,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",touchAction:"manipulation"}}
-            onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+            onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
           />
         </div>
         <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>PIN de acesso</label>
+          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>{isRecoverPinMode?"Novo PIN":"PIN de acesso"}</label>
           <input value={userPinInput} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
             style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"13px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px",touchAction:"manipulation"}}
-            onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+            onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
           />
           <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>
-            {authCheckingName?"Verificando cadastro...":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
+            {authCheckingName?"Verificando cadastro...":isRecoverPinMode?"Informe e confirme seu novo PIN para recuperar o acesso neste aparelho.":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
           </div>
         </div>
-        {isFirstAccessMode&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN</label>
+        {(isFirstAccessMode||isRecoverPinMode)&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>{isRecoverPinMode?"Confirmar novo PIN":"Confirmar PIN"}</label>
           <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
             style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"13px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px",touchAction:"manipulation"}}
-            onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+            onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
           />
         </div>)}
-        <button onClick={confirmAppUserName} disabled={loading||authCheckingName}
+        <button onClick={submitAuthForm} disabled={loading||authCheckingName}
           style={{width:"100%",padding:16,borderRadius:20,background:(loading||authCheckingName)?"#A78BFA":"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-          {loading?"Validando...":authCheckingName?"Verificando...":isFirstAccessMode?"Criar acesso":"Entrar"}
+          {loading?(isRecoverPinMode?"Redefinindo...":"Validando..."):authCheckingName?"Verificando...":isRecoverPinMode?"Redefinir PIN":isFirstAccessMode?"Criar acesso":"Entrar"}
         </button>
+        {!isFirstAccessMode&&(<button onClick={()=>{setIsRecoverPinMode(v=>!v);setUserPinInput("");setUserPinConfirmInput("");}} disabled={loading||authCheckingName}
+          style={{width:"100%",padding:12,borderRadius:16,background:"transparent",border:"none",color:"#6D28D9",fontWeight:900,fontSize:13,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit",marginTop:8,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+          {isRecoverPinMode?"Voltar para entrar com PIN":"Esqueci meu PIN"}
+        </button>)}
       </div>
       <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
         {toast.msg}
@@ -8451,30 +8561,34 @@ const [lists,setLists]=useState(()=>{
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
             <input value={userNameInput} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu" autoFocus
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
-              onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+              onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
             />
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>PIN de acesso</label>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>{isRecoverPinMode?"Novo PIN":"PIN de acesso"}</label>
             <input value={userPinInput} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
-              onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+              onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
             />
             <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>
-              {authCheckingName?"Verificando cadastro...":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
+              {authCheckingName?"Verificando cadastro...":isRecoverPinMode?"Informe e confirme seu novo PIN para recuperar o acesso neste aparelho.":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
             </div>
           </div>
-          {isFirstAccessMode&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN</label>
+          {(isFirstAccessMode||isRecoverPinMode)&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>{isRecoverPinMode?"Confirmar novo PIN":"Confirmar PIN"}</label>
             <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
-              onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
+              onKeyDown={e=>{if(e.key==="Enter")submitAuthForm();}}
             />
           </div>)}
-          <button onClick={confirmAppUserName} disabled={loading||authCheckingName}
+          <button onClick={submitAuthForm} disabled={loading||authCheckingName}
             style={{width:"100%",padding:16,borderRadius:20,background:(loading||authCheckingName)?"#A78BFA":"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit"}}>
-            {loading?"Validando...":authCheckingName?"Verificando...":isFirstAccessMode?"Criar acesso":"Entrar"}
+            {loading?(isRecoverPinMode?"Redefinindo...":"Validando..."):authCheckingName?"Verificando...":isRecoverPinMode?"Redefinir PIN":isFirstAccessMode?"Criar acesso":"Entrar"}
           </button>
+          {!isFirstAccessMode&&(<button onClick={()=>{setIsRecoverPinMode(v=>!v);setUserPinInput("");setUserPinConfirmInput("");}} disabled={loading||authCheckingName}
+            style={{width:"100%",padding:12,borderRadius:16,background:"transparent",border:"none",color:"#6D28D9",fontWeight:900,fontSize:13,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit",marginTop:8}}>
+            {isRecoverPinMode?"Voltar para entrar com PIN":"Esqueci meu PIN"}
+          </button>)}
           {false&&(<button onClick={()=>setUserNameModal(false)}
             style={{width:"100%",padding:12,borderRadius:18,background:"transparent",border:"none",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
             Agora não
