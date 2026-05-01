@@ -743,6 +743,41 @@ function eventToNotification(event) {
 }
 
 
+function buildSharedListEvent(sharedId, list, { type, actorName, targetName, message }) {
+  const cleanActor = String(actorName || getAppUserName() || "Usuário").trim();
+  const cleanTarget = String(
+    targetName ||
+    list?.ownerName ||
+    list?.remetente ||
+    list?.sharedOwner ||
+    ""
+  ).trim();
+
+  return {
+    id: `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    type: type || "info",
+    actorName: cleanActor,
+    targetName: cleanTarget,
+    listName: list?.name || "Lista",
+    listId: list?.id || "",
+    sharedId: sharedId || list?.sharedId || "",
+    createdAt: new Date().toISOString(),
+    message: message || `${cleanActor} atualizou a lista "${list?.name || "compartilhada"}".`,
+  };
+}
+
+function addLocalSharedEventToList(list, event) {
+  if (!list || !event?.id) return list;
+  const current = Array.isArray(list.sharedEvents) ? list.sharedEvents : [];
+  if (current.some((item) => item?.id === event.id)) return list;
+  return {
+    ...list,
+    sharedEvents: [event, ...current].slice(0, 80),
+    lastEventAt: event.createdAt || new Date().toISOString(),
+  };
+}
+
+
 function sharedListSignature(list) {
   try {
     if (!list) return "";
@@ -7089,28 +7124,28 @@ const [lists,setLists]=useState(()=>{
     if (!mNotFound && !l.startedAt) {
       l.startedAt = new Date().toISOString();
       if (isReallyShared) {
-        appendSharedListEvent(l.sharedId, {
+        const startedEvent = buildSharedListEvent(l.sharedId, l, {
           type:"started",
           actorName,
           targetName:l.ownerName || l.remetente || l.sharedOwner || "",
-          listName:l.name || "Lista",
-          listId:l.id,
           message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
         });
+        Object.assign(l, addLocalSharedEventToList(l, startedEvent));
+        appendSharedListEvent(l.sharedId, startedEvent);
       }
     }
 
     if (allDone && !l.finishedAt) {
       l.finishedAt = new Date().toISOString();
       if (isReallyShared) {
-        appendSharedListEvent(l.sharedId, {
+        const finishedEvent = buildSharedListEvent(l.sharedId, l, {
           type:"finished",
           actorName,
           targetName:l.ownerName || l.remetente || l.sharedOwner || "",
-          listName:l.name || "Lista",
-          listId:l.id,
           message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
         });
+        Object.assign(l, addLocalSharedEventToList(l, finishedEvent));
+        appendSharedListEvent(l.sharedId, finishedEvent);
       }
     }
 
