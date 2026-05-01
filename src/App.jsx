@@ -36,7 +36,7 @@ function ensureMobileViewport() {
       meta.setAttribute("name", "viewport");
       document.head.appendChild(meta);
     }
-    meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+    meta.setAttribute("content", "width=device-width, initial-scale=1.0, viewport-fit=cover");
 
     let style = document.getElementById("tnl-mobile-fit-style");
     if (!style) {
@@ -61,6 +61,10 @@ function ensureMobileViewport() {
       }
       input, select, textarea, button {
         font-size: 16px;
+        touch-action: manipulation;
+      }
+      body {
+        touch-action: manipulation;
       }
       img, svg, video, canvas {
         max-width: 100%;
@@ -5200,6 +5204,7 @@ const [lists,setLists]=useState(()=>{
   const [userNameInput,setUserNameInput]=useState(()=>getAppUserName()||"");
   const [userPinInput,setUserPinInput]=useState("");
   const [userPinConfirmInput,setUserPinConfirmInput]=useState("");
+  const [authLoading,setAuthLoading]=useState(false);
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
@@ -5257,7 +5262,7 @@ const [lists,setLists]=useState(()=>{
         const target = String(event?.targetName || "").trim().toLowerCase();
         const actor = String(event?.actorName || "").trim().toLowerCase();
         if (target && target !== currentName) return;
-        if (actor && actor === currentName && event?.type !== "finished") return;
+        if (actor && actor === currentName) return;
         const notification = eventToNotification(event);
         if (notification) events.push(notification);
       });
@@ -5312,6 +5317,26 @@ const [lists,setLists]=useState(()=>{
   useEffect(() => {
     syncNotificationsFromLists(lists);
   }, [lists, syncNotificationsFromLists]);
+
+
+  useEffect(() => {
+    const refreshCloudState = async () => {
+      const name = getAppUserName();
+      const userId = getAppUserId();
+      if (!name || !isPinSessionVerified(name) || !userId || !hasSupabaseConfig()) return;
+      await restoreUserListsFromCloud(userId, name, { silent: true });
+    };
+
+    const timer = setInterval(refreshCloudState, 25000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshCloudState();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [restoreUserListsFromCloud]);
 
 
   const resetPantryFlow = useCallback(() => {
@@ -5569,7 +5594,7 @@ const [lists,setLists]=useState(()=>{
     }
 
     try{
-      setLoading(true);
+      setAuthLoading(true);
       const pinResult=await verifyOrCreateUserPin(clean,userPinInput,userPinConfirmInput);
       if(!pinResult.ok){
         showToast(pinResult.message,3600);
@@ -5582,6 +5607,9 @@ const [lists,setLists]=useState(()=>{
       setUserNameModal(false);
       setUserPinInput("");
       setUserPinConfirmInput("");
+      try{document.activeElement?.blur?.();}catch{}
+      ensureMobileViewport();
+      setTimeout(()=>window.scrollTo({top:0,left:0,behavior:"auto"}),80);
 
       const userId=await registerAppUser(savedName,{force:true});
       if(userId)await restoreUserListsFromCloud(userId,savedName);
@@ -5590,7 +5618,7 @@ const [lists,setLists]=useState(()=>{
     }catch(err){
       showToast(err?.message || "Não foi possível validar seu acesso.",5200);
     }finally{
-      setLoading(false);
+      setAuthLoading(false);
     }
   };
 
@@ -5828,7 +5856,6 @@ const [lists,setLists]=useState(()=>{
     setSharedLandingRecord(null);
     try { window.history.replaceState({}, document.title, window.location.origin + "/"); } catch {}
     const actorName = getAppUserName() || "Usuário";
-    addNotification("shared-accepted", `Lista "${received.name || "compartilhada"}" adicionada ao seu app.`, { sharedId: received.sharedId, listName: received.name });
     if (received.sharedId) {
       appendSharedListEvent(received.sharedId, {
         type: "shared-accepted",
@@ -7049,30 +7076,34 @@ const [lists,setLists]=useState(()=>{
     if (!mNotFound && !l.startedAt) {
       l.startedAt = new Date().toISOString();
       if (isReallyShared) {
-        addNotification("started", `Você iniciou a lista "${l.name || "compartilhada"}".`, { sharedId:l.sharedId, listName:l.name });
-        appendSharedListEvent(l.sharedId, {
-          type:"started",
-          actorName,
-          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
-          listName:l.name || "Lista",
-          listId:l.id,
-          message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
-        });
+        const targetName = l.ownerName || l.remetente || l.sharedOwner || "";
+        if (String(targetName || "").trim().toLowerCase() !== String(actorName || "").trim().toLowerCase()) {
+          appendSharedListEvent(l.sharedId, {
+            type:"started",
+            actorName,
+            targetName,
+            listName:l.name || "Lista",
+            listId:l.id,
+            message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
+          });
+        }
       }
     }
 
     if (allDone && !l.finishedAt) {
       l.finishedAt = new Date().toISOString();
       if (isReallyShared) {
-        addNotification("finished", `Você finalizou a lista "${l.name || "compartilhada"}".`, { sharedId:l.sharedId, listName:l.name });
-        appendSharedListEvent(l.sharedId, {
-          type:"finished",
-          actorName,
-          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
-          listName:l.name || "Lista",
-          listId:l.id,
-          message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
-        });
+        const targetName = l.ownerName || l.remetente || l.sharedOwner || "";
+        if (String(targetName || "").trim().toLowerCase() !== String(actorName || "").trim().toLowerCase()) {
+          appendSharedListEvent(l.sharedId, {
+            type:"finished",
+            actorName,
+            targetName,
+            listName:l.name || "Lista",
+            listId:l.id,
+            message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
+          });
+        }
       }
     }
 
@@ -8302,14 +8333,14 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Como podemos te chamar?</label>
-            <input value={userNameInput} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu"
+            <input value={userNameInput} autoFocus onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserNameInput(e.target.value)} placeholder="Ex: Cadu"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:800,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>PIN de acesso</label>
-            <input value={userPinInput} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
+            <input value={userPinInput} onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserPinInput(normalizePin(e.target.value))} placeholder="4 a 6 dígitos" inputMode="numeric" type="password" autoComplete="current-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
@@ -8317,7 +8348,7 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
             <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN <span style={{fontWeight:700,color:"#9CA3AF"}}>(somente no primeiro acesso)</span></label>
-            <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
+            <input value={userPinConfirmInput} onTouchStart={e=>e.currentTarget.focus()} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
