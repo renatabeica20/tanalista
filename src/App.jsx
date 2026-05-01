@@ -4468,6 +4468,101 @@ function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) 
 }
 
 
+
+function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 }) {
+  if (!userName) return null;
+  return (
+    <div style={{
+      position:"sticky",
+      top:0,
+      zIndex:120,
+      width:"100%",
+      background:"rgba(255,255,255,0.94)",
+      backdropFilter:"blur(12px)",
+      WebkitBackdropFilter:"blur(12px)",
+      borderBottom:"1px solid #E5E7EB",
+      boxShadow:"0 8px 24px rgba(17,24,39,0.06)",
+      padding:"10px 12px",
+      boxSizing:"border-box"
+    }}>
+      <div style={{
+        maxWidth:430,
+        width:"100%",
+        margin:"0 auto",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"space-between",
+        gap:10
+      }}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:12,fontWeight:800,color:"#6B7280",lineHeight:1}}>Usuário</div>
+          <div style={{fontSize:14,fontWeight:900,color:"#111827",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            Olá, {userName}
+          </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <button onClick={onNotifications} aria-label="Notificações" style={{
+            position:"relative",
+            border:"1px solid #DDD6FE",
+            background:"#F5F3FF",
+            color:"#6D28D9",
+            borderRadius:999,
+            width:38,
+            height:34,
+            fontSize:17,
+            fontWeight:900,
+            cursor:"pointer",
+            fontFamily:"inherit",
+            display:"flex",
+            alignItems:"center",
+            justifyContent:"center",
+            boxShadow:"0 8px 18px rgba(109,40,217,0.10)"
+          }}>
+            🔔
+            {unreadCount > 0 && (
+              <span style={{
+                position:"absolute",
+                top:-6,
+                right:-6,
+                minWidth:18,
+                height:18,
+                borderRadius:999,
+                background:"#DC2626",
+                color:"#FFFFFF",
+                fontSize:10,
+                fontWeight:900,
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"center",
+                border:"2px solid #FFFFFF"
+              }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          <button onClick={onSwitchUser} style={{
+            border:"1px solid #E5E7EB",
+            background:"#FFFFFF",
+            color:"#6D28D9",
+            borderRadius:999,
+            padding:"8px 10px",
+            fontSize:11,
+            fontWeight:900,
+            cursor:"pointer",
+            fontFamily:"inherit",
+            whiteSpace:"nowrap",
+            boxShadow:"0 8px 18px rgba(17,24,39,0.06)"
+          }}>
+            Trocar usuário
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
   useEffect(() => {
@@ -7028,6 +7123,13 @@ const [lists,setLists]=useState(()=>{
 
   return(
     <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
+      <AppHeader
+        userName={getAppUserName()}
+        onSwitchUser={handleSwitchUser}
+        onNotifications={()=>setShowNotificationsScreen(true)}
+        unreadCount={unreadNotificationsCount}
+      />
+
 
       {/* LOADING */}
       {loading&&(
@@ -7122,51 +7224,7 @@ const [lists,setLists]=useState(()=>{
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
-          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"34px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
-            {getAppUserName()&&(
-              <button onClick={()=>setShowNotificationsScreen(true)} style={{
-                position:"absolute",
-                top:14,
-                right:124,
-                zIndex:3,
-                border:"1px solid #E5E7EB",
-                background:"rgba(255,255,255,0.92)",
-                color:"#6D28D9",
-                borderRadius:999,
-                width:36,
-                height:32,
-                fontSize:16,
-                fontWeight:900,
-                cursor:"pointer",
-                fontFamily:"inherit",
-                boxShadow:"0 8px 18px rgba(17,24,39,0.08)"
-              }}>
-                🔔
-                {unreadNotificationsCount>0&&(
-                  <span style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,borderRadius:999,background:"#DC2626",color:"#FFFFFF",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #FFFFFF"}}>
-                    {unreadNotificationsCount>9?"9+":unreadNotificationsCount}
-                  </span>
-                )}
-              </button>
-            )}
-            {getAppUserName()&&(
-              <button onClick={handleSwitchUser} style={{
-                position:"absolute",
-                top:14,
-                right:14,
-                zIndex:3,
-                border:"1px solid #E5E7EB",
-                background:"rgba(255,255,255,0.88)",
-                color:"#6D28D9",
-                borderRadius:999,
-                padding:"7px 10px",
-                fontSize:11,
-                fontWeight:900,
-                cursor:"pointer",
-                fontFamily:"inherit",
-                boxShadow:"0 8px 18px rgba(17,24,39,0.08)"
-              }}>Trocar usuário</button>
-            )}
+          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"24px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
             <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
