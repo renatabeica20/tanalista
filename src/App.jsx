@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.24 - Visual premium integrado à versão completa
+// Etapa 7.49 - Listas recentes compactas e ajuste de enquadramento mobile
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -7531,46 +7531,32 @@ const [lists,setLists]=useState(()=>{
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
                 {recentLists.map(list=>{
-                  const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
                   const shared=list.isShared === true;
                   const finished=isListFinished(list);
                   return(
-                    <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:24,boxShadow:"0 16px 38px rgba(17,24,39,0.08)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
+                    <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:20,boxShadow:"0 10px 24px rgba(17,24,39,0.07)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative",width:"100%",maxWidth:"100%",boxSizing:"border-box"}}>
                       <div onClick={()=>{setCurrentList(list);setScreen("list");setSearch("");setCollapsedCats({});}}
-                        style={{display:"flex",alignItems:"flex-start",gap:14,padding:"16px 16px 12px",cursor:"pointer"}}>
-                        <div style={{width:46,height:46,borderRadius:18,background:"linear-gradient(135deg,#F5F3FF,#EEF2FF)",border:"1px solid #DDD6FE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{icons[list.type]||"📦"}</div>
+                        style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",cursor:"pointer",width:"100%",maxWidth:"100%",boxSizing:"border-box"}}>
+                        <div style={{width:40,height:40,borderRadius:15,background:"linear-gradient(135deg,#F5F3FF,#EEF2FF)",border:"1px solid #DDD6FE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21,flexShrink:0}}>{icons[list.type]||"📦"}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{textAlign:"center",minWidth:0}}>
-                            <div style={{fontWeight:900,fontSize:16,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name||"Lista sem nome"}</div>
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexWrap:"wrap",marginTop:6}}>
+                            <div style={{fontWeight:900,fontSize:15,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{list.name||"Lista sem nome"}</div>
+                            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
                               <span style={{fontSize:11,fontWeight:900,color:finished?"#B91C1C":"#047857",background:finished?"#FEE2E2":"#ECFDF5",border:"1px solid "+(finished?"#FCA5A5":"#A7F3D0"),borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>{finished?"Finalizada":"Em aberto"}</span>
                               {shared&&<span style={{fontSize:10,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Compartilhada</span>}
                             </div>
                           </div>
-                          <div style={{fontSize:12,color:"#6B7280",marginTop:7,fontWeight:700,textAlign:"center"}}>{formatListDate(list.createdAt)}</div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
-                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
-                              <div style={{fontSize:10,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Orçamento</div>
-                              <div style={{fontSize:12,color:"#111827",fontWeight:900,marginTop:2}}>{stats.budget>0?fmtR(stats.budget):"Não definido"}</div>
-                            </div>
-                            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
-                              <div style={{fontSize:10,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Gasto</div>
-                              <div style={{fontSize:12,color:"#111827",fontWeight:900,marginTop:2}}>{fmtR(stats.fullTotal||list.total||0)}</div>
-                            </div>
-                            <div style={{background:stats.balanceBg,border:"1px solid "+stats.balanceBorder,borderRadius:14,padding:"8px 8px",textAlign:"center"}}>
-                              <div style={{fontSize:10,color:stats.balanceColor,fontWeight:900,textTransform:"uppercase"}}>Resultado</div>
-                              <div style={{fontSize:12,color:stats.balanceColor,fontWeight:900,marginTop:2}}>{stats.budget>0?(stats.balance>=0?fmtR(stats.balance):fmtR(Math.abs(stats.balance))):"Sem orçamento"}</div>
-                            </div>
-                          </div>
-                          {originMeta&&<div style={{display:"flex",justifyContent:"center",marginTop:10}}>
+                          <div style={{fontSize:11,color:"#6B7280",marginTop:5,fontWeight:700,textAlign:"center"}}>{formatListDate(list.createdAt)}</div>
+                          {/* Card compacto: removidas as métricas de orçamento, gasto e resultado para reduzir altura e evitar estouro de enquadramento no mobile. */}
+                          {originMeta&&<div style={{display:"flex",justifyContent:"center",marginTop:6}}>
                             <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:999,background:originMeta.type==="received"?"#EEF2FF":"#ECFDF5",border:"1px solid "+(originMeta.type==="received"?"#C4B5FD":"#A7F3D0"),color:originMeta.type==="received"?"#4C1D95":"#047857",fontSize:11,fontWeight:900}}><span>{originMeta.icon}</span><span>{originMeta.text}</span></span>
                           </div>}
                         </div>
                         <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                           <button onClick={()=>setListMenuId(listMenuId===list.id?null:list.id)}
-                            style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:12,padding:"7px 11px",cursor:"pointer",fontWeight:900,fontSize:18,color:"#4B5563",fontFamily:"inherit",lineHeight:1}}>⋯</button>
+                            style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:12,padding:"6px 10px",cursor:"pointer",fontWeight:900,fontSize:17,color:"#4B5563",fontFamily:"inherit",lineHeight:1}}>⋯</button>
                           {listMenuId===list.id&&(
                             <div style={{position:"absolute",right:0,top:42,background:"#FFFFFF",borderRadius:20,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",border:"1px solid #E5E7EB",zIndex:500,minWidth:230,overflow:"hidden"}}>
                               {!finished&&<button onClick={()=>openListForEdit(list)} style={{width:"100%",padding:"12px 16px",border:"none",background:"none",textAlign:"left",fontSize:14,fontWeight:600,color:"#111827",cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit"}}>✏️ Editar lista</button>}
