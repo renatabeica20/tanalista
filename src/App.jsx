@@ -28,6 +28,48 @@ function supabaseHeaders(extra = {}) {
 }
 
 
+function ensureMobileViewport() {
+  try {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "viewport");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover");
+
+    let style = document.getElementById("tnl-mobile-fit-style");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "tnl-mobile-fit-style";
+      document.head.appendChild(style);
+    }
+    style.textContent = `
+      html, body, #root {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      input, select, textarea, button {
+        font-size: 16px;
+      }
+      img, svg, video, canvas {
+        max-width: 100%;
+      }
+    `;
+  } catch {}
+}
+
+
 // ── Cadastro leve de usuários ─────────────────────────────────────────────
 // Identifica o usuário sem login/senha. O device_id permite mensurar usuários únicos.
 const APP_USER_NAME_KEY = "tnl_user_name";
@@ -469,6 +511,77 @@ async function softDeleteSharedListRecord(id, list = null) {
     return false;
   }
 }
+
+
+async function appendSharedListEvent(id, event = {}) {
+  if (!id || !hasSupabaseConfig()) return false;
+  try {
+    const record = await getSharedListRecord(id);
+    if (!record) return false;
+    const data = record?.data && typeof record.data === "object" ? record.data : {};
+    const existing = Array.isArray(data.sharedEvents) ? data.sharedEvents : [];
+    const normalizedEvent = {
+      id: event.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: event.type || "info",
+      message: event.message || "",
+      actorName: event.actorName || getAppUserName() || "",
+      targetName: event.targetName || data.ownerName || data.remetente || record.remetente || "",
+      listName: event.listName || data.name || record.title || "Lista",
+      listId: data.id || "",
+      sharedId: id,
+      createdAt: event.createdAt || new Date().toISOString(),
+    };
+    const nextEvents = [normalizedEvent, ...existing].slice(0, 80);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({ data: { ...data, sharedEvents: nextEvents, lastEventAt: normalizedEvent.createdAt } }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Erro ao registrar evento compartilhado:", err);
+    return false;
+  }
+}
+
+function getNotificationStorageKey() {
+  const name = normalizeCacheKey(getAppUserName() || "anon");
+  return `tnl_internal_notifications:${name || "anon"}`;
+}
+
+function loadStoredNotifications() {
+  try {
+    const raw = localStorage.getItem(getNotificationStorageKey()) || "[]";
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredNotifications(items) {
+  try {
+    localStorage.setItem(getNotificationStorageKey(), JSON.stringify(Array.isArray(items) ? items.slice(0, 80) : []));
+  } catch {}
+}
+
+function eventToNotification(event) {
+  if (!event || !event.id) return null;
+  return {
+    id: `shared-${event.id}`,
+    type: event.type || "shared",
+    message: event.message || "Atualização em lista compartilhada",
+    read: false,
+    createdAt: event.createdAt || new Date().toISOString(),
+    meta: {
+      sharedId: event.sharedId || "",
+      listId: event.listId || "",
+      listName: event.listName || "",
+      actorName: event.actorName || "",
+    },
+  };
+}
+
 
 function sharedListSignature(list) {
   try {
@@ -4354,6 +4467,73 @@ function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) 
   );
 }
 
+
+function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  useEffect(() => {
+    onMarkAllRead?.();
+  }, []);
+
+  const typeMeta = (type) => {
+    if (type === "shared-accepted") return { icon: "✅", color: "#047857", bg: "#ECFDF5" };
+    if (type === "started") return { icon: "🛒", color: "#6D28D9", bg: "#F5F3FF" };
+    if (type === "finished") return { icon: "🏁", color: "#B91C1C", bg: "#FEF2F2" };
+    return { icon: "🔔", color: "#374151", bg: "#F9FAFB" };
+  };
+
+  const formatNotifTime = (value) => {
+    try {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+    } catch {
+      return "";
+    }
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 52%,#F9FAFB 100%)",padding:"22px 18px 34px",boxSizing:"border-box",fontFamily:"inherit"}}>
+      <div style={{maxWidth:520,width:"100%",margin:"0 auto"}}>
+        <div style={{background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",borderRadius:28,padding:"18px 16px",color:"#FFFFFF",boxShadow:"0 18px 44px rgba(109,40,217,0.22)",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <button onClick={onBack} style={{width:44,height:44,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.28)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",fontSize:24,cursor:"pointer",fontFamily:"inherit"}}>←</button>
+            <div style={{textAlign:"center",flex:1,minWidth:0}}>
+              <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Notificações</div>
+              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>{unreadCount ? `${unreadCount} nova(s) notificação(ões)` : "Tudo em dia"}</div>
+            </div>
+            <div style={{width:44}} />
+          </div>
+        </div>
+
+        {!notifications.length ? (
+          <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:26,textAlign:"center",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
+            <div style={{fontSize:42,marginBottom:8}}>🔔</div>
+            <div style={{fontSize:19,fontWeight:900,color:"#111827",marginBottom:6}}>Nenhuma notificação</div>
+            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>As atualizações de listas compartilhadas aparecerão aqui.</div>
+          </div>
+        ) : (
+          <div style={{display:"grid",gap:10}}>
+            {notifications.map((n) => {
+              const meta = typeMeta(n.type);
+              return (
+                <div key={n.id} style={{background:"#FFFFFF",border:n.read?"1px solid #E5E7EB":"1.5px solid #C4B5FD",borderRadius:20,padding:14,boxShadow:n.read?"0 8px 18px rgba(17,24,39,0.04)":"0 14px 30px rgba(109,40,217,0.10)",display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{width:38,height:38,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",background:meta.bg,color:meta.color,fontSize:19,flexShrink:0}}>{meta.icon}</div>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{fontSize:14,fontWeight:n.read?750:900,color:"#111827",lineHeight:1.35}}>{n.message}</div>
+                    <div style={{fontSize:11,fontWeight:800,color:"#6B7280",marginTop:5}}>{formatNotifTime(n.createdAt)}</div>
+                  </div>
+                  {!n.read && <span style={{width:9,height:9,borderRadius:999,background:"#DC2626",marginTop:5,flexShrink:0}} />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function PriceStatsScreen({ onBack, lists = [] }) {
   const [openSection, setOpenSection] = useState("budget");
   const stats = getPriceStatsSummary(lists);
@@ -4387,7 +4567,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
       boxSizing:"border-box",
       fontFamily:"inherit"
     }}>
-      <div style={{maxWidth:760,margin:"0 auto"}}>
+      <div style={{maxWidth:760,width:"100%",margin:"0 auto"}}>
         <div style={{
           background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",
           borderRadius:28,
@@ -4676,6 +4856,11 @@ function formatPantryDate(value) {
 }
 
 export default function App(){
+
+  useEffect(() => {
+    ensureMobileViewport();
+  }, []);
+
   const [screen,setScreen]=useState("home");
   
   const [showPriceStatsScreen, setShowPriceStatsScreen] = useState(false);
@@ -4800,12 +4985,70 @@ const [lists,setLists]=useState(()=>{
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [installAvailable,setInstallAvailable]=useState(false);
+  const [notifications,setNotifications]=useState(()=>loadStoredNotifications());
+  const [showNotificationsScreen,setShowNotificationsScreen]=useState(false);
 
   const showToast=useCallback((msg,duration=1000)=>{
     clearTimeout(toastTimer.current);
     setToast({show:true,msg});
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
+
+
+  const addNotification = useCallback((type, message, meta = {}) => {
+    const id = meta.id || `${type}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const notification = {
+      id,
+      type,
+      message,
+      meta,
+      read: false,
+      createdAt: meta.createdAt || new Date().toISOString(),
+    };
+    setNotifications((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (current.some((n) => n.id === id)) return current;
+      const next = [notification, ...current].slice(0, 80);
+      saveStoredNotifications(next);
+      return next;
+    });
+  }, []);
+
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((prev) => {
+      const next = (Array.isArray(prev) ? prev : []).map((n) => ({ ...n, read: true }));
+      saveStoredNotifications(next);
+      return next;
+    });
+  }, []);
+
+  const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
+
+  const syncNotificationsFromLists = useCallback((sourceLists = []) => {
+    const currentName = String(getAppUserName() || "").trim().toLowerCase();
+    if (!currentName) return;
+    const events = [];
+    (Array.isArray(sourceLists) ? sourceLists : []).forEach((list) => {
+      (Array.isArray(list?.sharedEvents) ? list.sharedEvents : []).forEach((event) => {
+        const target = String(event?.targetName || "").trim().toLowerCase();
+        const actor = String(event?.actorName || "").trim().toLowerCase();
+        if (target && target !== currentName) return;
+        if (actor && actor === currentName && event?.type !== "finished") return;
+        const notification = eventToNotification(event);
+        if (notification) events.push(notification);
+      });
+    });
+    if (!events.length) return;
+    setNotifications((prev) => {
+      const map = new Map((Array.isArray(prev) ? prev : []).map((n) => [n.id, n]));
+      events.forEach((n) => {
+        if (!map.has(n.id)) map.set(n.id, n);
+      });
+      const next = Array.from(map.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
+      saveStoredNotifications(next);
+      return next;
+    });
+  }, []);
 
 
   const handleSwitchUser = useCallback(() => {
@@ -4824,6 +5067,8 @@ const [lists,setLists]=useState(()=>{
     setScreen("home");
     setShowPriceStatsScreen(false);
     setShowHistory(false);
+    setShowNotificationsScreen(false);
+    setNotifications([]);
     showToast("Usuário desconectado. Informe o nome para entrar novamente.", 2200);
   }, [showToast]);
 
@@ -4836,6 +5081,11 @@ const [lists,setLists]=useState(()=>{
   }, []);
 
   const activePantry = pantryLists.find(p => p.status === "ativa") || null;
+
+  useEffect(() => {
+    syncNotificationsFromLists(lists);
+  }, [lists, syncNotificationsFromLists]);
+
 
   const resetPantryFlow = useCallback(() => {
     setPantryPendingItems([]);
@@ -5322,8 +5572,20 @@ const [lists,setLists]=useState(()=>{
     setCollapsedCats({});
     setSharedLandingRecord(null);
     try { window.history.replaceState({}, document.title, window.location.origin + "/"); } catch {}
+    const actorName = getAppUserName() || "Usuário";
+    addNotification("shared-accepted", `Lista "${received.name || "compartilhada"}" adicionada ao seu app.`, { sharedId: received.sharedId, listName: received.name });
+    if (received.sharedId) {
+      appendSharedListEvent(received.sharedId, {
+        type: "shared-accepted",
+        actorName,
+        targetName: record?.remetente || baseData.remetente || baseData.ownerName || "",
+        listName: received.name || "Lista",
+        listId: received.id,
+        message: `${actorName} aceitou a lista "${received.name || "compartilhada"}".`,
+      });
+    }
     showToast("📲 Lista recebida aberta no Tá na Lista");
-  },[showToast]);
+  },[showToast, addNotification]);
 
   const loadSharedListFromUrl=useCallback(async()=>{
     const embedded=extractEmbeddedListFromUrl();
@@ -6524,12 +6786,46 @@ const [lists,setLists]=useState(()=>{
         });
       } catch {}
     }
+    const listHasItems = l.categories.reduce((s,c)=>s+c.items.length,0)>0;
+    const allDone = listHasItems && l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
+    const actorName = getAppUserName() || "Usuário";
+    const isReallyShared = l.isShared === true && Boolean(l.sharedId);
+
+    if (!mNotFound && !l.startedAt) {
+      l.startedAt = new Date().toISOString();
+      if (isReallyShared) {
+        addNotification("started", `Você iniciou a lista "${l.name || "compartilhada"}".`, { sharedId:l.sharedId, listName:l.name });
+        appendSharedListEvent(l.sharedId, {
+          type:"started",
+          actorName,
+          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          listName:l.name || "Lista",
+          listId:l.id,
+          message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
+        });
+      }
+    }
+
+    if (allDone && !l.finishedAt) {
+      l.finishedAt = new Date().toISOString();
+      if (isReallyShared) {
+        addNotification("finished", `Você finalizou a lista "${l.name || "compartilhada"}".`, { sharedId:l.sharedId, listName:l.name });
+        appendSharedListEvent(l.sharedId, {
+          type:"finished",
+          actorName,
+          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          listName:l.name || "Lista",
+          listId:l.id,
+          message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
+        });
+      }
+    }
+
     updateList(l);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
     setItemModal(null);
     returnToSearch();
-    const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
-    if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
+    if(allDone)setTimeout(()=>setShowFinished(true),400);
   };
 
   const removeItem=()=>{
@@ -6723,6 +7019,7 @@ const [lists,setLists]=useState(()=>{
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
   // ─────────────────────────────────────────────────────────────────────
+  if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
   if(showPriceStatsScreen) return <PriceStatsScreen lists={lists} onBack={()=>setShowPriceStatsScreen(false)} />;
 
   const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
@@ -6827,6 +7124,32 @@ const [lists,setLists]=useState(()=>{
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
           <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"34px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             {getAppUserName()&&(
+              <button onClick={()=>setShowNotificationsScreen(true)} style={{
+                position:"absolute",
+                top:14,
+                right:124,
+                zIndex:3,
+                border:"1px solid #E5E7EB",
+                background:"rgba(255,255,255,0.92)",
+                color:"#6D28D9",
+                borderRadius:999,
+                width:36,
+                height:32,
+                fontSize:16,
+                fontWeight:900,
+                cursor:"pointer",
+                fontFamily:"inherit",
+                boxShadow:"0 8px 18px rgba(17,24,39,0.08)"
+              }}>
+                🔔
+                {unreadNotificationsCount>0&&(
+                  <span style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,borderRadius:999,background:"#DC2626",color:"#FFFFFF",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #FFFFFF"}}>
+                    {unreadNotificationsCount>9?"9+":unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+            )}
+            {getAppUserName()&&(
               <button onClick={handleSwitchUser} style={{
                 position:"absolute",
                 top:14,
@@ -6846,7 +7169,7 @@ const [lists,setLists]=useState(()=>{
             )}
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
-            <div style={{position:"relative",maxWidth:520,margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
+            <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
               {getAppUserName()&&(
                 <div style={{alignSelf:"stretch",display:"flex",justifyContent:"center"}}>
                   <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:999,background:"rgba(255,255,255,0.86)",border:"1px solid #DDD6FE",boxShadow:"0 10px 24px rgba(109,40,217,0.08)",fontSize:13,color:"#4C1D95",fontWeight:900}}>
