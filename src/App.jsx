@@ -4205,7 +4205,16 @@ function ItemTrendCharts({ series = [] }) {
             const last = values[values.length - 1];
             const first = values[0];
             const diff = first ? ((last - first) / first) * 100 : 0;
-            const barMax = Math.max(...values, 1);
+            const chartW = 300;
+            const chartH = 70;
+            const pad = 10;
+            const spread = Math.max(max - min, 1);
+            const linePoints = points.map((p, i) => {
+              const x = points.length <= 1 ? chartW / 2 : pad + (i * (chartW - pad * 2)) / (points.length - 1);
+              const y = chartH - pad - ((Number(p.value || 0) - min) * (chartH - pad * 2)) / spread;
+              return { x, y, label: p.label, value: Number(p.value || 0) };
+            });
+            const linePath = linePoints.map((p) => `${p.x},${p.y}`).join(" ");
             return (
               <div key={`${item.itemName}-${idx}`} style={{border:"1px solid #F3F4F6",borderRadius:18,padding:12,background:"#FAFAFA"}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
@@ -4214,12 +4223,16 @@ function ItemTrendCharts({ series = [] }) {
                     {diff>0?"+":""}{Number(diff.toFixed(1))}%
                   </div>
                 </div>
-                <div style={{display:"flex",alignItems:"end",gap:5,height:54,marginBottom:8}}>
-                  {points.map((p, i) => {
-                    const h = Math.max(8, Math.round((Number(p.value || 0) / barMax) * 54));
-                    return <div key={i} title={`${p.label}: ${formatBRL(p.value)}`} style={{flex:1,height:h,borderRadius:"8px 8px 3px 3px",background:"linear-gradient(180deg,#8B5CF6,#6D28D9)"}} />;
-                  })}
-                </div>
+                <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{width:"100%",height:78,display:"block",marginBottom:8,overflow:"visible"}}>
+                  <line x1={pad} y1={chartH-pad} x2={chartW-pad} y2={chartH-pad} stroke="#E5E7EB" strokeWidth="2" />
+                  <polyline points={linePath} fill="none" stroke="#6D28D9" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                  {linePoints.map((p, i) => (
+                    <g key={i}>
+                      <circle cx={p.x} cy={p.y} r="4.5" fill="#6D28D9" />
+                      <title>{`${p.label}: ${formatBRL(p.value)}`}</title>
+                    </g>
+                  ))}
+                </svg>
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B7280",fontWeight:800}}>
                   <span>Menor: {formatBRL(min)}</span>
                   <span>Maior: {formatBRL(max)}</span>
@@ -6288,7 +6301,7 @@ const [lists,setLists]=useState(()=>{
     const timer=setTimeout(()=>{
       markActivePantryAsCompleted(currentList);
       setShowFinished(false);
-    },3200);
+    },5000);
     return()=>clearTimeout(timer);
   },[showFinished,currentList]);
 
