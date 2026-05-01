@@ -7237,7 +7237,7 @@ const [lists,setLists]=useState(()=>{
               )}
               <div style={{textAlign:"center",background:"rgba(255,255,255,0.58)",border:"1px solid rgba(221,214,254,0.72)",borderRadius:28,padding:"18px 18px 16px",width:"100%",boxShadow:"0 18px 42px rgba(109,40,217,0.08)",backdropFilter:"blur(8px)"}}>
                 <BrandWordmark />
-                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe sua lista e controle o orçamento</div>
+                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
               </div>
             </div>
           </div>
