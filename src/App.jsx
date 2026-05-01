@@ -5198,6 +5198,8 @@ const [lists,setLists]=useState(()=>{
   const [senderName,setSenderName]=useState(()=>getAppUserName()||"");
   const [userNameModal,setUserNameModal]=useState(()=>!getAppUserName());
   const [userNameInput,setUserNameInput]=useState(()=>getAppUserName()||"");
+  const [userPinInput,setUserPinInput]=useState("");
+  const [userPinConfirmInput,setUserPinConfirmInput]=useState("");
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
