@@ -5267,6 +5267,9 @@ const [lists,setLists]=useState(()=>{
   const [userNameInput,setUserNameInput]=useState(()=>getAppUserName()||"");
   const [userPinInput,setUserPinInput]=useState("");
   const [userPinConfirmInput,setUserPinConfirmInput]=useState("");
+  const [isFirstAccessMode,setIsFirstAccessMode]=useState(false);
+  const [authCheckingName,setAuthCheckingName]=useState(false);
+  const [authCheckedName,setAuthCheckedName]=useState("");
   const [sharedLandingRecord,setSharedLandingRecord]=useState(null);
   const [sharedPreviewExpanded,setSharedPreviewExpanded]=useState(false);
   const [sharedSyncing,setSharedSyncing]=useState(false);
@@ -5629,6 +5632,41 @@ const [lists,setLists]=useState(()=>{
     }
   },[restoreUserListsFromCloud,persistLocalListsToCloud]);
 
+  useEffect(()=>{
+    if(!userNameModal || !hasSupabaseConfig())return;
+    const clean=String(userNameInput||"").trim();
+    setUserPinConfirmInput("");
+    setAuthCheckedName("");
+    setIsFirstAccessMode(false);
+    if(clean.length<2){
+      setAuthCheckingName(false);
+      return;
+    }
+
+    let cancelled=false;
+    setAuthCheckingName(true);
+    const timer=setTimeout(async()=>{
+      try{
+        const profile=await findUserAuthProfile(clean);
+        if(cancelled)return;
+        setAuthCheckedName(clean);
+        setIsFirstAccessMode(!profile?.data?.pinHash);
+      }catch{
+        if(!cancelled){
+          setAuthCheckedName(clean);
+          setIsFirstAccessMode(false);
+        }
+      }finally{
+        if(!cancelled)setAuthCheckingName(false);
+      }
+    },420);
+
+    return()=>{
+      cancelled=true;
+      clearTimeout(timer);
+    };
+  },[userNameInput,userNameModal]);
+
   const confirmAppUserName=async()=>{
     const clean=String(userNameInput||"").trim();
     if(!clean){showToast("Informe seu nome para continuar.");return;}
@@ -5651,6 +5689,9 @@ const [lists,setLists]=useState(()=>{
       setUserNameModal(false);
       setUserPinInput("");
       setUserPinConfirmInput("");
+      setIsFirstAccessMode(false);
+      setAuthCheckingName(false);
+      setAuthCheckedName(savedName);
 
       const userId=await registerAppUser(savedName,{force:true});
       if(userId)await restoreUserListsFromCloud(userId,savedName);
@@ -7374,18 +7415,20 @@ const [lists,setLists]=useState(()=>{
             style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"13px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px",touchAction:"manipulation"}}
             onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
           />
-          <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>Se for seu primeiro acesso, informe e confirme um PIN para proteger suas listas.</div>
+          <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>
+            {authCheckingName?"Verificando cadastro...":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
+          </div>
         </div>
-        <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN <span style={{fontWeight:700,color:"#9CA3AF"}}>(somente no primeiro acesso)</span></label>
+        {isFirstAccessMode&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+          <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN</label>
           <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
             style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"13px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px",touchAction:"manipulation"}}
             onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
           />
-        </div>
-        <button onClick={confirmAppUserName} disabled={loading}
-          style={{width:"100%",padding:16,borderRadius:20,background:loading?"#A78BFA":"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:loading?"wait":"pointer",fontFamily:"inherit",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-          {loading?"Validando...":"Entrar"}
+        </div>)}
+        <button onClick={confirmAppUserName} disabled={loading||authCheckingName}
+          style={{width:"100%",padding:16,borderRadius:20,background:(loading||authCheckingName)?"#A78BFA":"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+          {loading?"Validando...":authCheckingName?"Verificando...":isFirstAccessMode?"Criar acesso":"Entrar"}
         </button>
       </div>
       <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
@@ -8417,18 +8460,20 @@ const [lists,setLists]=useState(()=>{
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
-            <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>Se for seu primeiro acesso, informe e confirme um PIN para proteger suas listas.</div>
+            <div style={{fontSize:11,color:"#6B7280",fontWeight:700,marginTop:7,lineHeight:1.35}}>
+              {authCheckingName?"Verificando cadastro...":isFirstAccessMode?"Primeiro acesso identificado. Confirme o PIN abaixo para criar seu acesso.":"Acesso rápido: informe seu PIN e toque em Entrar."}
+            </div>
           </div>
-          <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
-            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN <span style={{fontWeight:700,color:"#9CA3AF"}}>(somente no primeiro acesso)</span></label>
+          {isFirstAccessMode&&(<div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:14}}>
+            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Confirmar PIN</label>
             <input value={userPinConfirmInput} onChange={e=>setUserPinConfirmInput(normalizePin(e.target.value))} placeholder="Repita o PIN" inputMode="numeric" type="password" autoComplete="new-password"
               style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"12px 13px",fontSize:16,fontWeight:900,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",letterSpacing:"2px"}}
               onKeyDown={e=>{if(e.key==="Enter")confirmAppUserName();}}
             />
-          </div>
-          <button onClick={confirmAppUserName}
-            style={{width:"100%",padding:16,borderRadius:20,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>
-            Entrar
+          </div>)}
+          <button onClick={confirmAppUserName} disabled={loading||authCheckingName}
+            style={{width:"100%",padding:16,borderRadius:20,background:(loading||authCheckingName)?"#A78BFA":"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:(loading||authCheckingName)?"wait":"pointer",fontFamily:"inherit"}}>
+            {loading?"Validando...":authCheckingName?"Verificando...":isFirstAccessMode?"Criar acesso":"Entrar"}
           </button>
           {false&&(<button onClick={()=>setUserNameModal(false)}
             style={{width:"100%",padding:12,borderRadius:18,background:"transparent",border:"none",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>
