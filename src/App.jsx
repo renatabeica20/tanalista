@@ -59,9 +59,17 @@ function ensureMobileViewport() {
         overscroll-behavior-x: none;
         touch-action: manipulation;
       }
+      html { overflow-x: clip; }
       body {
         min-height: 100dvh;
         position: relative;
+        width: 100vw;
+        max-width: 100vw;
+      }
+      #root {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: clip;
       }
       *, *::before, *::after {
         box-sizing: border-box;
@@ -80,6 +88,11 @@ function ensureMobileViewport() {
       }
     `;
   } catch {}
+}
+
+// Aplica o viewport antes do primeiro render para evitar abertura com zoom/deslocamento no celular.
+if (typeof document !== "undefined") {
+  ensureMobileViewport();
 }
 
 
@@ -4624,13 +4637,17 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
       top:0,
       zIndex:120,
       width:"100%",
+      maxWidth:"100%",
       background:"#FFFFFF",
       borderBottom:"1px solid #E5E7EB",
-      padding:"10px 12px",
+      padding:"10px max(12px, env(safe-area-inset-left)) 10px max(12px, env(safe-area-inset-right))",
       display:"flex",
       alignItems:"center",
       justifyContent:"space-between",
+      gap:8,
       boxSizing:"border-box",
+      overflow:"hidden",
+      flexWrap:"nowrap",
       boxShadow:"0 8px 22px rgba(17,24,39,0.04)"
     }}>
       <div style={{
@@ -4640,12 +4657,14 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
         overflow:"hidden",
         textOverflow:"ellipsis",
         whiteSpace:"nowrap",
-        paddingRight:10
+        paddingRight:6,
+        minWidth:0,
+        flex:"1 1 auto"
       }}>
         Olá, {userName}
       </div>
 
-      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,minWidth:"max-content"}}>
         <button onClick={onNotifications} aria-label="Notificações" style={{
           position:"relative",
           border:"1px solid #DDD6FE",
@@ -7299,7 +7318,7 @@ const [lists,setLists]=useState(()=>{
   // Login leve e isolado: evita renderizar toda a tela principal por baixo do modal.
   // Isso deixa o campo clicável imediatamente no smartphone e elimina a sensação de tela bloqueada.
   if(userNameModal) return (
-    <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100dvh",background:"linear-gradient(180deg,#EEF2FF 0%,#FFFFFF 58%,#F8FAFC 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box",display:"flex",alignItems:"center",justifyContent:"center",padding:"max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom))",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+    <div style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100dvh",background:"linear-gradient(180deg,#EEF2FF 0%,#FFFFFF 58%,#F8FAFC 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",display:"flex",alignItems:"center",justifyContent:"center",padding:"max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right))",touchAction:"manipulation",WebkitTapHighlightColor:"transparent",isolation:"isolate"}}>
       <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 20% 10%,rgba(139,92,246,0.16),transparent 34%),radial-gradient(circle at 92% 0%,rgba(34,197,94,0.12),transparent 28%)",pointerEvents:"none"}} />
       <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:22,boxShadow:"0 24px 70px rgba(17,24,39,0.14)",border:"1px solid rgba(229,231,235,0.95)",position:"relative",zIndex:1,boxSizing:"border-box"}}>
         <div style={{textAlign:"center",marginBottom:16}}>
@@ -7346,7 +7365,7 @@ const [lists,setLists]=useState(()=>{
   const historyLists = visibleLists.slice(1);
 
   return(
-    <div style={{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
+    <div style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",isolation:"isolate"}}>
       <AppHeader
         userName={getAppUserName()}
         onSwitchUser={handleSwitchUser}
