@@ -3844,11 +3844,24 @@ function getPriceStatsSummary() {
       averageTicket: 0,
       topIncreases: [],
       monthlyTotals: [],
+      itemAnalysis: [],
+      smartInsights: [],
     };
   }
 
+  const validHistory = history
+    .map((h) => ({
+      ...h,
+      unitPrice: Number(h.unitPrice || h.totalPrice || 0),
+      totalPrice: Number(h.totalPrice || h.unitPrice || 0),
+      quantity: Number(h.quantity || 1),
+      createdAt: h.createdAt || new Date().toISOString(),
+      monthKey: h.monthKey || String(h.createdAt || new Date().toISOString()).slice(0, 7),
+    }))
+    .filter((h) => h.itemKey && Number.isFinite(h.unitPrice) && h.unitPrice > 0);
+
   const byMonth = new Map();
-  history.forEach((h) => {
+  validHistory.forEach((h) => {
     const k = h.monthKey || String(h.createdAt || "").slice(0, 7);
     byMonth.set(k, (byMonth.get(k) || 0) + Number(h.totalPrice || 0));
   });
@@ -3858,34 +3871,100 @@ function getPriceStatsSummary() {
     .sort((a, b) => a.month.localeCompare(b.month));
 
   const byItem = new Map();
-  history.forEach((h) => {
+  validHistory.forEach((h) => {
     if (!byItem.has(h.itemKey)) byItem.set(h.itemKey, []);
     byItem.get(h.itemKey).push(h);
   });
 
-  const topIncreases = Array.from(byItem.values())
+  const itemAnalysis = Array.from(byItem.values())
     .map((entries) => {
-      const ordered = entries.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-      if (ordered.length < 2) return null;
-      const first = Number(ordered[0].unitPrice || ordered[0].totalPrice || 0);
-      const last = Number(ordered[ordered.length - 1].unitPrice || ordered[ordered.length - 1].totalPrice || 0);
-      if (!first || !last) return null;
+      const ordered = entries
+        .slice()
+        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+      const prices = ordered.map((h) => Number(h.unitPrice || h.totalPrice || 0)).filter((n) => Number.isFinite(n) && n > 0);
+      if (!prices.length) return null;
+      const first = prices[0];
+      const last = prices[prices.length - 1];
+      const avg = average(prices);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const diffFromAvg = last - avg;
+      const diffPercent = avg ? Number(((diffFromAvg / avg) * 100).toFixed(1)) : 0;
+      const trendPercent = first ? Number((((last - first) / first) * 100).toFixed(1)) : 0;
+      const totalSpent = ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0);
+      let status = "estavel";
+      let insight = "Preço dentro do padrão histórico";
+      if (prices.length === 1) {
+        status = "novo";
+        insight = "Ainda há apenas um registro deste item";
+      } else if (diffPercent > 8) {
+        status = "caro";
+        insight = "Preço atual acima da média histórica";
+      } else if (diffPercent < -8) {
+        status = "barato";
+        insight = "Preço atual abaixo da média histórica";
+      }
       return {
+        itemKey: ordered[ordered.length - 1].itemKey,
         itemName: ordered[ordered.length - 1].itemName,
-        first,
-        last,
-        percent: Number((((last - first) / first) * 100).toFixed(1)),
+        count: ordered.length,
+        average: Number(avg.toFixed(2)),
+        min: Number(min.toFixed(2)),
+        max: Number(max.toFixed(2)),
+        first: Number(first.toFixed(2)),
+        last: Number(last.toFixed(2)),
+        diffFromAvg: Number(diffFromAvg.toFixed(2)),
+        diffPercent,
+        trendPercent,
+        totalSpent: Number(totalSpent.toFixed(2)),
+        status,
+        insight,
       };
     })
     .filter(Boolean)
+    .sort((a, b) => b.count - a.count || b.totalSpent - a.totalSpent);
+
+  const topIncreases = itemAnalysis
+    .filter((it) => it.count >= 2)
+    .map((it) => ({
+      itemName: it.itemName,
+      first: it.first,
+      last: it.last,
+      percent: it.trendPercent,
+    }))
     .sort((a, b) => b.percent - a.percent)
     .slice(0, 5);
 
+  const smartInsights = [];
+  const expensive = itemAnalysis.filter((it) => it.status === "caro").sort((a,b)=>b.diffPercent-a.diffPercent).slice(0,3);
+  const cheap = itemAnalysis.filter((it) => it.status === "barato").sort((a,b)=>a.diffPercent-b.diffPercent).slice(0,3);
+  const heavy = itemAnalysis.slice().sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,3);
+
+  expensive.forEach((it) => smartInsights.push({
+    type: "alerta",
+    title: `${it.itemName} está acima da média`,
+    text: `Último preço ${it.last.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}, média ${it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}.`,
+  }));
+  cheap.forEach((it) => smartInsights.push({
+    type: "oportunidade",
+    title: `${it.itemName} está abaixo da média`,
+    text: `Último preço ${it.last.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}, média ${it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}.`,
+  }));
+  if (heavy.length) {
+    smartInsights.push({
+      type: "impacto",
+      title: "Itens com maior impacto financeiro",
+      text: heavy.map((it) => it.itemName).join(", "),
+    });
+  }
+
   return {
-    totalRecords: history.length,
-    averageTicket: Number(average(history.map((h) => h.totalPrice)).toFixed(2)),
+    totalRecords: validHistory.length,
+    averageTicket: Number(average(validHistory.map((h) => h.totalPrice)).toFixed(2)),
     topIncreases,
     monthlyTotals,
+    itemAnalysis,
+    smartInsights,
   };
 }
 
@@ -4111,6 +4190,72 @@ function PriceStatsScreen({ onBack }) {
                 </div>
               ) : (
                 <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há comparação suficiente entre compras.</div>
+              )}
+            </div>
+
+            <div style={{
+              background:"#FFFFFF",
+              border:"1px solid #E5E7EB",
+              borderRadius:24,
+              padding:18,
+              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
+              marginBottom:14
+            }}>
+              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Análise inteligente por item</div>
+              {stats.itemAnalysis?.length ? (
+                <div style={{display:"grid",gap:10}}>
+                  {stats.itemAnalysis.slice(0,8).map((it,idx)=>{
+                    const palette = it.status === "caro"
+                      ? {bg:"#FEF2F2",color:"#991B1B",label:"Acima da média"}
+                      : it.status === "barato"
+                        ? {bg:"#ECFDF5",color:"#166534",label:"Abaixo da média"}
+                        : it.status === "novo"
+                          ? {bg:"#F5F3FF",color:"#5B21B6",label:"Novo"}
+                          : {bg:"#F9FAFB",color:"#374151",label:"Estável"};
+                    return (
+                      <div key={idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:18,padding:12}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
+                          <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.itemName}</div>
+                          <div style={{fontSize:11,fontWeight:900,color:palette.color,background:palette.bg,padding:"5px 8px",borderRadius:999,flexShrink:0}}>{palette.label}</div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,fontSize:12}}>
+                          <div><div style={{color:"#6B7280",fontWeight:800}}>Média</div><div style={{fontWeight:900,color:"#111827"}}>{it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
+                          <div><div style={{color:"#6B7280",fontWeight:800}}>Menor</div><div style={{fontWeight:900,color:"#166534"}}>{it.min.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
+                          <div><div style={{color:"#6B7280",fontWeight:800}}>Maior</div><div style={{fontWeight:900,color:"#991B1B"}}>{it.max.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
+                        </div>
+                        <div style={{fontSize:12,color:palette.color,fontWeight:800,marginTop:8,lineHeight:1.35}}>{it.insight}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há itens suficientes para análise individual.</div>
+              )}
+            </div>
+
+            <div style={{
+              background:"#FFFFFF",
+              border:"1px solid #E5E7EB",
+              borderRadius:24,
+              padding:18,
+              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
+              marginBottom:14
+            }}>
+              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Insights automáticos</div>
+              {stats.smartInsights?.length ? (
+                <div style={{display:"grid",gap:8}}>
+                  {stats.smartInsights.slice(0,6).map((ins,idx)=>{
+                    const c = ins.type === "alerta" ? {bg:"#FEF2F2",color:"#991B1B",icon:"⚠️"} : ins.type === "oportunidade" ? {bg:"#ECFDF5",color:"#166534",icon:"✓"} : {bg:"#F5F3FF",color:"#5B21B6",icon:"•"};
+                    return (
+                      <div key={idx} style={{background:c.bg,border:"1px solid rgba(17,24,39,0.06)",borderRadius:16,padding:"10px 12px",color:c.color}}>
+                        <div style={{fontWeight:900,fontSize:13}}>{c.icon} {ins.title}</div>
+                        <div style={{fontSize:12,fontWeight:700,opacity:.9,marginTop:3,lineHeight:1.35}}>{ins.text}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{fontSize:13,color:"#6B7280"}}>Registre mais compras para gerar leituras inteligentes.</div>
               )}
             </div>
 
