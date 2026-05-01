@@ -3846,6 +3846,8 @@ function getPriceStatsSummary() {
       monthlyTotals: [],
       itemAnalysis: [],
       smartInsights: [],
+      categoryTotals: [],
+      priceSeries: [],
     };
   }
 
@@ -3935,6 +3937,36 @@ function getPriceStatsSummary() {
     .sort((a, b) => b.percent - a.percent)
     .slice(0, 5);
 
+  const byCategory = new Map();
+  validHistory.forEach((h) => {
+    const category = inferPreferredCategoryForItem({ name: h.itemName }) || "Outros";
+    byCategory.set(category, (byCategory.get(category) || 0) + Number(h.totalPrice || h.unitPrice || 0));
+  });
+
+  const categoryTotals = Array.from(byCategory.entries())
+    .map(([category, total]) => ({ category, total: Number(total.toFixed(2)) }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8);
+
+  const priceSeries = Array.from(byItem.values())
+    .map((entries) => {
+      const ordered = entries
+        .slice()
+        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+      if (ordered.length < 2) return null;
+      return {
+        itemName: ordered[ordered.length - 1].itemName,
+        points: ordered.map((h) => ({
+          label: String(h.createdAt || "").slice(5, 10) || h.monthKey || "",
+          value: Number(h.unitPrice || h.totalPrice || 0),
+        })).filter((p) => Number.isFinite(p.value) && p.value > 0),
+        totalSpent: ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 5);
+
   const smartInsights = [];
   const expensive = itemAnalysis.filter((it) => it.status === "caro").sort((a,b)=>b.diffPercent-a.diffPercent).slice(0,3);
   const cheap = itemAnalysis.filter((it) => it.status === "barato").sort((a,b)=>a.diffPercent-b.diffPercent).slice(0,3);
@@ -3965,6 +3997,8 @@ function getPriceStatsSummary() {
     monthlyTotals,
     itemAnalysis,
     smartInsights,
+    categoryTotals,
+    priceSeries,
   };
 }
 
@@ -4085,6 +4119,123 @@ function PriceStatsEntryCard({ onClick }) {
   );
 }
 
+
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function MiniLineChart({ title, data = [], valueKey = "total", labelKey = "month", emptyText = "Sem dados suficientes." }) {
+  const values = data.map((d) => Number(d[valueKey] || 0)).filter((n) => Number.isFinite(n));
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const spread = Math.max(max - min, 1);
+  const width = 320;
+  const height = 128;
+  const pad = 14;
+  const points = data.map((d, idx) => {
+    const x = data.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / (data.length - 1);
+    const y = height - pad - ((Number(d[valueKey] || 0) - min) * (height - pad * 2)) / spread;
+    return { x, y, raw: d };
+  });
+  const path = points.map((p) => `${p.x},${p.y}`).join(" ");
+
+  return (
+    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
+      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>{title}</div>
+      {data.length >= 2 ? (
+        <>
+          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:150,display:"block",overflow:"visible"}}>
+            <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#E5E7EB" strokeWidth="2" />
+            <polyline points={path} fill="none" stroke="#6D28D9" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => (
+              <circle key={idx} cx={p.x} cy={p.y} r="4.5" fill="#6D28D9" />
+            ))}
+          </svg>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-4}}>
+            <span>{data[0]?.[labelKey]}</span>
+            <span>{data[data.length-1]?.[labelKey]}</span>
+          </div>
+        </>
+      ) : (
+        <div style={{fontSize:13,color:"#6B7280"}}>{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+function FunctionalBarChart({ title, data = [], labelKey = "category", valueKey = "total", emptyText = "Sem dados suficientes." }) {
+  const max = Math.max(...data.map((d) => Number(d[valueKey] || 0)), 1);
+  return (
+    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
+      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>{title}</div>
+      {data.length ? (
+        <div style={{display:"grid",gap:10}}>
+          {data.map((d, idx) => {
+            const value = Number(d[valueKey] || 0);
+            const width = Math.max(6, Math.round((value / max) * 100));
+            return (
+              <div key={`${d[labelKey]}-${idx}`} style={{display:"grid",gridTemplateColumns:"110px 1fr 92px",gap:9,alignItems:"center"}}>
+                <div style={{fontSize:12,fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d[labelKey]}</div>
+                <div style={{height:14,background:"#F3F4F6",borderRadius:999,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${width}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
+                </div>
+                <div style={{fontSize:12,fontWeight:900,color:"#111827",textAlign:"right"}}>{formatBRL(value)}</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{fontSize:13,color:"#6B7280"}}>{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+function ItemTrendCharts({ series = [] }) {
+  return (
+    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
+      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Evolução por produto</div>
+      {series.length ? (
+        <div style={{display:"grid",gap:12}}>
+          {series.map((item, idx) => {
+            const points = item.points || [];
+            const values = points.map((p) => Number(p.value || 0));
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const last = values[values.length - 1];
+            const first = values[0];
+            const diff = first ? ((last - first) / first) * 100 : 0;
+            const barMax = Math.max(...values, 1);
+            return (
+              <div key={`${item.itemName}-${idx}`} style={{border:"1px solid #F3F4F6",borderRadius:18,padding:12,background:"#FAFAFA"}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
+                  <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.itemName}</div>
+                  <div style={{fontSize:11,fontWeight:900,color:diff>0?"#991B1B":"#166534",background:diff>0?"#FEE2E2":"#DCFCE7",padding:"5px 8px",borderRadius:999,flexShrink:0}}>
+                    {diff>0?"+":""}{Number(diff.toFixed(1))}%
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"end",gap:5,height:54,marginBottom:8}}>
+                  {points.map((p, i) => {
+                    const h = Math.max(8, Math.round((Number(p.value || 0) / barMax) * 54));
+                    return <div key={i} title={`${p.label}: ${formatBRL(p.value)}`} style={{flex:1,height:h,borderRadius:"8px 8px 3px 3px",background:"linear-gradient(180deg,#8B5CF6,#6D28D9)"}} />;
+                  })}
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B7280",fontWeight:800}}>
+                  <span>Menor: {formatBRL(min)}</span>
+                  <span>Maior: {formatBRL(max)}</span>
+                  <span>Atual: {formatBRL(last)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{fontSize:13,color:"#6B7280"}}>Registre o mesmo item em mais de uma lista para visualizar sua evolução.</div>
+      )}
+    </div>
+  );
+}
+
 function PriceStatsScreen({ onBack }) {
   const stats = getPriceStatsSummary();
   const maxMonthly = Math.max(...(stats.monthlyTotals || []).map(x => Number(x.total || 0)), 1);
@@ -4159,6 +4310,24 @@ function PriceStatsScreen({ onBack }) {
                 </div>
               </div>
             </div>
+
+            <MiniLineChart
+              title="Gráfico de evolução mensal"
+              data={(stats.monthlyTotals || []).slice(-12)}
+              valueKey="total"
+              labelKey="month"
+              emptyText="Ainda não há meses suficientes para exibir a evolução."
+            />
+
+            <FunctionalBarChart
+              title="Gasto por seção"
+              data={stats.categoryTotals || []}
+              labelKey="category"
+              valueKey="total"
+              emptyText="Ainda não há dados por seção."
+            />
+
+            <ItemTrendCharts series={stats.priceSeries || []} />
 
             <div style={{
               background:"#FFFFFF",
