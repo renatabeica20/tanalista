@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.49 - Listas recentes compactas e ajuste de enquadramento mobile
+// Etapa 7.53 - Correção definitiva de enquadramento mobile/iPhone e safe area
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -59,17 +59,29 @@ function ensureMobileViewport() {
         overscroll-behavior-x: none;
         touch-action: manipulation;
       }
-      html { overflow-x: clip; }
+      html {
+        height: 100%;
+        overflow-x: hidden;
+        background: #FFFFFF;
+      }
       body {
         min-height: 100dvh;
         position: relative;
-        width: 100vw;
-        max-width: 100vw;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        background: #FFFFFF;
       }
       #root {
         width: 100%;
-        max-width: 100vw;
-        overflow-x: clip;
+        max-width: 100%;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        isolation: isolate;
+      }
+      #root > * {
+        max-width: 100%;
+        overflow-x: hidden;
       }
       *, *::before, *::after {
         box-sizing: border-box;
@@ -1167,7 +1179,7 @@ function BrandWordmark({ compact = false, color = "#111827" }) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:compact?8:12,justifyContent:"center"}}>
       <AppLogo size={compact?42:64} radius={compact?14:20} />
-      <div style={{fontWeight:900,fontSize:compact?22:34,color,letterSpacing:"-1px",lineHeight:1}}>Tá na Lista</div>
+      <div style={{fontWeight:900,fontSize:compact?22:"clamp(28px, 9vw, 34px)",color,letterSpacing:"-1px",lineHeight:1,whiteSpace:"nowrap"}}>Tá na Lista</div>
     </div>
   );
 }
@@ -4735,7 +4747,10 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
       maxWidth:"100%",
       background:"#FFFFFF",
       borderBottom:"1px solid #E5E7EB",
-      padding:"10px max(12px, env(safe-area-inset-left)) 10px max(12px, env(safe-area-inset-right))",
+      paddingTop:"calc(10px + env(safe-area-inset-top, 0px))",
+      paddingRight:"max(12px, env(safe-area-inset-right, 0px))",
+      paddingBottom:10,
+      paddingLeft:"max(12px, env(safe-area-inset-left, 0px))",
       display:"flex",
       alignItems:"center",
       justifyContent:"space-between",
@@ -4759,7 +4774,7 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
         Olá, {userName}
       </div>
 
-      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,minWidth:"max-content"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,minWidth:0}}>
         <button onClick={onNotifications} aria-label="Notificações" style={{
           position:"relative",
           border:"1px solid #DDD6FE",
@@ -7654,8 +7669,8 @@ const [lists,setLists]=useState(()=>{
       ════════════════════════════════════ */}
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
-        <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
-          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"24px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)",position:"relative"}}>
+          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",paddingTop:24,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:28,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
             <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
@@ -7665,7 +7680,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
           </div>
-          <div style={{padding:20,flex:1,paddingBottom:100,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box"}}>
+          <div style={{paddingTop:20,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Módulos</div>
               <div style={{fontSize:12,color:"#8B5CF6",fontWeight:800}}>6 áreas integradas</div>
