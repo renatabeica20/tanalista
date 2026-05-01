@@ -3836,7 +3836,7 @@ function PriceMemoryLine({ itemName }) {
 }
 
 
-function getPriceStatsSummary() {
+function getPriceStatsSummary(sourceLists = []) {
   const history = readPriceHistory();
   if (!history.length) {
     return {
@@ -3848,6 +3848,9 @@ function getPriceStatsSummary() {
       smartInsights: [],
       categoryTotals: [],
       priceSeries: [],
+      budgetSeries: [],
+      categorySeries: [],
+      annualTotals: [],
     };
   }
 
@@ -3956,10 +3959,15 @@ function getPriceStatsSummary() {
       if (ordered.length < 2) return null;
       return {
         itemName: ordered[ordered.length - 1].itemName,
-        points: ordered.map((h) => ({
-          label: String(h.createdAt || "").slice(5, 10) || h.monthKey || "",
-          value: Number(h.unitPrice || h.totalPrice || 0),
-        })).filter((p) => Number.isFinite(p.value) && p.value > 0),
+        points: ordered.map((h) => {
+          const d = new Date(h.createdAt || Date.now());
+          return {
+            label: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : (h.monthKey || ""),
+            date: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : (h.monthKey || ""),
+            listName: h.listName || "Lista",
+            value: Number(h.unitPrice || h.totalPrice || 0),
+          };
+        }).filter((p) => Number.isFinite(p.value) && p.value > 0),
         totalSpent: ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0),
       };
     })
@@ -3990,6 +3998,64 @@ function getPriceStatsSummary() {
     });
   }
 
+
+  const calcStatsItemTotal = (item) => {
+    const explicit = Number(item?.lineTotal ?? item?.total ?? item?.totalPrice ?? item?.subtotal ?? 0);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const price = Number(item?.price ?? item?.unitPrice ?? 0);
+    const qty = Number(item?.qty ?? item?.quantity ?? 1);
+    if (!Number.isFinite(price) || price <= 0) return 0;
+    return Number((price * (Number.isFinite(qty) && qty > 0 ? qty : 1)).toFixed(2));
+  };
+
+  const budgetSeries = (Array.isArray(sourceLists) ? sourceLists : [])
+    .filter((list) => list && Array.isArray(list.categories))
+    .map((list) => {
+      const spent = (list.categories || []).reduce((sum, cat) => {
+        return sum + (Array.isArray(cat.items) ? cat.items : []).reduce((s, item) => s + calcStatsItemTotal(item), 0);
+      }, 0);
+      const dateRaw = list.finishedAt || list.updatedAt || list.lastSyncedAt || list.createdAt || "";
+      const d = new Date(dateRaw || Date.now());
+      const dateLabel = Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : "";
+      return {
+        label: list.name || "Lista",
+        listName: list.name || "Lista",
+        date: dateLabel,
+        dateRaw: dateRaw || new Date().toISOString(),
+        budget: Number(list.budget || 0),
+        spent: Number((Number(list.total || 0) > 0 ? Number(list.total || 0) : spent).toFixed(2)),
+      };
+    })
+    .filter((row) => row.spent > 0 || row.budget > 0)
+    .sort((a, b) => String(a.dateRaw || "").localeCompare(String(b.dateRaw || "")))
+    .slice(-12);
+
+  const categoryMonthMap = new Map();
+  validHistory.forEach((h) => {
+    const category = inferPreferredCategoryForItem({ name: h.itemName }) || "Outros";
+    const month = h.monthKey || String(h.createdAt || "").slice(0, 7);
+    const key = `${category}|${month}`;
+    categoryMonthMap.set(key, (categoryMonthMap.get(key) || 0) + Number(h.totalPrice || h.unitPrice || 0));
+  });
+
+  const topCategories = categoryTotals.slice(0, 5).map((c) => c.category);
+  const categorySeries = topCategories.map((category) => {
+    const points = monthlyTotals.map((m) => ({
+      label: m.month,
+      date: m.month,
+      listName: category,
+      value: Number((categoryMonthMap.get(`${category}|${m.month}`) || 0).toFixed(2)),
+    }));
+    return { itemName: category, points };
+  }).filter((s) => s.points.some((p) => p.value > 0));
+
+  const annualTotals = monthlyTotals.map((m) => ({
+    label: m.month,
+    date: m.month,
+    listName: "Total mensal",
+    value: m.total,
+  }));
+
   return {
     totalRecords: validHistory.length,
     averageTicket: Number(average(validHistory.map((h) => h.totalPrice)).toFixed(2)),
@@ -3999,6 +4065,9 @@ function getPriceStatsSummary() {
     smartInsights,
     categoryTotals,
     priceSeries,
+    budgetSeries,
+    categorySeries,
+    annualTotals,
   };
 }
 
@@ -4124,134 +4193,190 @@ function formatBRL(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function MiniLineChart({ title, data = [], valueKey = "total", labelKey = "month", emptyText = "Sem dados suficientes." }) {
-  const values = data.map((d) => Number(d[valueKey] || 0)).filter((n) => Number.isFinite(n));
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
+
+function StatsExpandableSection({ id, title, subtitle, openSection, setOpenSection, children }) {
+  const isOpen = openSection === id;
+  return (
+    <div style={{
+      background:"#FFFFFF",
+      border:"1px solid #E5E7EB",
+      borderRadius:24,
+      marginBottom:12,
+      boxShadow:"0 12px 28px rgba(17,24,39,0.055)",
+      overflow:"hidden"
+    }}>
+      <button
+        onClick={() => setOpenSection(isOpen ? null : id)}
+        style={{
+          width:"100%",
+          border:"none",
+          background:isOpen ? "linear-gradient(135deg,#F5F3FF,#FFFFFF)" : "#FFFFFF",
+          padding:"16px 16px",
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"space-between",
+          gap:12,
+          cursor:"pointer",
+          fontFamily:"inherit",
+          textAlign:"left"
+        }}
+      >
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:16,fontWeight:900,color:"#4C1D95",lineHeight:1.2}}>{title}</div>
+          {subtitle ? <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:4,lineHeight:1.35}}>{subtitle}</div> : null}
+        </div>
+        <div style={{
+          width:32,height:32,borderRadius:12,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",
+          fontWeight:900,transform:isOpen ? "rotate(90deg)" : "rotate(0deg)",transition:"transform .2s"
+        }}>›</div>
+      </button>
+      {isOpen && <div style={{padding:"0 16px 16px"}}>{children}</div>}
+    </div>
+  );
+}
+
+function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", valueLabel = "Valor" }) {
+  const [tooltip, setTooltip] = useState(null);
+  const cleanSeries = (Array.isArray(series) ? series : [])
+    .map((s) => ({ ...s, points: (Array.isArray(s.points) ? s.points : []).filter((p) => Number.isFinite(Number(p.value))) }))
+    .filter((s) => s.points.length);
+
+  const allValues = cleanSeries.flatMap((s) => s.points.map((p) => Number(p.value || 0)));
+  const max = Math.max(...allValues, 1);
+  const min = Math.min(...allValues, 0);
   const spread = Math.max(max - min, 1);
   const width = 320;
-  const height = 128;
-  const pad = 14;
-  const points = data.map((d, idx) => {
-    const x = data.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / (data.length - 1);
-    const y = height - pad - ((Number(d[valueKey] || 0) - min) * (height - pad * 2)) / spread;
-    return { x, y, raw: d };
+  const height = 138;
+  const pad = 18;
+  const colors = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F97316", "#0F766E"];
+
+  if (!cleanSeries.length || cleanSeries.every((s) => s.points.length < 2)) {
+    return <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>{emptyText}</div>;
+  }
+
+  const buildPoints = (points) => points.map((p, idx) => {
+    const x = points.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / (points.length - 1);
+    const y = height - pad - ((Number(p.value || 0) - min) * (height - pad * 2)) / spread;
+    return { ...p, x, y, value:Number(p.value || 0) };
   });
-  const path = points.map((p) => `${p.x},${p.y}`).join(" ");
 
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
-      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>{title}</div>
-      {data.length >= 2 ? (
-        <>
-          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:150,display:"block",overflow:"visible"}}>
-            <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#E5E7EB" strokeWidth="2" />
-            <polyline points={path} fill="none" stroke="#6D28D9" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((p, idx) => (
-              <circle key={idx} cx={p.x} cy={p.y} r="4.5" fill="#6D28D9" />
-            ))}
-          </svg>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-4}}>
-            <span>{data[0]?.[labelKey]}</span>
-            <span>{data[data.length-1]?.[labelKey]}</span>
-          </div>
-        </>
-      ) : (
-        <div style={{fontSize:13,color:"#6B7280"}}>{emptyText}</div>
-      )}
-    </div>
-  );
-}
-
-function FunctionalBarChart({ title, data = [], labelKey = "category", valueKey = "total", emptyText = "Sem dados suficientes." }) {
-  const max = Math.max(...data.map((d) => Number(d[valueKey] || 0)), 1);
-  return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
-      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>{title}</div>
-      {data.length ? (
-        <div style={{display:"grid",gap:10}}>
-          {data.map((d, idx) => {
-            const value = Number(d[valueKey] || 0);
-            const width = Math.max(6, Math.round((value / max) * 100));
-            return (
-              <div key={`${d[labelKey]}-${idx}`} style={{display:"grid",gridTemplateColumns:"110px 1fr 92px",gap:9,alignItems:"center"}}>
-                <div style={{fontSize:12,fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d[labelKey]}</div>
-                <div style={{height:14,background:"#F3F4F6",borderRadius:999,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${width}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
-                </div>
-                <div style={{fontSize:12,fontWeight:900,color:"#111827",textAlign:"right"}}>{formatBRL(value)}</div>
-              </div>
-            );
-          })}
+    <div style={{position:"relative"}}>
+      {tooltip && (
+        <div style={{
+          position:"absolute",
+          left:`${Math.min(72, Math.max(8, (tooltip.x / width) * 100))}%`,
+          top:8,
+          transform:"translateX(-50%)",
+          background:"#111827",
+          color:"#FFFFFF",
+          borderRadius:14,
+          padding:"9px 11px",
+          fontSize:12,
+          fontWeight:800,
+          lineHeight:1.35,
+          zIndex:5,
+          minWidth:148,
+          boxShadow:"0 16px 34px rgba(17,24,39,0.24)"
+        }}>
+          <div style={{fontWeight:900}}>{tooltip.seriesName}</div>
+          <div>{tooltip.date || tooltip.label || ""}</div>
+          {tooltip.listName ? <div style={{opacity:.82}}>{tooltip.listName}</div> : null}
+          <div style={{marginTop:3,color:"#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
         </div>
-      ) : (
-        <div style={{fontSize:13,color:"#6B7280"}}>{emptyText}</div>
       )}
+
+      <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:160,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
+        <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#E5E7EB" strokeWidth="2" />
+        <line x1={pad} y1={pad} x2={pad} y2={height-pad} stroke="#F3F4F6" strokeWidth="2" />
+        {cleanSeries.map((s, si) => {
+          const pts = buildPoints(s.points);
+          const linePath = pts.map((p) => `${p.x},${p.y}`).join(" ");
+          const color = s.color || colors[si % colors.length];
+          return (
+            <g key={`${s.itemName || s.name}-${si}`}>
+              <polyline points={linePath} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+              {pts.map((p, pi) => (
+                <circle
+                  key={pi}
+                  cx={p.x}
+                  cy={p.y}
+                  r="7"
+                  fill="#FFFFFF"
+                  stroke={color}
+                  strokeWidth="4"
+                  style={{cursor:"pointer"}}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTooltip({
+                      x:p.x,
+                      y:p.y,
+                      value:p.value,
+                      label:p.label,
+                      date:p.date,
+                      listName:p.listName,
+                      seriesName:s.itemName || s.name || "Série"
+                    });
+                  }}
+                />
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-2}}>
+        {cleanSeries.map((s, si) => (
+          <span key={si} style={{display:"inline-flex",alignItems:"center",gap:5}}>
+            <span style={{width:9,height:9,borderRadius:999,background:s.color || colors[si % colors.length],display:"inline-block"}} />
+            {s.itemName || s.name}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
 
-function ItemTrendCharts({ series = [] }) {
+function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) {
+  if (!rows.length) return null;
   return (
-    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:18,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",marginBottom:14}}>
-      <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Evolução por produto</div>
-      {series.length ? (
-        <div style={{display:"grid",gap:12}}>
-          {series.map((item, idx) => {
-            const points = item.points || [];
-            const values = points.map((p) => Number(p.value || 0));
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const last = values[values.length - 1];
-            const first = values[0];
-            const diff = first ? ((last - first) / first) * 100 : 0;
-            const chartW = 300;
-            const chartH = 70;
-            const pad = 10;
-            const spread = Math.max(max - min, 1);
-            const linePoints = points.map((p, i) => {
-              const x = points.length <= 1 ? chartW / 2 : pad + (i * (chartW - pad * 2)) / (points.length - 1);
-              const y = chartH - pad - ((Number(p.value || 0) - min) * (chartH - pad * 2)) / spread;
-              return { x, y, label: p.label, value: Number(p.value || 0) };
-            });
-            const linePath = linePoints.map((p) => `${p.x},${p.y}`).join(" ");
-            return (
-              <div key={`${item.itemName}-${idx}`} style={{border:"1px solid #F3F4F6",borderRadius:18,padding:12,background:"#FAFAFA"}}>
-                <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
-                  <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.itemName}</div>
-                  <div style={{fontSize:11,fontWeight:900,color:diff>0?"#991B1B":"#166534",background:diff>0?"#FEE2E2":"#DCFCE7",padding:"5px 8px",borderRadius:999,flexShrink:0}}>
-                    {diff>0?"+":""}{Number(diff.toFixed(1))}%
-                  </div>
-                </div>
-                <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{width:"100%",height:78,display:"block",marginBottom:8,overflow:"visible"}}>
-                  <line x1={pad} y1={chartH-pad} x2={chartW-pad} y2={chartH-pad} stroke="#E5E7EB" strokeWidth="2" />
-                  <polyline points={linePath} fill="none" stroke="#6D28D9" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                  {linePoints.map((p, i) => (
-                    <g key={i}>
-                      <circle cx={p.x} cy={p.y} r="4.5" fill="#6D28D9" />
-                      <title>{`${p.label}: ${formatBRL(p.value)}`}</title>
-                    </g>
-                  ))}
-                </svg>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6B7280",fontWeight:800}}>
-                  <span>Menor: {formatBRL(min)}</span>
-                  <span>Maior: {formatBRL(max)}</span>
-                  <span>Atual: {formatBRL(last)}</span>
-                </div>
-              </div>
-            );
-          })}
+    <div style={{display:"grid",gap:7,marginTop:12}}>
+      {rows.slice(-8).map((row, idx) => (
+        <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px",fontSize:12}}>
+          <span style={{fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row[labelKey] || row.date || row.month || "Registro"}</span>
+          <span style={{fontWeight:900,color:"#111827",whiteSpace:"nowrap"}}>{formatBRL(row[valueKey] || row.total || 0)}</span>
         </div>
-      ) : (
-        <div style={{fontSize:13,color:"#6B7280"}}>Registre o mesmo item em mais de uma lista para visualizar sua evolução.</div>
-      )}
+      ))}
     </div>
   );
 }
 
-function PriceStatsScreen({ onBack }) {
-  const stats = getPriceStatsSummary();
-  const maxMonthly = Math.max(...(stats.monthlyTotals || []).map(x => Number(x.total || 0)), 1);
+function PriceStatsScreen({ onBack, lists = [] }) {
+  const [openSection, setOpenSection] = useState("budget");
+  const stats = getPriceStatsSummary(lists);
+
+  const budgetSpentSeries = {
+    name:"Gasto",
+    color:"#6D28D9",
+    points:(stats.budgetSeries || []).map((p) => ({
+      label:p.label,
+      date:p.date,
+      listName:p.listName,
+      value:p.spent
+    }))
+  };
+  const budgetLimitSeries = {
+    name:"Orçamento",
+    color:"#16A34A",
+    points:(stats.budgetSeries || []).filter((p)=>Number(p.budget || 0)>0).map((p) => ({
+      label:p.label,
+      date:p.date,
+      listName:p.listName,
+      value:p.budget
+    }))
+  };
 
   return (
     <div style={{
@@ -4282,7 +4407,7 @@ function PriceStatsScreen({ onBack }) {
             }}>←</button>
             <div style={{textAlign:"center",flex:1,minWidth:0}}>
               <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Estatísticas de preços</div>
-              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Acompanhe variações e padrões das suas compras</div>
+              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Toque nas seções e nos pontos dos gráficos para ver detalhes</div>
             </div>
             <div style={{width:44}} />
           </div>
@@ -4305,171 +4430,47 @@ function PriceStatsScreen({ onBack }) {
           </div>
         ) : (
           <>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:14}}>
-              <div style={{
-                background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:22,padding:16,
-                boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
-              }}>
-                <div style={{fontSize:12,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Preços registrados</div>
-                <div style={{fontSize:28,color:"#111827",fontWeight:900,marginTop:4}}>{stats.totalRecords}</div>
-              </div>
-              <div style={{
-                background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:22,padding:16,
-                boxShadow:"0 10px 24px rgba(17,24,39,0.06)"
-              }}>
-                <div style={{fontSize:12,color:"#6B7280",fontWeight:900,textTransform:"uppercase"}}>Média registrada</div>
-                <div style={{fontSize:24,color:"#111827",fontWeight:900,marginTop:6}}>
-                  {stats.averageTicket.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
-                </div>
-              </div>
-            </div>
-
-            <MiniLineChart
-              title="Gráfico de evolução mensal"
-              data={(stats.monthlyTotals || []).slice(-12)}
-              valueKey="total"
-              labelKey="month"
-              emptyText="Ainda não há meses suficientes para exibir a evolução."
-            />
-
-            <FunctionalBarChart
-              title="Gasto por seção"
-              data={stats.categoryTotals || []}
-              labelKey="category"
-              valueKey="total"
-              emptyText="Ainda não há dados por seção."
-            />
-
-            <ItemTrendCharts series={stats.priceSeries || []} />
-
-            <div style={{
-              background:"#FFFFFF",
-              border:"1px solid #E5E7EB",
-              borderRadius:24,
-              padding:18,
-              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
-              marginBottom:14
-            }}>
-              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Maiores altas</div>
-              {stats.topIncreases?.length ? (
-                <div style={{display:"grid",gap:8}}>
-                  {stats.topIncreases.map((it,idx)=>(
-                    <div key={idx} style={{
-                      display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,
-                      background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:16,padding:"11px 12px"
-                    }}>
-                      <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.itemName}</div>
-                      <div style={{
-                        fontWeight:900,
-                        color:it.percent>0?"#B91C1C":"#166534",
-                        background:it.percent>0?"#FEE2E2":"#DCFCE7",
-                        padding:"5px 9px",
-                        borderRadius:999,
-                        flexShrink:0
-                      }}>{it.percent>0?"+":""}{it.percent}%</div>
+            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
+              <div style={{display:"grid",gap:8,marginTop:12}}>
+                {(stats.budgetSeries || []).slice(-8).map((row, idx) => {
+                  const balance = Number(row.budget || 0) - Number(row.spent || 0);
+                  return (
+                    <div key={idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px",fontSize:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                        <strong style={{color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.listName}</strong>
+                        <span style={{color:"#6B7280",fontWeight:800,whiteSpace:"nowrap"}}>{row.date}</span>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:5,color:"#374151",fontWeight:800}}>
+                        <span>Orçamento: {row.budget ? formatBRL(row.budget) : "não definido"}</span>
+                        <span>Gasto: {formatBRL(row.spent)}</span>
+                      </div>
+                      {row.budget > 0 ? <div style={{marginTop:4,fontWeight:900,color:balance >= 0 ? "#166534" : "#991B1B"}}>{balance >= 0 ? "Economia: " : "Estouro: "}{formatBRL(Math.abs(balance))}</div> : null}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há comparação suficiente entre compras.</div>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            </StatsExpandableSection>
 
-            <div style={{
-              background:"#FFFFFF",
-              border:"1px solid #E5E7EB",
-              borderRadius:24,
-              padding:18,
-              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
-              marginBottom:14
-            }}>
-              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Análise inteligente por item</div>
-              {stats.itemAnalysis?.length ? (
-                <div style={{display:"grid",gap:10}}>
-                  {stats.itemAnalysis.slice(0,8).map((it,idx)=>{
-                    const palette = it.status === "caro"
-                      ? {bg:"#FEF2F2",color:"#991B1B",label:"Acima da média"}
-                      : it.status === "barato"
-                        ? {bg:"#ECFDF5",color:"#166534",label:"Abaixo da média"}
-                        : it.status === "novo"
-                          ? {bg:"#F5F3FF",color:"#5B21B6",label:"Novo"}
-                          : {bg:"#F9FAFB",color:"#374151",label:"Estável"};
-                    return (
-                      <div key={idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:18,padding:12}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
-                          <div style={{fontWeight:900,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.itemName}</div>
-                          <div style={{fontSize:11,fontWeight:900,color:palette.color,background:palette.bg,padding:"5px 8px",borderRadius:999,flexShrink:0}}>{palette.label}</div>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,fontSize:12}}>
-                          <div><div style={{color:"#6B7280",fontWeight:800}}>Média</div><div style={{fontWeight:900,color:"#111827"}}>{it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
-                          <div><div style={{color:"#6B7280",fontWeight:800}}>Menor</div><div style={{fontWeight:900,color:"#166534"}}>{it.min.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
-                          <div><div style={{color:"#6B7280",fontWeight:800}}>Maior</div><div style={{fontWeight:900,color:"#991B1B"}}>{it.max.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</div></div>
-                        </div>
-                        <div style={{fontSize:12,color:palette.color,fontWeight:800,marginTop:8,lineHeight:1.35}}>{it.insight}</div>
-                      </div>
-                    );
-                  })}
+            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Veja a variação do preço unitário dos produtos ao longo das compras." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={stats.priceSeries || []} valueLabel="Preço" emptyText="Registre o mesmo item em mais de uma lista para visualizar sua evolução." />
+              {(stats.priceSeries || []).slice(0,4).map((item, idx) => (
+                <div key={idx} style={{marginTop:10,background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px"}}>
+                  <div style={{fontSize:13,fontWeight:900,color:"#111827",marginBottom:5}}>{item.itemName}</div>
+                  <StatsDetailList rows={(item.points || []).map(p => ({label:`${p.date || p.label}${p.listName ? " · " + p.listName : ""}`, value:p.value}))} />
                 </div>
-              ) : (
-                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há itens suficientes para análise individual.</div>
-              )}
-            </div>
+              ))}
+            </StatsExpandableSection>
 
-            <div style={{
-              background:"#FFFFFF",
-              border:"1px solid #E5E7EB",
-              borderRadius:24,
-              padding:18,
-              boxShadow:"0 12px 28px rgba(17,24,39,0.06)",
-              marginBottom:14
-            }}>
-              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Insights automáticos</div>
-              {stats.smartInsights?.length ? (
-                <div style={{display:"grid",gap:8}}>
-                  {stats.smartInsights.slice(0,6).map((ins,idx)=>{
-                    const c = ins.type === "alerta" ? {bg:"#FEF2F2",color:"#991B1B",icon:"⚠️"} : ins.type === "oportunidade" ? {bg:"#ECFDF5",color:"#166534",icon:"✓"} : {bg:"#F5F3FF",color:"#5B21B6",icon:"•"};
-                    return (
-                      <div key={idx} style={{background:c.bg,border:"1px solid rgba(17,24,39,0.06)",borderRadius:16,padding:"10px 12px",color:c.color}}>
-                        <div style={{fontWeight:900,fontSize:13}}>{c.icon} {ins.title}</div>
-                        <div style={{fontSize:12,fontWeight:700,opacity:.9,marginTop:3,lineHeight:1.35}}>{ins.text}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{fontSize:13,color:"#6B7280"}}>Registre mais compras para gerar leituras inteligentes.</div>
-              )}
-            </div>
+            <StatsExpandableSection id="category" title="Gastos por seção" subtitle="Acompanhe quanto cada seção representa mês a mês." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={stats.categorySeries || []} valueLabel="Gasto" emptyText="Ainda não há dados suficientes por seção." />
+              <StatsDetailList rows={(stats.categoryTotals || []).map(c => ({label:c.category, value:c.total}))} />
+            </StatsExpandableSection>
 
-            <div style={{
-              background:"#FFFFFF",
-              border:"1px solid #E5E7EB",
-              borderRadius:24,
-              padding:18,
-              boxShadow:"0 12px 28px rgba(17,24,39,0.06)"
-            }}>
-              <div style={{fontSize:17,fontWeight:900,color:"#4C1D95",marginBottom:10}}>Evolução mensal</div>
-              {stats.monthlyTotals?.length ? (
-                <div style={{display:"grid",gap:10}}>
-                  {stats.monthlyTotals.slice(-8).map((m)=> {
-                    const width = Math.max(8, Math.round((Number(m.total || 0) / maxMonthly) * 100));
-                    return (
-                      <div key={m.month} style={{display:"grid",gridTemplateColumns:"70px 1fr 92px",gap:9,alignItems:"center"}}>
-                        <div style={{fontSize:12,fontWeight:900,color:"#4B5563"}}>{m.month}</div>
-                        <div style={{height:12,background:"#F3F4F6",borderRadius:999,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${width}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
-                        </div>
-                        <div style={{fontSize:12,fontWeight:900,color:"#111827",textAlign:"right"}}>
-                          {m.total.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{fontSize:13,color:"#6B7280"}}>Ainda não há evolução mensal registrada.</div>
-              )}
-            </div>
+            <StatsExpandableSection id="year" title="Evolução dos gastos totais ao longo do ano" subtitle="Linha mensal consolidada das suas compras registradas." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={[{name:"Total mensal", color:"#6D28D9", points:stats.annualTotals || []}]} valueLabel="Total" emptyText="Ainda não há evolução mensal registrada." />
+              <StatsDetailList rows={(stats.annualTotals || []).map(m => ({label:m.label, value:m.value}))} />
+            </StatsExpandableSection>
           </>
         )}
       </div>
@@ -4803,6 +4804,26 @@ const [lists,setLists]=useState(()=>{
     setToast({show:true,msg});
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
+
+
+  const handleSwitchUser = useCallback(() => {
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("tnl_") || key.startsWith("ta-na-lista:")) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch {}
+    setLists([]);
+    setCurrentList(null);
+    setSenderName("");
+    setUserNameInput("");
+    setUserNameModal(true);
+    setScreen("home");
+    setShowPriceStatsScreen(false);
+    setShowHistory(false);
+    showToast("Usuário desconectado. Informe o nome para entrar novamente.", 2200);
+  }, [showToast]);
 
 
 
@@ -5253,7 +5274,7 @@ const [lists,setLists]=useState(()=>{
     const record=await createSharedListRecord(list);
     if(!record?.id)throw new Error("Não foi possível gerar o link curto da lista no Supabase.");
 
-    const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString()};
+    const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString(),isShared:true};
     setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
     saveLists(lists.map(l=>l.id===list.id?updated:l));
     return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
@@ -5275,6 +5296,7 @@ const [lists,setLists]=useState(()=>{
       remetente:record?.remetente || baseData.remetente || "Não informado",
       sharedOwner:record?.remetente || baseData.remetente || "Não informado",
       sharedMode:"manual-sync",
+      isShared:true,
       receivedAt:new Date().toISOString(),
       importedAt:new Date().toISOString(),
       lastSyncedAt:new Date().toISOString(),
@@ -5602,8 +5624,8 @@ const [lists,setLists]=useState(()=>{
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
       let newList=editingOriginal
-        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0}
-        : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0};
+        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0,isShared:editingOriginal.isShared===true}
+        : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0,isShared:false};
 
       // Toda lista criada pelo usuário passa a ser salva também na nuvem.
       // Assim ela aparece no computador e no celular com o mesmo nome de usuário.
@@ -6699,7 +6721,7 @@ const [lists,setLists]=useState(()=>{
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
   // ─────────────────────────────────────────────────────────────────────
-  if(showPriceStatsScreen) return <PriceStatsScreen onBack={()=>setShowPriceStatsScreen(false)} />;
+  if(showPriceStatsScreen) return <PriceStatsScreen lists={lists} onBack={()=>setShowPriceStatsScreen(false)} />;
 
   const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
   const recentLists = visibleLists.slice(0,1);
@@ -6802,6 +6824,24 @@ const [lists,setLists]=useState(()=>{
       {screen==="home"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)"}}>
           <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",padding:"34px 20px 28px",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
+            {getAppUserName()&&(
+              <button onClick={handleSwitchUser} style={{
+                position:"absolute",
+                top:14,
+                right:14,
+                zIndex:3,
+                border:"1px solid #E5E7EB",
+                background:"rgba(255,255,255,0.88)",
+                color:"#6D28D9",
+                borderRadius:999,
+                padding:"7px 10px",
+                fontSize:11,
+                fontWeight:900,
+                cursor:"pointer",
+                fontFamily:"inherit",
+                boxShadow:"0 8px 18px rgba(17,24,39,0.08)"
+              }}>Trocar usuário</button>
+            )}
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
             <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
             <div style={{position:"relative",maxWidth:520,margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
@@ -6875,7 +6915,7 @@ const [lists,setLists]=useState(()=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=Boolean(list.isShared || list.sharedAt || list.imported || list.importedFrom || list.sharedMode);
+                  const shared=list.isShared === true;
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:24,boxShadow:"0 16px 38px rgba(17,24,39,0.08)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
@@ -6938,7 +6978,7 @@ const [lists,setLists]=useState(()=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=Boolean(list.isShared || list.sharedAt || list.imported || list.importedFrom || list.sharedMode);
+                  const shared=list.isShared === true;
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:22,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
@@ -7401,7 +7441,7 @@ const [lists,setLists]=useState(()=>{
         </div>
       </div>
 
-          {(currentList.isShared || currentList.sharedAt || currentList.imported || currentList.importedFrom || currentList.sharedMode)&&(
+          {(currentList.isShared === true)&&(
             <div style={{margin:"10px 20px 0",background:"#EEF2FF",border:"1px solid #C4B5FD",borderRadius:18,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,color:"#4C1D95"}}>
               <span style={{fontSize:18}}>🤝</span>
               <div style={{flex:1,minWidth:0}}>
