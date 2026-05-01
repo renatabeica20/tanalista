@@ -4270,7 +4270,8 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
           left:`${Math.min(72, Math.max(8, (tooltip.x / width) * 100))}%`,
           top:8,
           transform:"translateX(-50%)",
-          background:"#111827",
+          background:"rgba(17,24,39,0.75)",
+          backdropFilter:"blur(6px)",
           color:"#FFFFFF",
           borderRadius:14,
           padding:"9px 11px",
@@ -4453,11 +4454,12 @@ function PriceStatsScreen({ onBack, lists = [] }) {
             </StatsExpandableSection>
 
             <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Veja a variação do preço unitário dos produtos ao longo das compras." openSection={openSection} setOpenSection={setOpenSection}>
-              <StatsLineChart series={stats.priceSeries || []} valueLabel="Preço" emptyText="Registre o mesmo item em mais de uma lista para visualizar sua evolução." />
-              {(stats.priceSeries || []).slice(0,4).map((item, idx) => (
-                <div key={idx} style={{marginTop:10,background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px"}}>
-                  <div style={{fontSize:13,fontWeight:900,color:"#111827",marginBottom:5}}>{item.itemName}</div>
-                  <StatsDetailList rows={(item.points || []).map(p => ({label:`${p.date || p.label}${p.listName ? " · " + p.listName : ""}`, value:p.value}))} />
+              {(stats.priceSeries || []).slice(0,6).map((item, idx) => (
+                <div key={idx} style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
+                  <div style={{fontWeight:900,fontSize:14,marginBottom:6,color:"#111827"}}>
+                    {item.itemName}
+                  </div>
+                  <StatsLineChart series={[item]} valueLabel="Preço" emptyText="Dados insuficientes." />
                 </div>
               ))}
             </StatsExpandableSection>
