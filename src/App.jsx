@@ -5042,12 +5042,14 @@ const [lists,setLists]=useState(()=>{
   };
 
   const confirmDialog = () => {
+    const editedName = String(itemDialog?.name || "").trim();
+    if (!editedName) { showToast("⚠️ Informe o nome do item"); return; }
     const unit = normalizeUnitValue(dlgUnit || "unidade");
     const qtyNumber = Number(String(dlgQty || 1).replace(",", "."));
     const decimalUnit = ["kg", "g", "L", "ml"].includes(unit);
     const embalagem = decimalUnit ? "" : (dlgPeso || dlgVolume || "");
     const newItem = normalizeListItem({
-      name: itemDialog.name,
+      name: editedName,
       marca: "",
       tipo: "",
       embalagem,
@@ -6892,8 +6894,19 @@ const [lists,setLists]=useState(()=>{
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
         <ModalSheet onClose={()=>{setItemDialog(null);setItemDialogMode("pending");setEditPendingIdx(null);setCurrentInput("");}}>
-          <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialog.name}</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:8}}>{dlgLoading?"":itemDialogMode==="extra"?"Defina os detalhes do item extra":editPendingIdx!=null?"Editar item":"Defina os detalhes"}</div>
+          <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialogMode==="pantryReview"?"Editar item da despensa":itemDialog.name}</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>{dlgLoading?"":itemDialogMode==="extra"?"Defina os detalhes do item extra":(editPendingIdx!=null||itemDialogMode==="pantryReview")?"Editar item":"Defina os detalhes"}</div>
+          {!dlgLoading&&dlgConfig&& (editPendingIdx!=null || itemDialogMode==="pantryReview" || itemDialogMode==="pantry") && (
+            <div style={{marginBottom:16}}>
+              <label style={lbl}>Nome do item</label>
+              <input
+                value={itemDialog.name || ""}
+                onChange={(e)=>setItemDialog(prev=>({...prev,name:e.target.value}))}
+                placeholder="Nome do item"
+                style={inp({height:52})}
+              />
+            </div>
+          )}
           {dlgLoading&&(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 0",gap:14}}>
               <div style={{width:40,height:40,borderRadius:"50%",border:"4px solid #E6FAF2",borderTopColor:"#6D28D9",animation:"spin 0.8s linear infinite"}}/>
