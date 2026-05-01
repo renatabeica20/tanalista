@@ -4377,6 +4377,9 @@ const [lists,setLists]=useState(()=>{
   const [pantryReviewCategories,setPantryReviewCategories]=useState([]);
   const [pantryComparison,setPantryComparison]=useState(null);
   const [pantryCompared,setPantryCompared]=useState(false);
+  const [pantryEditingId,setPantryEditingId]=useState(null);
+  const [pantryReviewEdit,setPantryReviewEdit]=useState(null);
+  const [showPantryComparisonDetails,setShowPantryComparisonDetails]=useState(false);
   const [currentInput,setCurrentInput]=useState("");
   const [editingListId,setEditingListId]=useState(null);
 
@@ -4401,6 +4404,7 @@ const [lists,setLists]=useState(()=>{
   const [pasteText,setPasteText]=useState("");
   const [pasteTarget,setPasteTarget]=useState("list");
   const [voiceTarget,setVoiceTarget]=useState("list");
+  const voiceTargetRef=useRef("list");
   const [showPhotoModal,setShowPhotoModal]=useState(false);
   const [ocrLoading,setOcrLoading]=useState(false);
   const [ocrProgress,setOcrProgress]=useState(0);
@@ -4487,12 +4491,16 @@ const [lists,setLists]=useState(()=>{
     setPantryPendingItems([]);
     setPantryInput("");
     setPantryReviewCategories([]);
+    setPantryEditingId(null);
+    setPantryReviewEdit(null);
   }, []);
 
   const openPantryCreator = useCallback(() => {
     setPantryPendingItems([]);
     setPantryInput("");
     setPantryReviewCategories([]);
+    setPantryEditingId(null);
+    setPantryReviewEdit(null);
     setScreen("pantry_create");
   }, []);
 
@@ -5059,6 +5067,19 @@ const [lists,setLists]=useState(()=>{
         localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
       }
     } catch {}
+    if (itemDialogMode === "pantryReview") {
+      if (pantryReviewEdit) {
+        setPantryReviewCategories(prev => prev.map((cat,ci) => ci === pantryReviewEdit.catIndex ? {
+          ...cat,
+          items: (cat.items || []).map((it,ii) => ii === pantryReviewEdit.itemIndex ? newItem : it)
+        } : cat));
+      }
+      setPantryReviewEdit(null);
+      setItemDialog(null);
+      setItemDialogMode("pending");
+      showToast("✏️ Item da despensa atualizado");
+      return;
+    }
     if (itemDialogMode === "pantry") {
       if (editPendingIdx != null) {
         setPantryPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
@@ -5117,6 +5138,21 @@ const [lists,setLists]=useState(()=>{
     openProductDialog(pantryPendingItems[idx].name, pantryPendingItems[idx], { mode: "pantry" });
   };
 
+  const editPantryReviewItem = (catIndex, itemIndex) => {
+    const item = pantryReviewCategories?.[catIndex]?.items?.[itemIndex];
+    if (!item) return;
+    setPantryReviewEdit({ catIndex, itemIndex });
+    openProductDialog(item.name, item, { mode: "pantryReview" });
+  };
+
+  const removePantryReviewItem = (catIndex, itemIndex) => {
+    setPantryReviewCategories(prev => prev
+      .map((cat,ci) => ci === catIndex ? { ...cat, items: (cat.items || []).filter((_,ii) => ii !== itemIndex) } : cat)
+      .filter(cat => (cat.items || []).length > 0)
+    );
+    showToast("🗑️ Item removido da despensa");
+  };
+
   const organizePantry = async () => {
     if (pantryPendingItems.length === 0) { showToast("⚠️ Adicione itens à despensa"); return; }
     setLoading(true);
@@ -5134,6 +5170,22 @@ const [lists,setLists]=useState(()=>{
   const savePantryFromReview = () => {
     if (!pantryReviewCategories.length) { showToast("⚠️ Organize a despensa antes de salvar"); return; }
     const now = new Date().toISOString();
+    if (pantryEditingId) {
+      const updated = pantryLists.map(p => p.id === pantryEditingId ? {
+        ...p,
+        categories: pantryReviewCategories,
+        itemCount: countCategoryItems(pantryReviewCategories),
+        updatedAt: now,
+      } : p);
+      savePantryLists(updated);
+      resetPantryFlow();
+      setPantryCompared(false);
+      setPantryComparison(null);
+      setShowPantryComparisonDetails(false);
+      setScreen("create");
+      showToast("✅ Despensa atualizada");
+      return;
+    }
     const newPantry = {
       id: `pantry-${Date.now()}`,
       createdAt: now,
@@ -5146,6 +5198,7 @@ const [lists,setLists]=useState(()=>{
     resetPantryFlow();
     setPantryCompared(false);
     setPantryComparison(null);
+    setShowPantryComparisonDetails(false);
     setScreen("create");
     showToast("✅ Despensa salva e ativa");
   };
@@ -5157,6 +5210,7 @@ const [lists,setLists]=useState(()=>{
     setPendingItems(result.items);
     setPantryComparison(result);
     setPantryCompared(true);
+    setShowPantryComparisonDetails(false);
     setScreen("pantry_compare_result");
   };
 
@@ -5385,7 +5439,7 @@ const [lists,setLists]=useState(()=>{
       items=repairAndNormalizeVoiceItems(items).map(normalizeListItem);
       items=applyUserMemoryToItems(items).map(normalizeListItem);
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
-      const target = source === "voz" ? voiceTarget : pasteTarget;
+      const target = source === "voz" ? voiceTargetRef.current : pasteTarget;
       if (target === "pantry") setPantryPendingItems(prev=>[...prev,...items]);
       else setPendingItems(prev=>[...prev,...items]);
       if(closePaste){setPasteText("");setShowPasteModal(false);setPasteTarget("list");}
@@ -6590,7 +6644,7 @@ const [lists,setLists]=useState(()=>{
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:12}}>
-                {activePantry&&(<button onClick={()=>{setPantryReviewCategories(activePantry.categories||[]);setScreen("pantry_review");}} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver despensa</button>)}
+                {activePantry&&(<button onClick={()=>{setPantryEditingId(activePantry.id);setPantryReviewCategories(activePantry.categories||[]);setScreen("pantry_review");}} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver despensa</button>)}
                 <button onClick={openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6"}}>{activePantry?"Criar nova despensa":"Criar despensa"}</button>
               </div>
             </div>
@@ -6648,7 +6702,7 @@ const [lists,setLists]=useState(()=>{
                   style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
                   Colar lista
                 </button>
-                <button onClick={()=>{setVoiceTarget("list");startVoiceInput();}} disabled={voiceProcessing}
+                <button onClick={()=>{voiceTargetRef.current="list";setVoiceTarget("list");startVoiceInput();}} disabled={voiceProcessing}
                   style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1}}>
                   {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
                 </button>
@@ -6721,7 +6775,7 @@ const [lists,setLists]=useState(()=>{
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale os itens existentes em casa. Você poderá editar antes de salvar.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>{setPasteTarget("pantry");setShowPasteModal(true);}} style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>Colar lista</button>
-                <button onClick={()=>{setVoiceTarget("pantry");startVoiceInput();}} disabled={voiceProcessing} style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",opacity:voiceProcessing?0.65:1}}>{voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}</button>
+                <button onClick={()=>{voiceTargetRef.current="pantry";setVoiceTarget("pantry");startVoiceInput();}} disabled={voiceProcessing} style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",opacity:voiceProcessing?0.65:1}}>{voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}</button>
               </div>
             </div>
             {pantryPendingItems.length>0&&(
@@ -6768,15 +6822,20 @@ const [lists,setLists]=useState(()=>{
                   <div style={{fontSize:12,fontWeight:900,color:th.header}}>{cat.items?.length||0} itens</div>
                 </div>
                 {(cat.items||[]).map((item,i)=>(
-                  <div key={i} style={{padding:"12px 16px",borderBottom:i<(cat.items||[]).length-1?"1px solid #F0F2F5":"none",display:"flex",justifyContent:"space-between",gap:10}}>
-                    <div style={{fontWeight:800,color:"#111827"}}>{item.name}</div>
+                  <div key={i} style={{padding:"12px 16px",borderBottom:i<(cat.items||[]).length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
+                      {item.detail&&<div style={{fontSize:12,color:"#6B7280",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.detail}</div>}
+                    </div>
                     <div style={{fontSize:13,fontWeight:800,color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(item.qty,item.unit)}</div>
+                    <button onClick={()=>editPantryReviewItem(ci,i)} style={{background:"#F5F3FF",border:"none",borderRadius:8,padding:"5px 9px",color:"#6D28D9",cursor:"pointer",fontSize:13,fontWeight:900}}>✏️</button>
+                    <button onClick={()=>removePantryReviewItem(ci,i)} style={{background:"#FEF2F2",border:"none",borderRadius:8,padding:"5px 9px",color:"#DC2626",cursor:"pointer",fontSize:13,fontWeight:900}}>×</button>
                   </div>
                 ))}
               </div>
             );})}
             <div style={{background:"#F8FAFC",border:"1px solid #E5E7EB",borderRadius:18,padding:12,fontSize:12,color:"#6B7280",fontWeight:700,lineHeight:1.45}}>A despensa serve apenas como base de comparação para a próxima lista. Ela ficará ativa até a compra da lista comparada ser finalizada.</div>
-            <button onClick={savePantryFromReview} style={createPrimaryBtn}>Salvar despensa</button>
+            <button onClick={savePantryFromReview} style={createPrimaryBtn}>{pantryEditingId?"Salvar alterações da despensa":"Salvar despensa"}</button>
           </div>
         </div>
       )}
@@ -6806,6 +6865,25 @@ const [lists,setLists]=useState(()=>{
                 <div style={{background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#4338CA",fontSize:18}}>{pendingItems.length}</div><div style={{fontSize:11,color:"#3730A3",fontWeight:800}}>na lista</div></div>
               </div>
             </div>
+            <button onClick={()=>setShowPantryComparisonDetails(v=>!v)} style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
+              {showPantryComparisonDetails?"Ocultar detalhes":"Ver o que foi feito"}
+            </button>
+            {showPantryComparisonDetails&&pantryComparison&&(<div style={createCard}>
+              <label style={lbl}>Detalhes da comparação</label>
+              {(pantryComparison.removed||[]).length>0&&(<div style={{marginBottom:12}}>
+                <div style={{fontWeight:900,color:"#B91C1C",fontSize:13,marginBottom:6}}>Itens removidos porque já estavam na despensa</div>
+                {pantryComparison.removed.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.item?.name} — {r.reason}</div>)}
+              </div>)}
+              {(pantryComparison.adjusted||[]).length>0&&(<div style={{marginBottom:12}}>
+                <div style={{fontWeight:900,color:"#B45309",fontSize:13,marginBottom:6}}>Itens ajustados ou sinalizados</div>
+                {pantryComparison.adjusted.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.before?.name} — {r.after?.pantryNote || "ajustado pela despensa"}</div>)}
+              </div>)}
+              {(pantryComparison.kept||[]).length>0&&(<div>
+                <div style={{fontWeight:900,color:"#166534",fontSize:13,marginBottom:6}}>Itens mantidos na lista</div>
+                {pantryComparison.kept.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.name} — não encontrado na despensa</div>)}
+              </div>)}
+              <div style={{marginTop:10,fontSize:12,color:"#6B7280",fontWeight:700}}>Visualização apenas informativa. Para alterar, volte à pré-lista.</div>
+            </div>)}
             <button onClick={()=>setScreen("create")} style={createPrimaryBtn}>Continuar e organizar lista</button>
           </div>
         </div>
