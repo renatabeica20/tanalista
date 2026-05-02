@@ -671,21 +671,33 @@ async function resetUserAuthPin(name, newPin, newPinConfirm = "") {
     return { ok: false, message: "Não encontrei PIN cadastrado para este nome. Use o primeiro acesso para criar um PIN." };
   }
 
-  // Recuperação simples e segura para esta fase: permite redefinir somente no aparelho já reconhecido.
+  // Recuperação de PIN compatível com iOS/Safari.
+  // Em alguns aparelhos o localStorage pode regenerar o device_id, fazendo o mesmo iPhone parecer outro aparelho.
+  // Por isso, se o perfil de PIN existe e o nome informado confere, a recuperação é permitida e a sessão local é reancorada.
   const deviceId = getAppDeviceId();
   const storedUserId = getAppUserId();
   const storedName = normalizeAuthName(getAppUserName());
   const appUser = await findAppUserByName(clean);
+  const cleanNormalized = normalizeAuthName(clean);
+  const profileNameMatches = Boolean(
+    normalizeAuthName(profile?.remetente) === cleanNormalized ||
+    normalizeAuthName(profile?.data?.name) === cleanNormalized
+  );
   const deviceMatches = Boolean(appUser?.device_id && appUser.device_id === deviceId);
   const localUserMatches = Boolean(storedUserId && appUser?.id && storedUserId === appUser.id);
-  const localNameMatches = Boolean(storedName && storedName === normalizeAuthName(clean));
+  const localNameMatches = Boolean(storedName && storedName === cleanNormalized);
+  const appUserNameMatches = Boolean(appUser?.nome && normalizeAuthName(appUser.nome) === cleanNormalized);
 
-  if (!deviceMatches && !localUserMatches && !localNameMatches) {
+  if (!profileNameMatches && !deviceMatches && !localUserMatches && !localNameMatches && !appUserNameMatches) {
     return {
       ok: false,
-      message: "Por segurança, a recuperação do PIN precisa ser feita no aparelho já usado por este usuário.",
+      message: "Não foi possível validar este usuário para redefinir o PIN. Confira o nome informado e tente novamente.",
     };
   }
+
+  saveAppUserName(clean);
+  if (appUser?.id) saveAppUserId(appUser.id);
+  setStoredValue(APP_USER_REGISTERED_KEY, deviceId);
 
   const pinHash = await hashUserPin(clean, safePin);
   const payload = {
@@ -712,6 +724,7 @@ async function resetUserAuthPin(name, newPin, newPinConfirm = "") {
   }
 
   const data = await res.json().catch(() => []);
+  markPinSessionVerified(clean);
   return { ok: true, profile: Array.isArray(data) ? data[0] : data };
 }
 
