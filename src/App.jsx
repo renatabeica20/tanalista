@@ -1288,14 +1288,24 @@ function WhatsAppIcon({ size = 20 }) {
 function getListOriginMeta(list) {
   if (!list) return null;
   const currentName = getAppUserName();
-  if (list.imported || list.importedFrom) {
-    const from = list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "não informado";
+  const normalizedCurrent = normalizeAuthName(currentName || "");
+  const owner = list.ownerName || list.remetente || currentName;
+  const normalizedOwner = normalizeAuthName(owner || "");
+  const from = list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "não informado";
+  const normalizedFrom = normalizeAuthName(from || "");
+
+  // Lista recebida só deve aparecer como recebida quando veio de outra pessoa.
+  // Listas próprias sincronizadas na nuvem também têm sharedId, mas isso não significa
+  // que foram compartilhadas nem recebidas.
+  const receivedFromAnotherUser = Boolean(list.imported === true || list.receivedAt || list.importedAt)
+    && Boolean(normalizedFrom)
+    && (!normalizedCurrent || normalizedFrom !== normalizedCurrent);
+
+  if (receivedFromAnotherUser) {
     return { type:"received", icon:"📥", text:"Recebida de " + from };
   }
-  const owner = list.ownerName || list.remetente || currentName;
+
   if (owner) {
-    const normalizedOwner = String(owner).trim().toLowerCase();
-    const normalizedCurrent = String(currentName || "").trim().toLowerCase();
     return { type:"created", icon:"✍️", text: normalizedCurrent && normalizedOwner === normalizedCurrent ? "Criada por você" : "Feita por " + owner };
   }
   return null;
@@ -5584,8 +5594,29 @@ const [lists,setLists]=useState(()=>{
     return `${formatQtyUnit(Number.isFinite(qty) && qty > 0 ? qty : 1, unit)} · ${[name, size].filter(Boolean).join(" ")}`;
   }, [dlgQty, dlgUnit, itemDialog, dlgPeso, dlgVolume, isDecimalManualUnit]);
 
+  const normalizeListOwnershipFlags=(list)=>{
+    if(!list)return list;
+    const currentName=getAppUserName();
+    const owner=list.ownerName || list.remetente || currentName;
+    const from=list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "";
+    const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizeAuthName(currentName);
+    const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizeAuthName(currentName);
+    if(ownerIsCurrent || fromIsCurrent){
+      return {
+        ...list,
+        imported:false,
+        importedFrom:null,
+        sharedOwner:null,
+        // sharedId pode existir apenas para sincronização na nuvem.
+        // O selo Compartilhada fica reservado ao envio explícito da lista.
+        isShared:list.sharedAt ? list.isShared === true : false,
+      };
+    }
+    return list;
+  };
+
   const saveLists=(nl)=>{
-    const safe=mergeUniqueLists(Array.isArray(nl)?nl:[]);
+    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
     setLists(safe);
     localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
@@ -7137,15 +7168,21 @@ const [lists,setLists]=useState(()=>{
     try{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      const currentUserName = getAppUserName();
+      const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
+      const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
+      const isReceivedFromAnotherUser = Boolean(currentList.imported === true || currentList.receivedAt || currentList.importedAt) && !remoteOwnerIsCurrentUser;
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
         sharedId,
-        isShared:true,
-        imported:currentList.imported,
-        importedFrom:record?.remetente || currentList.importedFrom || currentList.remetente || "Não informado",
-        remetente:record?.remetente || currentList.remetente || "Não informado",
-        sharedOwner:record?.remetente || currentList.sharedOwner || "Não informado",
+        // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
+        isShared: currentList.isShared === true || record?.data?.isShared === true,
+        imported: isReceivedFromAnotherUser,
+        importedFrom: isReceivedFromAnotherUser ? remoteOwner : null,
+        remetente: remoteOwner,
+        ownerName: record?.data?.ownerName || remoteOwner,
+        sharedOwner: isReceivedFromAnotherUser ? remoteOwner : null,
         pulledAt:new Date().toISOString(),
       },record.data);
       setCurrentList(refreshed);
@@ -7189,7 +7226,9 @@ const [lists,setLists]=useState(()=>{
     const updated={...ul,total:fullTotal,lastLocalUpdateAt:new Date().toISOString(),dirtySinceLastSync:Boolean(ul.sharedId)};
     setCurrentList(updated);
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
-    if(updated.sharedId){
+    // Sincroniza no servidor apenas quando a lista está realmente compartilhada ou recebida.
+    // Listas próprias apenas salvas na nuvem não devem gerar comportamento de compartilhamento.
+    if(updated.sharedId && (updated.isShared === true || updated.imported === true)){
       syncSharedListToCloud(updated,{silent:true});
     }
   };
