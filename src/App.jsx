@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.53 - Correção definitiva de enquadramento mobile/iPhone e safe area
+// Etapa 7.58 - Histórico finalizado protegido e estatísticas profissionais
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -4278,227 +4278,257 @@ function PriceMemoryLine({ itemName }) {
 
 function getPriceStatsSummary(sourceLists = []) {
   const history = readPriceHistory();
-  if (!history.length) {
-    return {
-      totalRecords: 0,
-      averageTicket: 0,
-      topIncreases: [],
-      monthlyTotals: [],
-      itemAnalysis: [],
-      smartInsights: [],
-      categoryTotals: [],
-      priceSeries: [],
-      budgetSeries: [],
-      categorySeries: [],
-      annualTotals: [],
-    };
-  }
-
-  const validHistory = history
-    .map((h) => ({
-      ...h,
-      unitPrice: Number(h.unitPrice || h.totalPrice || 0),
-      totalPrice: Number(h.totalPrice || h.unitPrice || 0),
-      quantity: Number(h.quantity || 1),
-      createdAt: h.createdAt || new Date().toISOString(),
-      monthKey: h.monthKey || String(h.createdAt || new Date().toISOString()).slice(0, 7),
-    }))
-    .filter((h) => h.itemKey && Number.isFinite(h.unitPrice) && h.unitPrice > 0);
-
-  const byMonth = new Map();
-  validHistory.forEach((h) => {
-    const k = h.monthKey || String(h.createdAt || "").slice(0, 7);
-    byMonth.set(k, (byMonth.get(k) || 0) + Number(h.totalPrice || 0));
-  });
-
-  const monthlyTotals = Array.from(byMonth.entries())
-    .map(([month, total]) => ({ month, total: Number(total.toFixed(2)) }))
-    .sort((a, b) => a.month.localeCompare(b.month));
-
-  const byItem = new Map();
-  validHistory.forEach((h) => {
-    if (!byItem.has(h.itemKey)) byItem.set(h.itemKey, []);
-    byItem.get(h.itemKey).push(h);
-  });
-
-  const itemAnalysis = Array.from(byItem.values())
-    .map((entries) => {
-      const ordered = entries
-        .slice()
-        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-      const prices = ordered.map((h) => Number(h.unitPrice || h.totalPrice || 0)).filter((n) => Number.isFinite(n) && n > 0);
-      if (!prices.length) return null;
-      const first = prices[0];
-      const last = prices[prices.length - 1];
-      const avg = average(prices);
-      const min = Math.min(...prices);
-      const max = Math.max(...prices);
-      const diffFromAvg = last - avg;
-      const diffPercent = avg ? Number(((diffFromAvg / avg) * 100).toFixed(1)) : 0;
-      const trendPercent = first ? Number((((last - first) / first) * 100).toFixed(1)) : 0;
-      const totalSpent = ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0);
-      let status = "estavel";
-      let insight = "Preço dentro do padrão histórico";
-      if (prices.length === 1) {
-        status = "novo";
-        insight = "Ainda há apenas um registro deste item";
-      } else if (diffPercent > 8) {
-        status = "caro";
-        insight = "Preço atual acima da média histórica";
-      } else if (diffPercent < -8) {
-        status = "barato";
-        insight = "Preço atual abaixo da média histórica";
-      }
-      return {
-        itemKey: ordered[ordered.length - 1].itemKey,
-        itemName: ordered[ordered.length - 1].itemName,
-        count: ordered.length,
-        average: Number(avg.toFixed(2)),
-        min: Number(min.toFixed(2)),
-        max: Number(max.toFixed(2)),
-        first: Number(first.toFixed(2)),
-        last: Number(last.toFixed(2)),
-        diffFromAvg: Number(diffFromAvg.toFixed(2)),
-        diffPercent,
-        trendPercent,
-        totalSpent: Number(totalSpent.toFixed(2)),
-        status,
-        insight,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.count - a.count || b.totalSpent - a.totalSpent);
-
-  const topIncreases = itemAnalysis
-    .filter((it) => it.count >= 2)
-    .map((it) => ({
-      itemName: it.itemName,
-      first: it.first,
-      last: it.last,
-      percent: it.trendPercent,
-    }))
-    .sort((a, b) => b.percent - a.percent)
-    .slice(0, 5);
-
-  const byCategory = new Map();
-  validHistory.forEach((h) => {
-    const category = inferPreferredCategoryForItem({ name: h.itemName }) || "Outros";
-    byCategory.set(category, (byCategory.get(category) || 0) + Number(h.totalPrice || h.unitPrice || 0));
-  });
-
-  const categoryTotals = Array.from(byCategory.entries())
-    .map(([category, total]) => ({ category, total: Number(total.toFixed(2)) }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8);
-
-  const priceSeries = Array.from(byItem.values())
-    .map((entries) => {
-      const ordered = entries
-        .slice()
-        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-      if (ordered.length < 2) return null;
-      return {
-        itemName: ordered[ordered.length - 1].itemName,
-        points: ordered.map((h) => {
-          const d = new Date(h.createdAt || Date.now());
-          return {
-            label: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : (h.monthKey || ""),
-            date: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : (h.monthKey || ""),
-            listName: h.listName || "Lista",
-            value: Number(h.unitPrice || h.totalPrice || 0),
-          };
-        }).filter((p) => Number.isFinite(p.value) && p.value > 0),
-        totalSpent: ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.totalSpent - a.totalSpent)
-    .slice(0, 5);
-
-  const smartInsights = [];
-  const expensive = itemAnalysis.filter((it) => it.status === "caro").sort((a,b)=>b.diffPercent-a.diffPercent).slice(0,3);
-  const cheap = itemAnalysis.filter((it) => it.status === "barato").sort((a,b)=>a.diffPercent-b.diffPercent).slice(0,3);
-  const heavy = itemAnalysis.slice().sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,3);
-
-  expensive.forEach((it) => smartInsights.push({
-    type: "alerta",
-    title: `${it.itemName} está acima da média`,
-    text: `Último preço ${it.last.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}, média ${it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}.`,
-  }));
-  cheap.forEach((it) => smartInsights.push({
-    type: "oportunidade",
-    title: `${it.itemName} está abaixo da média`,
-    text: `Último preço ${it.last.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}, média ${it.average.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}.`,
-  }));
-  if (heavy.length) {
-    smartInsights.push({
-      type: "impacto",
-      title: "Itens com maior impacto financeiro",
-      text: heavy.map((it) => it.itemName).join(", "),
-    });
-  }
-
 
   const calcStatsItemTotal = (item) => {
     const explicit = Number(item?.lineTotal ?? item?.total ?? item?.totalPrice ?? item?.subtotal ?? 0);
-    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    if (Number.isFinite(explicit) && explicit > 0) return Number(explicit.toFixed(2));
     const price = Number(item?.price ?? item?.unitPrice ?? 0);
     const qty = Number(item?.qty ?? item?.quantity ?? 1);
     if (!Number.isFinite(price) || price <= 0) return 0;
     return Number((price * (Number.isFinite(qty) && qty > 0 ? qty : 1)).toFixed(2));
   };
 
-  const budgetSeries = (Array.isArray(sourceLists) ? sourceLists : [])
-    .filter((list) => list && Array.isArray(list.categories))
-    .map((list) => {
-      const spent = (list.categories || []).reduce((sum, cat) => {
-        return sum + (Array.isArray(cat.items) ? cat.items : []).reduce((s, item) => s + calcStatsItemTotal(item), 0);
-      }, 0);
-      const dateRaw = list.finishedAt || list.updatedAt || list.lastSyncedAt || list.createdAt || "";
-      const d = new Date(dateRaw || Date.now());
-      const dateLabel = Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : "";
+  const listStamp = (list, index = 0) => {
+    const candidates = [list?.finishedAt, list?.completedAt, list?.lastLocalUpdateAt, list?.updatedAt, list?.lastSyncedAt, list?.createdAt];
+    for (const value of candidates) {
+      const t = value ? new Date(value).getTime() : 0;
+      if (Number.isFinite(t) && t > 0) return t;
+    }
+    return index + 1;
+  };
+
+  const listRows = (Array.isArray(sourceLists) ? sourceLists : [])
+    .filter((list) => list && Array.isArray(list.categories) && list.categories.length)
+    .map((list, index) => {
+      const items = [];
+      (list.categories || []).forEach((cat) => {
+        (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
+          const unitPrice = Number(item?.price ?? item?.unitPrice ?? 0);
+          const totalPrice = calcStatsItemTotal(item);
+          if (!item?.name || (!unitPrice && !totalPrice)) return;
+          items.push({
+            ...item,
+            category: cat?.name || inferPreferredCategoryForItem({ name: item?.name }) || "Outros",
+            itemKey: normalizePriceItemName(item?.name),
+            itemName: String(item?.name || "").trim(),
+            unitPrice: Number((unitPrice || totalPrice || 0).toFixed(2)),
+            totalPrice,
+          });
+        });
+      });
+      const computedSpent = items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+      const spent = Number((Number(list.total || 0) > 0 ? Number(list.total || 0) : computedSpent).toFixed(2));
+      const stamp = listStamp(list, index);
+      const d = new Date(stamp);
       return {
-        label: list.name || "Lista",
-        listName: list.name || "Lista",
-        date: dateLabel,
-        dateRaw: dateRaw || new Date().toISOString(),
+        id: list.id || list.sharedId || `list-${index}`,
+        sequence: Number.isFinite(Number(list.listSequence)) ? Number(list.listSequence) : index + 1,
+        stamp,
+        label: list.name || `Lista ${index + 1}`,
+        listName: list.name || `Lista ${index + 1}`,
+        date: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : "",
+        dateRaw: Number.isFinite(d.getTime()) ? d.toISOString() : "",
         budget: Number(list.budget || 0),
-        spent: Number((Number(list.total || 0) > 0 ? Number(list.total || 0) : spent).toFixed(2)),
+        spent,
+        items,
+        categories: list.categories || [],
       };
     })
-    .filter((row) => row.spent > 0 || row.budget > 0)
-    .sort((a, b) => String(a.dateRaw || "").localeCompare(String(b.dateRaw || "")))
-    .slice(-12);
+    .filter((row) => row.spent > 0 || row.items.length || row.budget > 0)
+    .sort((a, b) => (a.stamp - b.stamp) || (a.sequence - b.sequence) || String(a.listName).localeCompare(String(b.listName)));
 
-  const categoryMonthMap = new Map();
-  validHistory.forEach((h) => {
-    const category = inferPreferredCategoryForItem({ name: h.itemName }) || "Outros";
-    const month = h.monthKey || String(h.createdAt || "").slice(0, 7);
-    const key = `${category}|${month}`;
-    categoryMonthMap.set(key, (categoryMonthMap.get(key) || 0) + Number(h.totalPrice || h.unitPrice || 0));
+  const budgetSeries = listRows.map((row, idx) => ({
+    ...row,
+    label: row.listName,
+    orderLabel: `${idx + 1}`,
+  }));
+
+  const budgetSpentSeries = {
+    name: "Gasto",
+    color: "#6D28D9",
+    points: budgetSeries.map((row, idx) => ({
+      label: `${idx + 1}`,
+      axisLabel: row.listName,
+      date: row.date,
+      listName: row.listName,
+      value: row.spent,
+    })),
+  };
+
+  const budgetLimitSeries = {
+    name: "Orçamento",
+    color: "#16A34A",
+    points: budgetSeries.map((row, idx) => ({
+      label: `${idx + 1}`,
+      axisLabel: row.listName,
+      date: row.date,
+      listName: row.listName,
+      value: row.budget,
+    })).filter((p) => Number(p.value || 0) > 0),
+  };
+
+  const categoryNames = Array.from(new Set(listRows.flatMap((row) => row.items.map((item) => item.category || "Outros"))));
+  const categoryTotals = categoryNames.map((category) => {
+    const values = listRows.map((row) => row.items.filter((item) => item.category === category).reduce((sum, item) => sum + Number(item.totalPrice || 0), 0));
+    return { category, total: Number(values.reduce((a, b) => a + b, 0).toFixed(2)), values };
+  }).filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
+
+  const categorySeries = categoryTotals.map((cat, catIndex) => ({
+    name: cat.category,
+    itemName: cat.category,
+    color: ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F59E0B", "#0891B2", "#DB2777", "#475569"][catIndex % 8],
+    points: listRows.map((row, idx) => ({
+      label: `${idx + 1}`,
+      axisLabel: row.listName,
+      date: row.date,
+      listName: row.listName,
+      value: Number(row.items.filter((item) => item.category === cat.category).reduce((sum, item) => sum + Number(item.totalPrice || 0), 0).toFixed(2)),
+    })),
+    total: cat.total,
+  })).filter((s) => s.points.some((p) => p.value > 0));
+
+  const productMap = new Map();
+  listRows.forEach((row, listIndex) => {
+    const perList = new Map();
+    row.items.forEach((item) => {
+      const key = item.itemKey || normalizePriceItemName(item.itemName);
+      if (!key) return;
+      const prev = perList.get(key) || { itemName: item.itemName, totalUnit: 0, unitCount: 0, totalSpent: 0, quantity: 0, category: item.category };
+      const unitPrice = Number(item.unitPrice || 0);
+      if (unitPrice > 0) {
+        prev.totalUnit += unitPrice;
+        prev.unitCount += 1;
+      }
+      prev.totalSpent += Number(item.totalPrice || 0);
+      prev.quantity += Number(item.qty || item.quantity || 1);
+      prev.category = prev.category || item.category;
+      perList.set(key, prev);
+    });
+    perList.forEach((value, key) => {
+      if (!productMap.has(key)) productMap.set(key, { key, itemName: value.itemName, category: value.category, points: [], totalSpent: 0 });
+      const rec = productMap.get(key);
+      const avgUnit = value.unitCount ? value.totalUnit / value.unitCount : value.totalSpent;
+      rec.points.push({
+        label: `${listIndex + 1}`,
+        axisLabel: row.listName,
+        date: row.date,
+        listName: row.listName,
+        value: Number(avgUnit.toFixed(2)),
+        totalSpent: Number(value.totalSpent.toFixed(2)),
+        quantity: Number(value.quantity.toFixed(2)),
+      });
+      rec.totalSpent += Number(value.totalSpent || 0);
+    });
   });
 
-  const topCategories = categoryTotals.slice(0, 5).map((c) => c.category);
-  const categorySeries = topCategories.map((category) => {
-    const points = monthlyTotals.map((m) => ({
-      label: m.month,
-      date: m.month,
-      listName: category,
-      value: Number((categoryMonthMap.get(`${category}|${m.month}`) || 0).toFixed(2)),
-    }));
-    return { itemName: category, points };
-  }).filter((s) => s.points.some((p) => p.value > 0));
+  let priceSeries = Array.from(productMap.values()).map((rec, index) => {
+    const values = rec.points.map((p) => Number(p.value || 0)).filter((v) => v > 0);
+    const first = values[0] || 0;
+    const last = values[values.length - 1] || 0;
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 0;
+    const variationAbs = Number((max - min).toFixed(2));
+    const variationPercent = min > 0 ? Number((((max - min) / min) * 100).toFixed(1)) : 0;
+    const directionPercent = first > 0 ? Number((((last - first) / first) * 100).toFixed(1)) : 0;
+    return {
+      ...rec,
+      name: rec.itemName,
+      itemName: rec.itemName,
+      color: ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F59E0B", "#0891B2", "#DB2777", "#475569"][index % 8],
+      totalSpent: Number(rec.totalSpent.toFixed(2)),
+      variationAbs,
+      variationPercent,
+      directionPercent,
+      first,
+      last,
+    };
+  }).filter((s) => s.points.length >= 1).sort((a, b) => (b.variationAbs - a.variationAbs) || (b.totalSpent - a.totalSpent));
 
-  const annualTotals = monthlyTotals.map((m) => ({
-    label: m.month,
-    date: m.month,
-    listName: "Total mensal",
-    value: m.total,
+  if (!priceSeries.length && history.length) {
+    const grouped = new Map();
+    history.forEach((h) => {
+      const key = h.itemKey || normalizePriceItemName(h.itemName);
+      if (!key) return;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(h);
+    });
+    priceSeries = Array.from(grouped.entries()).map(([key, rows], index) => {
+      const ordered = rows.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+      const values = ordered.map((h) => Number(h.unitPrice || h.totalPrice || 0)).filter((v) => v > 0);
+      const min = values.length ? Math.min(...values) : 0;
+      const max = values.length ? Math.max(...values) : 0;
+      return {
+        key,
+        name: ordered[ordered.length - 1]?.itemName || key,
+        itemName: ordered[ordered.length - 1]?.itemName || key,
+        color: ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F59E0B", "#0891B2", "#DB2777", "#475569"][index % 8],
+        variationAbs: Number((max - min).toFixed(2)),
+        variationPercent: min > 0 ? Number((((max - min) / min) * 100).toFixed(1)) : 0,
+        totalSpent: Number(ordered.reduce((sum, h) => sum + Number(h.totalPrice || h.unitPrice || 0), 0).toFixed(2)),
+        points: ordered.map((h, i) => ({
+          label: `${i + 1}`,
+          axisLabel: h.listName || h.monthKey || `${i + 1}`,
+          date: h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "",
+          listName: h.listName || "Registro",
+          value: Number(h.unitPrice || h.totalPrice || 0),
+        })),
+      };
+    }).filter((s) => s.points.length).sort((a, b) => (b.variationAbs - a.variationAbs) || (b.totalSpent - a.totalSpent));
+  }
+
+  const topIncreases = priceSeries
+    .filter((s) => Number.isFinite(s.directionPercent) && s.directionPercent !== 0)
+    .sort((a, b) => Math.abs(b.directionPercent) - Math.abs(a.directionPercent))
+    .slice(0, 8)
+    .map((s) => ({ itemName: s.itemName, percent: s.directionPercent, current: s.last || 0 }));
+
+  const smartInsights = [];
+  const worstBudget = budgetSeries
+    .filter((row) => row.budget > 0)
+    .map((row) => ({ ...row, diff: row.spent - row.budget, percent: row.budget > 0 ? ((row.spent - row.budget) / row.budget) * 100 : 0 }))
+    .sort((a, b) => b.diff - a.diff)[0];
+  if (worstBudget && worstBudget.diff > 0) {
+    smartInsights.push({
+      type: "alerta",
+      title: `${worstBudget.listName} estourou o orçamento`,
+      text: `Gasto acima do limite em ${formatBRL(worstBudget.diff)} (${Number(worstBudget.percent).toFixed(1)}%).`,
+    });
+  }
+  const categoryIncrease = categorySeries.map((s) => {
+    const values = s.points.map((p) => Number(p.value || 0));
+    return { name: s.name, diff: Number(((values[values.length - 1] || 0) - (values[0] || 0)).toFixed(2)) };
+  }).sort((a, b) => b.diff - a.diff)[0];
+  if (categoryIncrease && categoryIncrease.diff > 0) {
+    smartInsights.push({ type: "impacto", title: `${categoryIncrease.name} foi a seção que mais subiu`, text: `Alta de ${formatBRL(categoryIncrease.diff)} entre a primeira e a última lista analisada.` });
+  }
+  const volatileProduct = priceSeries.find((s) => s.variationAbs > 0);
+  if (volatileProduct) {
+    smartInsights.push({ type: "oportunidade", title: `${volatileProduct.itemName} teve maior oscilação`, text: `Variação de ${formatBRL(volatileProduct.variationAbs)} no preço unitário entre as listas.` });
+  }
+  if (budgetSeries.length) {
+    smartInsights.push({ type: "analise", title: "Sequência analisada", text: `${budgetSeries.length} lista(s) em ordem cronológica de criação/finalização, da esquerda para a direita.` });
+  }
+
+  const monthMap = new Map();
+  listRows.forEach((row) => {
+    const month = row.dateRaw ? row.dateRaw.slice(0, 7) : "Sem mês";
+    monthMap.set(month, (monthMap.get(month) || 0) + row.spent);
+  });
+  const monthlyTotals = Array.from(monthMap.entries()).map(([month, total]) => ({ month, total: Number(total.toFixed(2)) })).sort((a, b) => String(a.month).localeCompare(String(b.month)));
+  const annualTotals = monthlyTotals.map((m) => ({ label: m.month, date: m.month, listName: "Total mensal", value: m.total }));
+
+  const itemAnalysis = priceSeries.map((s) => ({
+    itemName: s.itemName,
+    totalSpent: s.totalSpent,
+    last: s.last || 0,
+    average: average(s.points.map((p) => p.value)),
+    diffPercent: s.directionPercent || 0,
+    status: (s.directionPercent || 0) > 5 ? "caro" : (s.directionPercent || 0) < -5 ? "barato" : "estavel",
   }));
 
   return {
-    totalRecords: validHistory.length,
-    averageTicket: Number(average(validHistory.map((h) => h.totalPrice)).toFixed(2)),
+    totalRecords: listRows.reduce((sum, row) => sum + row.items.length, 0) || history.length,
+    averageTicket: Number(average(listRows.map((row) => row.spent)).toFixed(2)),
     topIncreases,
     monthlyTotals,
     itemAnalysis,
@@ -4506,8 +4536,11 @@ function getPriceStatsSummary(sourceLists = []) {
     categoryTotals,
     priceSeries,
     budgetSeries,
+    budgetSpentSeries,
+    budgetLimitSeries,
     categorySeries,
     annualTotals,
+    listRows,
   };
 }
 
@@ -4546,8 +4579,6 @@ function PriceInsightBadge({ itemName, price }) {
     </div>
   );
 }
-
-
 
 function PriceStatsEntryCard({ onClick }) {
   return (
@@ -4628,11 +4659,9 @@ function PriceStatsEntryCard({ onClick }) {
   );
 }
 
-
 function formatBRL(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
-
 
 function StatsExpandableSection({ id, title, subtitle, openSection, setOpenSection, children }) {
   const isOpen = openSection === id;
@@ -4677,403 +4706,220 @@ function StatsExpandableSection({ id, title, subtitle, openSection, setOpenSecti
   );
 }
 
-function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", valueLabel = "Valor" }) {
+function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", valueLabel = "Valor", height = 210 }) {
   const [tooltip, setTooltip] = useState(null);
+  const palette = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F59E0B", "#0891B2", "#DB2777", "#475569"];
   const cleanSeries = (Array.isArray(series) ? series : [])
-    .map((s) => ({ ...s, points: (Array.isArray(s.points) ? s.points : []).filter((p) => Number.isFinite(Number(p.value))) }))
+    .map((s, idx) => ({
+      ...s,
+      color: s.color || palette[idx % palette.length],
+      name: s.name || s.itemName || `Série ${idx + 1}`,
+      points: (Array.isArray(s.points) ? s.points : []).filter((p) => Number.isFinite(Number(p.value))),
+    }))
     .filter((s) => s.points.length);
 
   const allValues = cleanSeries.flatMap((s) => s.points.map((p) => Number(p.value || 0)));
-  const max = Math.max(...allValues, 1);
-  const min = Math.min(...allValues, 0);
-  const spread = Math.max(max - min, 1);
-  const width = 320;
-  const height = 138;
-  const pad = 18;
-  const colors = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F97316", "#0F766E"];
-
-  if (!cleanSeries.length || cleanSeries.every((s) => s.points.length < 2)) {
-    return <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>{emptyText}</div>;
+  if (!cleanSeries.length || !allValues.length) {
+    return <div style={{padding:"18px 12px",color:"#6B7280",fontWeight:700,fontSize:13}}>{emptyText}</div>;
   }
 
-  const buildPoints = (points) => points.map((p, idx) => {
-    const x = points.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / (points.length - 1);
-    const y = height - pad - ((Number(p.value || 0) - min) * (height - pad * 2)) / spread;
-    return { ...p, x, y, value:Number(p.value || 0) };
-  });
+  const labels = Array.from(new Set(cleanSeries.flatMap((s) => s.points.map((p) => String(p.label || ""))))).filter(Boolean);
+  const maxLen = Math.max(...cleanSeries.map((s) => s.points.length), 1);
+  const xCount = Math.max(labels.length, maxLen);
+  const minValue = Math.min(0, ...allValues);
+  const maxValue = Math.max(...allValues, 1);
+  const spread = Math.max(1, maxValue - minValue);
+  const w = 360;
+  const h = height;
+  const pad = { left: 38, right: 18, top: 20, bottom: 42 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+  const xFor = (point, index) => {
+    const label = String(point?.label || "");
+    const labelIndex = labels.indexOf(label);
+    const i = labelIndex >= 0 ? labelIndex : index;
+    return pad.left + (xCount <= 1 ? plotW / 2 : (i / (xCount - 1)) * plotW);
+  };
+  const yFor = (value) => pad.top + plotH - ((Number(value || 0) - minValue) / spread) * plotH;
 
   return (
-    <div style={{position:"relative"}}>
-      {tooltip && (
-        <div style={{
-          position:"absolute",
-          left:`${Math.min(72, Math.max(8, (tooltip.x / width) * 100))}%`,
-          top:8,
-          transform:"translateX(-50%)",
-          background:"rgba(17,24,39,0.75)",
-          backdropFilter:"blur(6px)",
-          color:"#FFFFFF",
-          borderRadius:14,
-          padding:"9px 11px",
-          fontSize:12,
-          fontWeight:800,
-          lineHeight:1.35,
-          zIndex:5,
-          minWidth:148,
-          boxShadow:"0 16px 34px rgba(17,24,39,0.24)"
-        }}>
-          <div style={{fontWeight:900}}>{tooltip.seriesName}</div>
-          <div>{tooltip.date || tooltip.label || ""}</div>
-          {tooltip.listName ? <div style={{opacity:.82}}>{tooltip.listName}</div> : null}
-          <div style={{marginTop:3,color:"#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
-        </div>
-      )}
-
-      <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:160,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
-        <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#E5E7EB" strokeWidth="2" />
-        <line x1={pad} y1={pad} x2={pad} y2={height-pad} stroke="#F3F4F6" strokeWidth="2" />
-        {cleanSeries.map((s, si) => {
-          const pts = buildPoints(s.points);
-          const linePath = pts.map((p) => `${p.x},${p.y}`).join(" ");
-          const color = s.color || colors[si % colors.length];
+    <div style={{width:"100%",overflow:"hidden"}}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={valueLabel} style={{display:"block"}}>
+        <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + plotH} stroke="#E5E7EB" strokeWidth="2" />
+        <line x1={pad.left} y1={pad.top + plotH} x2={pad.left + plotW} y2={pad.top + plotH} stroke="#E5E7EB" strokeWidth="2" />
+        {[0, .5, 1].map((t) => {
+          const y = pad.top + plotH - t * plotH;
+          const value = minValue + t * spread;
           return (
-            <g key={`${s.itemName || s.name}-${si}`}>
-              <polyline points={linePath} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {pts.map((p, pi) => (
-                <circle
-                  key={pi}
-                  cx={p.x}
-                  cy={p.y}
-                  r="7"
-                  fill="#FFFFFF"
-                  stroke={color}
-                  strokeWidth="4"
-                  style={{cursor:"pointer"}}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTooltip({
-                      x:p.x,
-                      y:p.y,
-                      value:p.value,
-                      label:p.label,
-                      date:p.date,
-                      listName:p.listName,
-                      seriesName:s.itemName || s.name || "Série"
-                    });
-                  }}
-                />
+            <g key={t}>
+              <line x1={pad.left} y1={y} x2={pad.left + plotW} y2={y} stroke="#F3F4F6" strokeWidth="1" />
+              <text x={pad.left - 6} y={y + 4} textAnchor="end" fontSize="9" fill="#9CA3AF" fontWeight="700">{value >= 1000 ? `${Math.round(value/1000)}k` : Math.round(value)}</text>
+            </g>
+          );
+        })}
+        {cleanSeries.map((s, si) => {
+          const points = s.points.map((p, pi) => ({ ...p, x: xFor(p, pi), y: yFor(p.value) }));
+          const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+          return (
+            <g key={s.name || si}>
+              {points.length > 1 ? <path d={d} fill="none" stroke={s.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /> : null}
+              {points.map((p, pi) => (
+                <g key={`${si}-${pi}`} onClick={() => setTooltip({ ...p, seriesName: s.name, color: s.color })} style={{cursor:"pointer"}}>
+                  <circle cx={p.x} cy={p.y} r="8" fill="#FFFFFF" stroke={s.color} strokeWidth="5" />
+                  <circle cx={p.x} cy={p.y} r="16" fill="transparent" />
+                </g>
               ))}
             </g>
           );
         })}
+        {Array.from({length:xCount}).map((_, i) => {
+          const x = pad.left + (xCount <= 1 ? plotW / 2 : (i / (xCount - 1)) * plotW);
+          return <text key={i} x={x} y={h - 18} textAnchor="middle" fontSize="10" fill="#6B7280" fontWeight="900">{labels[i] || `${i + 1}`}</text>;
+        })}
       </svg>
-
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-2}}>
-        {cleanSeries.map((s, si) => (
-          <span key={si} style={{display:"inline-flex",alignItems:"center",gap:5}}>
-            <span style={{width:9,height:9,borderRadius:999,background:s.color || colors[si % colors.length],display:"inline-block"}} />
-            {s.itemName || s.name}
-          </span>
-        ))}
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:12,fontWeight:900,color:"#4B5563",marginTop:4}}>
+        {cleanSeries.map((s, idx) => <span key={idx} style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:99,background:s.color,display:"inline-block"}} />{s.name}</span>)}
       </div>
+      {tooltip ? (
+        <div style={{marginTop:8,padding:"10px 12px",border:"1px solid #E5E7EB",borderRadius:14,background:"#FAFAFA",fontSize:12,color:"#374151",fontWeight:800}}>
+          <div style={{color:tooltip.color || "#4C1D95",fontWeight:900}}>{tooltip.seriesName}</div>
+          <div>{tooltip.listName || tooltip.axisLabel || tooltip.label} {tooltip.date ? `· ${tooltip.date}` : ""}</div>
+          <div>{valueLabel}: {formatBRL(tooltip.value)}</div>
+          {tooltip.quantity ? <div>Quantidade: {tooltip.quantity}</div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) {
-  if (!rows.length) return null;
+function StatsDetailList({ rows = [], limit = 8 }) {
+  const cleanRows = (Array.isArray(rows) ? rows : []).filter((r) => r && (r.value || r.value === 0)).slice(0, limit);
+  if (!cleanRows.length) return null;
   return (
-    <div style={{display:"grid",gap:7,marginTop:12}}>
-      {rows.slice(-8).map((row, idx) => (
-        <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px",fontSize:12}}>
-          <span style={{fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row[labelKey] || row.date || row.month || "Registro"}</span>
-          <span style={{fontWeight:900,color:"#111827",whiteSpace:"nowrap"}}>{formatBRL(row[valueKey] || row.total || 0)}</span>
+    <div style={{display:"grid",gap:8,marginTop:12}}>
+      {cleanRows.map((row, idx) => (
+        <div key={idx} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:14,background:"#FAFAFA",border:"1px solid #F3F4F6",fontSize:13}}>
+          <span style={{fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.label}</span>
+          <span style={{fontWeight:900,color:"#111827",whiteSpace:"nowrap"}}>{typeof row.value === "number" ? formatBRL(row.value) : row.value}</span>
         </div>
       ))}
     </div>
   );
 }
 
-
-
-function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 }) {
-  if (!userName) return null;
+function ProductStatsControls({ products, selectedKeys, setSelectedKeys, search, setSearch, showAll, setShowAll }) {
+  const filtered = products.filter((p) => normalizePriceItemName(p.itemName).includes(normalizePriceItemName(search)));
+  const visible = showAll ? filtered : filtered.slice(0, 8);
   return (
-    <div style={{
-      position:"sticky",
-      top:0,
-      zIndex:120,
-      width:"100%",
-      maxWidth:"100%",
-      background:"#FFFFFF",
-      borderBottom:"1px solid #E5E7EB",
-      paddingTop:"calc(10px + env(safe-area-inset-top, 0px))",
-      paddingRight:"max(12px, env(safe-area-inset-right, 0px))",
-      paddingBottom:10,
-      paddingLeft:"max(12px, env(safe-area-inset-left, 0px))",
-      display:"flex",
-      alignItems:"center",
-      justifyContent:"space-between",
-      gap:8,
-      boxSizing:"border-box",
-      overflow:"hidden",
-      flexWrap:"nowrap",
-      boxShadow:"0 8px 22px rgba(17,24,39,0.04)"
-    }}>
-      <div style={{
-        fontSize:14,
-        fontWeight:900,
-        color:"#111827",
-        overflow:"hidden",
-        textOverflow:"ellipsis",
-        whiteSpace:"nowrap",
-        paddingRight:6,
-        minWidth:0,
-        flex:"1 1 auto"
-      }}>
-        Olá, {userName}
+    <div style={{marginBottom:12}}>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar produto para analisar..."
+        style={{width:"100%",border:"1px solid #E5E7EB",borderRadius:14,padding:"11px 12px",fontSize:16,fontWeight:700,outline:"none",boxSizing:"border-box",marginBottom:10}}
+      />
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {visible.map((p) => {
+          const active = selectedKeys.includes(p.key);
+          return (
+            <button key={p.key} onClick={() => setSelectedKeys(active ? selectedKeys.filter((k) => k !== p.key) : [...selectedKeys, p.key])} style={{border:`1px solid ${active ? "#6D28D9" : "#E5E7EB"}`,background:active ? "#F5F3FF" : "#FFFFFF",color:active ? "#4C1D95" : "#374151",borderRadius:999,padding:"8px 10px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>
+              {p.itemName}
+            </button>
+          );
+        })}
       </div>
-
-      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,minWidth:0}}>
-        <button onClick={onNotifications} aria-label="Notificações" style={{
-          position:"relative",
-          border:"1px solid #DDD6FE",
-          background:"#F5F3FF",
-          color:"#6D28D9",
-          borderRadius:999,
-          width:34,
-          height:34,
-          cursor:"pointer",
-          fontSize:16,
-          display:"flex",
-          alignItems:"center",
-          justifyContent:"center",
-          boxShadow:"0 8px 18px rgba(109,40,217,0.10)"
-        }}>
-          🔔
-          {unreadCount > 0 && (
-            <span style={{
-              position:"absolute",
-              top:-4,
-              right:-4,
-              minWidth:17,
-              height:17,
-              background:"#DC2626",
-              color:"#FFF",
-              borderRadius:"50%",
-              fontSize:10,
-              fontWeight:900,
-              display:"flex",
-              alignItems:"center",
-              justifyContent:"center",
-              border:"2px solid #FFFFFF"
-            }}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </button>
-
-        <button onClick={onSwitchUser} style={{
-          border:"1px solid #E5E7EB",
-          background:"#FFF",
-          color:"#6D28D9",
-          borderRadius:999,
-          padding:"7px 12px",
-          fontSize:12,
-          fontWeight:900,
-          cursor:"pointer",
-          fontFamily:"inherit",
-          boxShadow:"0 8px 18px rgba(17,24,39,0.06)"
-        }}>
-          Sair
-        </button>
-      </div>
+      {filtered.length > 8 ? <button onClick={() => setShowAll(!showAll)} style={{marginTop:10,border:"none",background:"#F5F3FF",color:"#5B21B6",borderRadius:12,padding:"9px 12px",fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}>{showAll ? "Mostrar menos" : `Ver todos (${filtered.length})`}</button> : null}
     </div>
   );
 }
-
-function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  useEffect(() => {
-    onMarkAllRead?.();
-  }, []);
-
-  const typeMeta = (type) => {
-    if (type === "shared-accepted") return { icon: "✅", color: "#047857", bg: "#ECFDF5" };
-    if (type === "started") return { icon: "🛒", color: "#6D28D9", bg: "#F5F3FF" };
-    if (type === "finished") return { icon: "🏁", color: "#B91C1C", bg: "#FEF2F2" };
-    return { icon: "🔔", color: "#374151", bg: "#F9FAFB" };
-  };
-
-  const formatNotifTime = (value) => {
-    try {
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return "";
-      return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
-    } catch {
-      return "";
-    }
-  };
-
-  return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 52%,#F9FAFB 100%)",padding:"22px 18px 34px",boxSizing:"border-box",fontFamily:"inherit"}}>
-      <div style={{maxWidth:520,width:"100%",margin:"0 auto"}}>
-        <div style={{background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",borderRadius:28,padding:"18px 16px",color:"#FFFFFF",boxShadow:"0 18px 44px rgba(109,40,217,0.22)",marginBottom:18}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-            <button onClick={onBack} style={{width:44,height:44,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.28)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",fontSize:24,cursor:"pointer",fontFamily:"inherit"}}>←</button>
-            <div style={{textAlign:"center",flex:1,minWidth:0}}>
-              <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Notificações</div>
-              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>{unreadCount ? `${unreadCount} nova(s) notificação(ões)` : "Tudo em dia"}</div>
-            </div>
-            <div style={{width:44}} />
-          </div>
-        </div>
-
-        {!notifications.length ? (
-          <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:26,textAlign:"center",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
-            <div style={{fontSize:42,marginBottom:8}}>🔔</div>
-            <div style={{fontSize:19,fontWeight:900,color:"#111827",marginBottom:6}}>Nenhuma notificação</div>
-            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>As atualizações de listas compartilhadas aparecerão aqui.</div>
-          </div>
-        ) : (
-          <div style={{display:"grid",gap:10}}>
-            {notifications.map((n) => {
-              const meta = typeMeta(n.type);
-              return (
-                <div key={n.id} style={{background:"#FFFFFF",border:n.read?"1px solid #E5E7EB":"1.5px solid #C4B5FD",borderRadius:20,padding:14,boxShadow:n.read?"0 8px 18px rgba(17,24,39,0.04)":"0 14px 30px rgba(109,40,217,0.10)",display:"flex",gap:12,alignItems:"flex-start"}}>
-                  <div style={{width:38,height:38,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",background:meta.bg,color:meta.color,fontSize:19,flexShrink:0}}>{meta.icon}</div>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{fontSize:14,fontWeight:n.read?750:900,color:"#111827",lineHeight:1.35}}>{n.message}</div>
-                    <div style={{fontSize:11,fontWeight:800,color:"#6B7280",marginTop:5}}>{formatNotifTime(n.createdAt)}</div>
-                  </div>
-                  {!n.read && <span style={{width:9,height:9,borderRadius:999,background:"#DC2626",marginTop:5,flexShrink:0}} />}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 
 function PriceStatsScreen({ onBack, lists = [] }) {
   const [openSection, setOpenSection] = useState("budget");
+  const [productSearch, setProductSearch] = useState("");
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const stats = getPriceStatsSummary(lists);
+  const defaultSelected = (stats.priceSeries || []).slice(0, 5).map((p) => p.key);
+  const [selectedProductKeys, setSelectedProductKeys] = useState(defaultSelected);
 
-  const budgetSpentSeries = {
-    name:"Gasto",
-    color:"#6D28D9",
-    points:(stats.budgetSeries || []).map((p) => ({
-      label:p.label,
-      date:p.date,
-      listName:p.listName,
-      value:p.spent
-    }))
-  };
-  const budgetLimitSeries = {
-    name:"Orçamento",
-    color:"#16A34A",
-    points:(stats.budgetSeries || []).filter((p)=>Number(p.budget || 0)>0).map((p) => ({
-      label:p.label,
-      date:p.date,
-      listName:p.listName,
-      value:p.budget
-    }))
-  };
+  useEffect(() => {
+    setSelectedProductKeys((prev) => prev.length ? prev : defaultSelected);
+  }, [stats.priceSeries?.length]);
+
+  const selectedProductSeries = (stats.priceSeries || []).filter((p) => selectedProductKeys.includes(p.key));
+  const budgetSpentSeries = stats.budgetSpentSeries || { name:"Gasto", color:"#6D28D9", points:[] };
+  const budgetLimitSeries = stats.budgetLimitSeries || { name:"Orçamento", color:"#16A34A", points:[] };
 
   return (
-    <div style={{
-      minHeight:"100vh",
-      background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 48%,#F9FAFB 100%)",
-      padding:"22px 18px 34px",
-      boxSizing:"border-box",
-      fontFamily:"inherit"
-    }}>
-      <div style={{maxWidth:760,width:"100%",margin:"0 auto"}}>
-        <div style={{
-          background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",
-          borderRadius:28,
-          padding:"20px 18px",
-          color:"#FFFFFF",
-          boxShadow:"0 18px 44px rgba(109,40,217,0.22)",
-          marginBottom:18
-        }}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-            <button onClick={onBack} style={{
-              width:44,height:44,borderRadius:"50%",
-              border:"1px solid rgba(255,255,255,0.28)",
-              background:"rgba(255,255,255,0.16)",
-              color:"#FFFFFF",
-              fontSize:24,
-              cursor:"pointer",
-              fontFamily:"inherit"
-            }}>←</button>
+    <div style={{minHeight:"100dvh",background:"linear-gradient(180deg,#FFFFFF 0%,#F8F5FF 100%)",padding:"calc(env(safe-area-inset-top, 0px) + 14px) 14px 24px",boxSizing:"border-box",fontFamily:"Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:"#111827"}}>
+      <div style={{maxWidth:720,margin:"0 auto"}}>
+        <div style={{background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",color:"#FFFFFF",borderRadius:28,padding:"18px 16px",boxShadow:"0 18px 36px rgba(109,40,217,.22)",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <button onClick={onBack} style={{width:44,height:44,borderRadius:22,border:"1px solid rgba(255,255,255,.35)",background:"rgba(255,255,255,.12)",color:"#FFFFFF",fontSize:28,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontFamily:"inherit"}}>←</button>
             <div style={{textAlign:"center",flex:1,minWidth:0}}>
               <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Estatísticas de preços</div>
-              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Toque nas seções e nos pontos dos gráficos para ver detalhes</div>
+              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Análise comparativa por lista, seção e produto</div>
             </div>
             <div style={{width:44}} />
           </div>
         </div>
 
         {!stats.totalRecords ? (
-          <div style={{
-            background:"#FFFFFF",
-            border:"1px solid #E5E7EB",
-            borderRadius:24,
-            padding:24,
-            textAlign:"center",
-            boxShadow:"0 12px 28px rgba(17,24,39,0.06)"
-          }}>
+          <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:24,textAlign:"center",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
             <div style={{fontSize:42,marginBottom:8}}>📊</div>
             <div style={{fontSize:20,fontWeight:900,color:"#111827",marginBottom:6}}>Ainda não há dados suficientes</div>
-            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>
-              As estatísticas aparecerão após você registrar preços nos itens comprados.
-            </div>
+            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>As estatísticas aparecerão após você finalizar listas com preços registrados.</div>
           </div>
         ) : (
           <>
-            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista." openSection={openSection} setOpenSection={setOpenSection}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:"#4C1D95"}}>{stats.budgetSeries.length}</div><div style={{fontSize:11,fontWeight:800,color:"#6B7280"}}>Listas</div></div>
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:"#4C1D95"}}>{stats.priceSeries.length}</div><div style={{fontSize:11,fontWeight:800,color:"#6B7280"}}>Produtos</div></div>
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:900,color:"#4C1D95"}}>{stats.categorySeries.length}</div><div style={{fontSize:11,fontWeight:800,color:"#6B7280"}}>Seções</div></div>
+            </div>
+
+            {stats.smartInsights?.length ? (
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:22,padding:14,marginBottom:12,boxShadow:"0 10px 22px rgba(17,24,39,.045)"}}>
+                <div style={{fontSize:15,fontWeight:900,color:"#4C1D95",marginBottom:8}}>Insights automáticos</div>
+                <div style={{display:"grid",gap:8}}>
+                  {stats.smartInsights.slice(0,4).map((ins, idx) => (
+                    <div key={idx} style={{padding:"10px 11px",borderRadius:14,background:ins.type === "alerta" ? "#FEF2F2" : "#F8FAFC",border:"1px solid #F3F4F6"}}>
+                      <div style={{fontWeight:900,color:ins.type === "alerta" ? "#991B1B" : "#111827",fontSize:13}}>{ins.title}</div>
+                      <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:3,lineHeight:1.35}}>{ins.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <StatsExpandableSection id="budget" title="1. Orçamento x gastos" subtitle="Compara cada lista na sequência em que foi criada ou finalizada." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
               <div style={{display:"grid",gap:8,marginTop:12}}>
-                {(stats.budgetSeries || []).slice(-8).map((row, idx) => {
+                {(stats.budgetSeries || []).map((row, idx) => {
                   const balance = Number(row.budget || 0) - Number(row.spent || 0);
+                  const pct = row.budget > 0 ? ((row.spent - row.budget) / row.budget) * 100 : 0;
                   return (
-                    <div key={idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px",fontSize:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-                        <strong style={{color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.listName}</strong>
-                        <span style={{color:"#6B7280",fontWeight:800,whiteSpace:"nowrap"}}>{row.date}</span>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:5,color:"#374151",fontWeight:800}}>
-                        <span>Orçamento: {row.budget ? formatBRL(row.budget) : "não definido"}</span>
-                        <span>Gasto: {formatBRL(row.spent)}</span>
-                      </div>
-                      {row.budget > 0 ? <div style={{marginTop:4,fontWeight:900,color:balance >= 0 ? "#166534" : "#991B1B"}}>{balance >= 0 ? "Economia: " : "Estouro: "}{formatBRL(Math.abs(balance))}</div> : null}
+                    <div key={row.id || idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px",fontSize:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8}}><strong style={{color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{idx + 1}. {row.listName}</strong><span style={{color:"#6B7280",fontWeight:800,whiteSpace:"nowrap"}}>{row.date}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:5,color:"#374151",fontWeight:800}}><span>Orçamento: {row.budget ? formatBRL(row.budget) : "não definido"}</span><span>Gasto: {formatBRL(row.spent)}</span></div>
+                      {row.budget > 0 ? <div style={{marginTop:4,fontWeight:900,color:balance >= 0 ? "#166534" : "#991B1B"}}>{balance >= 0 ? "Economia: " : "Estouro: "}{formatBRL(Math.abs(balance))} {pct ? `(${pct > 0 ? "+" : ""}${pct.toFixed(1)}%)` : ""}</div> : null}
                     </div>
                   );
                 })}
               </div>
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Veja a variação do preço unitário dos produtos ao longo das compras." openSection={openSection} setOpenSection={setOpenSection}>
-              {(stats.priceSeries || []).slice(0,6).map((item, idx) => (
-                <div key={idx} style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
-                  <div style={{fontWeight:900,fontSize:14,marginBottom:6,color:"#111827"}}>
-                    {item.itemName}
-                  </div>
-                  <StatsLineChart series={[item]} valueLabel="Preço" emptyText="Dados insuficientes." />
-                </div>
-              ))}
+            <StatsExpandableSection id="category" title="2. Gastos por seção" subtitle="Gráfico de linha por seção, lista a lista." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={stats.categorySeries || []} valueLabel="Gasto" emptyText="Ainda não há dados suficientes por seção." height={240} />
+              <StatsDetailList rows={(stats.categoryTotals || []).map(c => ({label:c.category, value:c.total}))} limit={12} />
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="category" title="Gastos por seção" subtitle="Acompanhe quanto cada seção representa mês a mês." openSection={openSection} setOpenSection={setOpenSection}>
-              <StatsLineChart series={stats.categorySeries || []} valueLabel="Gasto" emptyText="Ainda não há dados suficientes por seção." />
-              <StatsDetailList rows={(stats.categoryTotals || []).map(c => ({label:c.category, value:c.total}))} />
+            <StatsExpandableSection id="product" title="3. Evolução do preço por produto" subtitle="Selecione qualquer produto para comparar o preço unitário entre listas." openSection={openSection} setOpenSection={setOpenSection}>
+              <ProductStatsControls products={stats.priceSeries || []} selectedKeys={selectedProductKeys} setSelectedKeys={setSelectedProductKeys} search={productSearch} setSearch={setProductSearch} showAll={showAllProducts} setShowAll={setShowAllProducts} />
+              {selectedProductSeries.length ? <StatsLineChart series={selectedProductSeries} valueLabel="Preço unitário" emptyText="Selecione produtos para analisar." height={250} /> : <div style={{padding:16,color:"#6B7280",fontWeight:800}}>Selecione um produto para visualizar a evolução.</div>}
+              <StatsDetailList rows={(selectedProductSeries.length ? selectedProductSeries : (stats.priceSeries || []).slice(0, 8)).map(p => ({label:`${p.itemName} · variação ${p.variationPercent || 0}%`, value:p.variationAbs}))} limit={12} />
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="year" title="Evolução dos gastos totais ao longo do ano" subtitle="Linha mensal consolidada das suas compras registradas." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="year" title="4. Evolução mensal consolidada" subtitle="Leitura complementar por mês, quando houver listas em meses diferentes." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[{name:"Total mensal", color:"#6D28D9", points:stats.annualTotals || []}]} valueLabel="Total" emptyText="Ainda não há evolução mensal registrada." />
               <StatsDetailList rows={(stats.annualTotals || []).map(m => ({label:m.label, value:m.value}))} />
             </StatsExpandableSection>
@@ -5083,6 +4929,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
     </div>
   );
 }
+
 
 
 function PriceStatsPanel() {
@@ -7066,6 +6913,16 @@ const [lists,setLists]=useState(()=>{
     return total>0 && (list?.categories||[]).every(c=>(c.items||[]).every(i=>i.checked||i.notFound));
   };
 
+  const isRealSharedList=(list)=>Boolean(list?.sharedId && (list?.isShared === true || list?.imported === true));
+
+  const isReadOnlyFinishedList=(list)=>Boolean(isListFinished(list) || list?.finishedAt);
+
+  const blockFinishedListEdit=()=>{
+    showToast("🔒 Lista finalizada. Faça uma cópia para usar ou editar.");
+    returnToSearch();
+    return true;
+  };
+
   const openListForEdit=(list)=>{
     if(!list)return;
     if(isListFinished(list)){
@@ -7256,14 +7113,17 @@ const [lists,setLists]=useState(()=>{
 
 
   useEffect(()=>{
-    if(screen!=="list" || !currentList?.sharedId)return;
+    // Atualização automática deve ocorrer somente para lista realmente compartilhada/recebida.
+    // Lista própria salva na nuvem não pode ser recarregada automaticamente ao abrir o histórico,
+    // pois uma cópia remota antiga pode desmarcar itens já finalizados.
+    if(screen!=="list" || !currentList?.sharedId || !isRealSharedList(currentList))return;
     const lastPull=getListSyncStamp({lastSyncedAt:currentList.lastCloudSeenAt || currentList.pulledAt});
     if(lastPull && Date.now()-lastPull<45000)return;
     const now=Date.now();
     if(now-(autoSyncNoticeRef.current||0)<45000)return;
     autoSyncNoticeRef.current=now;
     refreshSharedListFromCloud().catch(()=>null);
-  },[screen,currentList?.id,currentList?.sharedId]);
+  },[screen,currentList?.id,currentList?.sharedId,currentList?.isShared,currentList?.imported]);
 
   // Etapa 4: sincronização manual.
   // A lista compartilhada é atualizada pelo botão “Atualizar”, evitando
@@ -7276,14 +7136,15 @@ const [lists,setLists]=useState(()=>{
     const updated={...ul,total:fullTotal,lastLocalUpdateAt:new Date().toISOString(),dirtySinceLastSync:Boolean(ul.sharedId)};
     setCurrentList(updated);
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
-    // Sincroniza no servidor apenas quando a lista está realmente compartilhada ou recebida.
-    // Listas próprias apenas salvas na nuvem não devem gerar comportamento de compartilhamento.
-    if(updated.sharedId && (updated.isShared === true || updated.imported === true)){
-      syncSharedListToCloud(updated,{silent:true});
+    // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
+    // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
+    if(updated.sharedId){
+      syncSharedListToCloud(updated,{silent:true,force:!isRealSharedList(updated)});
     }
   };
 
   const toggleCheck=(ci,ii)=>{
+    if(isReadOnlyFinishedList(currentList))return blockFinishedListEdit();
     const item=currentList.categories[ci].items[ii];
     if(item.notFound){
       showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
@@ -7301,6 +7162,7 @@ const [lists,setLists]=useState(()=>{
     setCheckPopup({ci,ii});
   };
   const toggleNotFound=(ci,ii)=>{
+    if(isReadOnlyFinishedList(currentList))return blockFinishedListEdit();
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[ci].items[ii];
     item.notFound=!item.notFound;
@@ -7310,6 +7172,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const openItemModal=(ci,ii)=>{
+    if(isReadOnlyFinishedList(currentList))return blockFinishedListEdit();
     const item=currentList.categories[ci].items[ii];
     if(item?.notFound){
       showToast("⚠️ Item em falta. Use o botão de falta para voltar a pendente.");
@@ -7326,6 +7189,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const confirmItem=()=>{
+    if(isReadOnlyFinishedList(currentList)){ setItemModal(null); return blockFinishedListEdit(); }
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[itemModal.ci].items[itemModal.ii];
     const confirmedQty=numberFromText(mQtyText) || Number(mQty||1) || 1;
@@ -7408,6 +7272,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const removeItem=()=>{
+    if(isReadOnlyFinishedList(currentList)){ setItemModal(null); return blockFinishedListEdit(); }
     const l=JSON.parse(JSON.stringify(currentList));
     l.categories[itemModal.ci].items.splice(itemModal.ii,1);
     if(l.categories[itemModal.ci].items.length===0)l.categories.splice(itemModal.ci,1);
@@ -7415,6 +7280,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const quickAdjust=(ci,ii,delta)=>{
+    if(isReadOnlyFinishedList(currentList))return blockFinishedListEdit();
     const l=JSON.parse(JSON.stringify(currentList));
     const item=l.categories[ci].items[ii];
     const newQty=Math.max(0.5,Math.round(((Number(item.qty)||1)+delta)*10)/10);
@@ -7460,6 +7326,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const addExtra=()=>{
+    if(isReadOnlyFinishedList(currentList)){ setExtraModal(false); return blockFinishedListEdit(); }
     if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
     const l=JSON.parse(JSON.stringify(currentList));
     let cat=l.categories.find(c=>c.name==="Itens Extras");
