@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.61 - Estatísticas inteligentes com rankings, busca e insights reforçados
+// Etapa 7.63 - Estatísticas de preços com UX limpa, safe area iPhone e gráficos focados
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -4789,11 +4789,11 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
   const spread = Math.max(max - min, 1);
   const width = 320;
   const height = 138;
-  const pad = 18;
+  const pad = 22;
   const colors = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F97316", "#0F766E"];
   const axisTicks = [min, min + spread / 2, max].map((value) => Number(value || 0));
-  const firstAxisLabel = cleanSeries[0]?.points?.[0]?.label || "";
-  const lastAxisLabel = cleanSeries[0]?.points?.[cleanSeries[0]?.points?.length - 1]?.label || "";
+  const axisPoints = cleanSeries[0]?.points || [];
+  const labelStep = axisPoints.length <= 5 ? 1 : Math.ceil(axisPoints.length / 5);
 
   if (!cleanSeries.length || cleanSeries.every((s) => s.points.length < 2)) {
     return <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>{emptyText}</div>;
@@ -4806,39 +4806,51 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
   });
 
   return (
-    <div style={{position:"relative"}}>
+    <div style={{position:"relative", width:"100%", maxWidth:"100%", overflow:"visible"}}>
       {tooltip && (
         <div style={{
           position:"absolute",
-          left:`${Math.min(72, Math.max(8, (tooltip.x / width) * 100))}%`,
-          top:8,
+          left:"50%",
+          top:6,
           transform:"translateX(-50%)",
-          background:"rgba(17,24,39,0.75)",
-          backdropFilter:"blur(6px)",
+          width:"min(268px, calc(100vw - 44px))",
+          maxWidth:"calc(100vw - 44px)",
+          background:"rgba(17,24,39,0.88)",
+          backdropFilter:"blur(8px)",
           color:"#FFFFFF",
-          borderRadius:14,
-          padding:"9px 11px",
+          borderRadius:16,
+          padding:"10px 12px",
           fontSize:12,
           fontWeight:800,
-          lineHeight:1.35,
-          zIndex:5,
-          minWidth:148,
-          boxShadow:"0 16px 34px rgba(17,24,39,0.24)"
+          lineHeight:1.38,
+          zIndex:20,
+          boxShadow:"0 18px 38px rgba(17,24,39,0.30)",
+          boxSizing:"border-box",
+          pointerEvents:"none"
         }}>
-          <div style={{fontWeight:900}}>{tooltip.seriesName}</div>
-          <div>{tooltip.date || tooltip.label || ""}</div>
-          {tooltip.listName ? <div style={{opacity:.82}}>{tooltip.listName}</div> : null}
-          <div style={{marginTop:3,color:"#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
+          <div style={{fontWeight:950,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tooltip.listName || tooltip.seriesName}</div>
+          <div style={{opacity:.84,marginTop:2}}>{tooltip.date || tooltip.label || ""}</div>
+          <div style={{marginTop:5,color:"#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
+          {Array.isArray(tooltip.meta) && tooltip.meta.length ? (
+            <div style={{marginTop:6,paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.16)",display:"grid",gap:3}}>
+              {tooltip.meta.map((row, idx) => (
+                <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10}}>
+                  <span style={{opacity:.82}}>{row.label}</span>
+                  <span style={{fontWeight:950,whiteSpace:"nowrap",color:row.color || "#FFFFFF"}}>{row.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
 
-      <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:174,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
+      <svg viewBox={`0 0 ${width} ${height + 24}`} style={{width:"100%",height:198,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
         {axisTicks.map((tick, idx) => {
           const y = height - pad - ((tick - min) * (height - pad * 2)) / spread;
           return (
             <g key={`axis-${idx}`}>
               <line x1={pad} y1={y} x2={width-pad} y2={y} stroke={idx === 0 ? "#E5E7EB" : "#F3F4F6"} strokeWidth="1.5" strokeDasharray={idx === 0 ? "0" : "4 5"} />
-              <text x={pad - 4} y={y + 4} textAnchor="end" fontSize="9" fontWeight="800" fill="#9CA3AF">{formatBRL(tick).replace("R$", "")}</text>
+              <text x={pad - 5} y={y + 4} textAnchor="end" fontSize="9" fontWeight="800" fill="#9CA3AF">{formatBRL(tick).replace("R$", "")}</text>
             </g>
           );
         })}
@@ -4870,6 +4882,7 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
                       label:p.label,
                       date:p.date,
                       listName:p.listName,
+                      meta:p.meta,
                       seriesName:s.itemName || s.name || "Série"
                     });
                   }}
@@ -4878,15 +4891,19 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
             </g>
           );
         })}
-        {firstAxisLabel || lastAxisLabel ? (
-          <>
-            <text x={pad} y={height + 12} textAnchor="start" fontSize="9" fontWeight="800" fill="#6B7280">{String(firstAxisLabel).slice(0, 18)}</text>
-            <text x={width - pad} y={height + 12} textAnchor="end" fontSize="9" fontWeight="800" fill="#6B7280">{String(lastAxisLabel).slice(0, 18)}</text>
-          </>
-        ) : null}
+        {axisPoints.map((p, idx) => {
+          if (idx !== 0 && idx !== axisPoints.length - 1 && idx % labelStep !== 0) return null;
+          const x = axisPoints.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / Math.max(1, axisPoints.length - 1);
+          const label = String(p.label || p.listName || "").slice(0, 10);
+          return (
+            <text key={`xlabel-${idx}`} x={x} y={height + 13} textAnchor="middle" fontSize="9" fontWeight="900" fill="#6B7280">
+              {label}
+            </text>
+          );
+        })}
       </svg>
 
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-2}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-4}}>
         {cleanSeries.map((s, si) => (
           <span key={si} style={{display:"inline-flex",alignItems:"center",gap:5}}>
             <span style={{width:9,height:9,borderRadius:999,background:s.color || colors[si % colors.length],display:"inline-block"}} />
@@ -5080,26 +5097,47 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const [openSection, setOpenSection] = useState("budget");
   const [productQuery, setProductQuery] = useState("");
   const [showAllProducts, setShowAllProducts] = useState(false);
+  const [selectedProductName, setSelectedProductName] = useState("");
+  const [selectedCategoryName, setSelectedCategoryName] = useState("");
   const stats = getPriceStatsSummary(lists);
 
+  const shortListLabel = (value, fallback = "Lista") => {
+    const raw = String(value || fallback).trim();
+    return raw.length > 10 ? raw.slice(0, 10) + "…" : raw;
+  };
+
+  const budgetRows = stats.budgetSeries || [];
   const budgetSpentSeries = {
     name:"Gasto real",
     color:"#6D28D9",
-    points:(stats.budgetSeries || []).map((p) => ({
-      label:p.label,
-      date:p.date,
-      listName:p.listName,
-      value:p.spent
-    }))
+    points:budgetRows.map((p) => {
+      const spent = Number(p.spent || 0);
+      const budget = Number(p.budget || 0);
+      const balance = Number((budget - spent).toFixed(2));
+      return {
+        label:shortListLabel(p.label || p.listName),
+        date:p.date,
+        listName:p.listName || p.label,
+        value:spent,
+        meta:[
+          { label:"Orçamento", value:budget > 0 ? formatBRL(budget) : "não definido" },
+          { label:balance >= 0 ? "Economia" : "Estouro", value:formatBRL(Math.abs(balance)), color:balance >= 0 ? "#BBF7D0" : "#FECACA" }
+        ]
+      };
+    })
   };
   const budgetLimitSeries = {
     name:"Orçamento",
     color:"#16A34A",
-    points:(stats.budgetSeries || []).filter((p)=>Number(p.budget || 0)>0).map((p) => ({
-      label:p.label,
+    points:budgetRows.filter((p)=>Number(p.budget || 0)>0).map((p) => ({
+      label:shortListLabel(p.label || p.listName),
       date:p.date,
-      listName:p.listName,
-      value:p.budget
+      listName:p.listName || p.label,
+      value:Number(p.budget || 0),
+      meta:[
+        { label:"Gasto real", value:formatBRL(p.spent || 0) },
+        { label:"Saldo", value:formatBRL(Math.abs(Number(p.budget || 0) - Number(p.spent || 0))), color:Number(p.budget || 0) >= Number(p.spent || 0) ? "#BBF7D0" : "#FECACA" }
+      ]
     }))
   };
 
@@ -5109,14 +5147,6 @@ function PriceStatsScreen({ onBack, lists = [] }) {
     if (!q) return true;
     return normalizeStatsSearch(item.itemName || item.name).includes(q);
   });
-  const productSeriesToShow = showAllProducts ? filteredProductSeries : filteredProductSeries.slice(0, 6);
-
-  const budgetRows = stats.budgetSeries || [];
-  const totalSpent = budgetRows.reduce((sum, row) => sum + Number(row.spent || 0), 0);
-  const totalBudget = budgetRows.reduce((sum, row) => sum + Number(row.budget || 0), 0);
-  const balance = totalBudget - totalSpent;
-  const topCategory = (stats.categoryTotals || [])[0];
-  const topProductVariation = (stats.priceSeries || [])[0];
 
   const calcMovement = (series) => {
     const points = Array.isArray(series?.points) ? series.points.filter((p) => Number(p?.value || 0) > 0) : [];
@@ -5136,16 +5166,29 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   };
 
   const productMovements = (stats.priceSeries || []).map(calcMovement).filter(Boolean);
-  const topProductIncreases = productMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent).slice(0, 3);
-  const topProductDrops = productMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent).slice(0, 3);
-  const categoryMovements = (stats.categorySeries || []).map(calcMovement).filter(Boolean);
-  const topCategoryIncrease = categoryMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent)[0] || null;
-  const topCategoryDrop = categoryMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent)[0] || null;
-  const budgetWithBalance = budgetRows
-    .filter((row) => Number(row.budget || 0) > 0 || Number(row.spent || 0) > 0)
-    .map((row) => ({ ...row, balance: Number((Number(row.budget || 0) - Number(row.spent || 0)).toFixed(2)) }));
-  const mostEconomicalList = budgetWithBalance.filter((row) => row.balance > 0).sort((a, b) => b.balance - a.balance)[0] || null;
-  const mostOverspentList = budgetWithBalance.filter((row) => row.balance < 0).sort((a, b) => a.balance - b.balance)[0] || null;
+  const topProductIncreases = productMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent).slice(0, 5);
+  const topProductDrops = productMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent).slice(0, 5);
+
+  const categorySeriesAll = stats.categorySeries || [];
+  const selectedCategory = categorySeriesAll.find((s) => (s.itemName || s.name) === selectedCategoryName) || categorySeriesAll[0] || null;
+
+  const productOptions = filteredProductSeries;
+  const selectedProduct = productOptions.find((s) => (s.itemName || s.name) === selectedProductName) || productOptions[0] || null;
+
+  const consolidatedByListSeries = {
+    name:"Gasto executado",
+    color:"#6D28D9",
+    points:budgetRows.map((p) => ({
+      label:shortListLabel(p.label || p.listName),
+      date:p.date,
+      listName:p.listName || p.label,
+      value:Number(p.spent || 0),
+      meta:[
+        { label:"Lista", value:String(p.listName || p.label || "Lista") },
+        { label:"Orçamento", value:Number(p.budget || 0) > 0 ? formatBRL(p.budget) : "não definido" }
+      ]
+    }))
+  };
 
   const RankingMiniList = ({ title, rows = [], positive = true, emptyText = "Sem variação suficiente" }) => (
     <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
@@ -5161,36 +5204,45 @@ function PriceStatsScreen({ onBack, lists = [] }) {
 
   return (
     <div style={{
-      minHeight:"100vh",
+      minHeight:"100dvh",
+      width:"100%",
+      maxWidth:"100vw",
+      overflowX:"hidden",
       background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 48%,#F9FAFB 100%)",
-      padding:"22px 18px 34px",
+      paddingTop:"calc(env(safe-area-inset-top, 0px) + 10px)",
+      paddingRight:"max(14px, env(safe-area-inset-right, 0px))",
+      paddingBottom:"calc(env(safe-area-inset-bottom, 0px) + 28px)",
+      paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",
       boxSizing:"border-box",
       fontFamily:"inherit"
     }}>
-      <div style={{maxWidth:760,width:"100%",margin:"0 auto"}}>
+      <div style={{maxWidth:760,width:"100%",margin:"0 auto",boxSizing:"border-box",overflow:"visible"}}>
         <div style={{
           background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",
-          borderRadius:28,
-          padding:"20px 18px",
+          borderRadius:24,
+          padding:"16px 14px",
           color:"#FFFFFF",
           boxShadow:"0 18px 44px rgba(109,40,217,0.22)",
-          marginBottom:18
+          marginBottom:16,
+          boxSizing:"border-box",
+          maxWidth:"100%"
         }}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,minWidth:0}}>
             <button onClick={onBack} style={{
-              width:44,height:44,borderRadius:"50%",
+              width:42,height:42,borderRadius:"50%",
               border:"1px solid rgba(255,255,255,0.28)",
               background:"rgba(255,255,255,0.16)",
               color:"#FFFFFF",
-              fontSize:24,
+              fontSize:23,
               cursor:"pointer",
-              fontFamily:"inherit"
+              fontFamily:"inherit",
+              flexShrink:0
             }}>←</button>
             <div style={{textAlign:"center",flex:1,minWidth:0}}>
-              <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Estatísticas de preços</div>
-              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>Análise por lista, seção e produto</div>
+              <div style={{fontSize:"clamp(20px, 6vw, 24px)",fontWeight:900,lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Estatísticas de preços</div>
+              <div style={{fontSize:12,fontWeight:700,opacity:.86,marginTop:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Análise limpa por lista, seção e produto</div>
             </div>
-            <div style={{width:44}} />
+            <div style={{width:42,flexShrink:0}} />
           </div>
         </div>
 
@@ -5204,126 +5256,84 @@ function PriceStatsScreen({ onBack, lists = [] }) {
             boxShadow:"0 12px 28px rgba(17,24,39,0.06)"
           }}>
             <div style={{fontSize:42,marginBottom:8}}>📊</div>
-            <div style={{fontSize:20,fontWeight:900,color:"#111827",marginBottom:6}}>Ainda não há dados suficientes</div>
-            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>
-              As estatísticas aparecerão após você registrar preços nos itens comprados.
-            </div>
+            <div style={{fontSize:19,fontWeight:900,color:"#111827",marginBottom:6}}>Ainda não há estatísticas</div>
+            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>Finalize listas com preços para acompanhar a evolução dos gastos.</div>
           </div>
         ) : (
           <>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:11,fontWeight:900,color:"#6B7280",textTransform:"uppercase"}}>Gasto analisado</div>
-                <div style={{fontSize:19,fontWeight:950,color:"#111827",marginTop:4}}>{formatBRL(totalSpent)}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:11,fontWeight:900,color:"#6B7280",textTransform:"uppercase"}}>Saldo global</div>
-                <div style={{fontSize:19,fontWeight:950,color:balance >= 0 ? "#166534" : "#991B1B",marginTop:4}}>{totalBudget ? formatBRL(balance) : "Sem orçamento"}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:11,fontWeight:900,color:"#6B7280",textTransform:"uppercase"}}>Seção de maior peso</div>
-                <div style={{fontSize:15,fontWeight:950,color:"#111827",marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategory ? `${topCategory.category} · ${formatBRL(topCategory.total)}` : "Sem seção"}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:11,fontWeight:900,color:"#6B7280",textTransform:"uppercase"}}>Maior variação</div>
-                <div style={{fontSize:15,fontWeight:950,color:"#111827",marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topProductVariation ? `${topProductVariation.itemName} · ${formatBRL(topProductVariation.variation || 0)}` : "Sem variação"}</div>
-              </div>
-            </div>
-
-            {Array.isArray(stats.smartInsights) && stats.smartInsights.length ? (
-              <div style={{background:"#FFFFFF",border:"1px solid #EDE9FE",borderRadius:22,padding:14,marginBottom:12,boxShadow:"0 12px 26px rgba(109,40,217,0.06)"}}>
-                <div style={{fontWeight:950,color:"#4C1D95",fontSize:15,marginBottom:8}}>Insights rápidos e rankings</div>
-                <div style={{display:"grid",gap:8}}>
-                  {stats.smartInsights.slice(0,5).map((insight, idx) => (
-                    <div key={idx} style={{background:"#F9FAFB",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px"}}>
-                      <div style={{fontSize:13,fontWeight:950,color:"#111827"}}>{insight.title}</div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#6B7280",marginTop:3,lineHeight:1.35}}>{insight.text}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
-              <RankingMiniList title="🔺 Produtos que mais subiram" rows={topProductIncreases} positive={true} />
-              <RankingMiniList title="🔻 Produtos que mais caíram" rows={topProductDrops} positive={false} />
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:12,fontWeight:950,color:"#4C1D95",marginBottom:6}}>📈 Seção que mais cresceu</div>
-                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategoryIncrease ? `${topCategoryIncrease.name} · +${topCategoryIncrease.percent}%` : "Sem variação suficiente"}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
-                <div style={{fontSize:12,fontWeight:950,color:"#4C1D95",marginBottom:6}}>📉 Seção que mais caiu</div>
-                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategoryDrop ? `${topCategoryDrop.name} · ${topCategoryDrop.percent}%` : "Sem variação suficiente"}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #DCFCE7",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(22,101,52,0.05)"}}>
-                <div style={{fontSize:12,fontWeight:950,color:"#166534",marginBottom:6}}>🏆 Lista mais econômica</div>
-                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mostEconomicalList ? `${mostEconomicalList.label} · ${formatBRL(mostEconomicalList.balance)}` : "Sem economia apurada"}</div>
-              </div>
-              <div style={{background:"#FFFFFF",border:"1px solid #FEE2E2",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(153,27,27,0.05)"}}>
-                <div style={{fontSize:12,fontWeight:950,color:"#991B1B",marginBottom:6}}>⚠️ Lista que mais estourou</div>
-                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mostOverspentList ? `${mostOverspentList.label} · ${formatBRL(Math.abs(mostOverspentList.balance))}` : "Sem estouro apurado"}</div>
-              </div>
-            </div>
-
-            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista, na sequência em que foram criadas/finalizadas." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
-              <div style={{display:"grid",gap:8,marginTop:12}}>
-                {budgetRows.slice(-10).map((row, idx) => {
-                  const rowBalance = Number(row.budget || 0) - Number(row.spent || 0);
-                  const pct = row.budget > 0 ? Math.round((Number(row.spent || 0) / Number(row.budget || 1)) * 100) : 0;
-                  return (
-                    <div key={idx} style={{background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"10px 11px",fontSize:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-                        <strong style={{color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.label}</strong>
-                        <span style={{color:"#6B7280",fontWeight:800,whiteSpace:"nowrap"}}>{row.date}</span>
-                      </div>
-                      <div style={{height:8,background:"#E5E7EB",borderRadius:999,overflow:"hidden",marginTop:8}}>
-                        <div style={{height:"100%",width:`${Math.min(100, pct)}%`,background:pct > 100 ? "#DC2626" : "#6D28D9",borderRadius:999}} />
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:6,color:"#374151",fontWeight:800}}>
-                        <span>Orçamento: {row.budget ? formatBRL(row.budget) : "não definido"}</span>
-                        <span>Gasto: {formatBRL(row.spent)}</span>
-                      </div>
-                      {row.budget > 0 ? <div style={{marginTop:4,fontWeight:900,color:rowBalance >= 0 ? "#166534" : "#991B1B"}}>{rowBalance >= 0 ? "Economia: " : "Estouro: "}{formatBRL(Math.abs(rowBalance))}</div> : null}
-                    </div>
-                  );
-                })}
-              </div>
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="category" title="Gastos por seção" subtitle="Cada seção aparece como uma linha, acompanhando sua evolução lista a lista." openSection={openSection} setOpenSection={setOpenSection}>
-              <StatsLineChart series={stats.categorySeries || []} valueLabel="Gasto" emptyText="Ainda não há dados suficientes por seção." />
-              <StatsDetailList rows={(stats.categoryTotals || []).map(c => ({label:c.category, value:c.total}))} />
+            <StatsExpandableSection id="category" title="Gastos por seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
+              {categorySeriesAll.length ? (
+                <>
+                  <select
+                    value={selectedCategory ? (selectedCategory.itemName || selectedCategory.name) : ""}
+                    onChange={(e)=>setSelectedCategoryName(e.target.value)}
+                    style={{width:"100%",border:"1px solid #DDD6FE",borderRadius:16,padding:"12px 13px",fontSize:16,fontWeight:800,outline:"none",marginBottom:10,boxSizing:"border-box",fontFamily:"inherit",background:"#FFFFFF",color:"#111827"}}
+                  >
+                    {categorySeriesAll.map((sec) => {
+                      const name = sec.itemName || sec.name;
+                      return <option key={name} value={name}>{name}</option>;
+                    })}
+                  </select>
+                  <StatsLineChart series={selectedCategory ? [selectedCategory] : []} valueLabel="Gasto" emptyText="Ainda não há dados suficientes por seção." />
+                </>
+              ) : (
+                <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>Ainda não há dados suficientes por seção.</div>
+              )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Pesquise um item ou veja todos os produtos com histórico de variação." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
               <input
                 value={productQuery}
-                onChange={(e)=>setProductQuery(e.target.value)}
+                onChange={(e)=>{ setProductQuery(e.target.value); setSelectedProductName(""); }}
                 placeholder="Buscar produto..."
                 style={{width:"100%",border:"1px solid #DDD6FE",borderRadius:16,padding:"12px 13px",fontSize:16,fontWeight:700,outline:"none",marginBottom:10,boxSizing:"border-box",fontFamily:"inherit"}}
               />
-              {!filteredProductSeries.length ? (
+              {!productOptions.length ? (
                 <div style={{fontSize:13,color:"#6B7280",fontWeight:700,padding:"8px 2px"}}>Nenhum produto encontrado para este filtro.</div>
-              ) : productSeriesToShow.map((item, idx) => (
-                <div key={`${item.itemName}-${idx}`} style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:6}}>
-                    <div style={{fontWeight:900,fontSize:14,color:"#111827",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.itemName}</div>
-                    <div style={{fontSize:11,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 8px",whiteSpace:"nowrap"}}>var. {formatBRL(item.variation || 0)}</div>
+              ) : (
+                <>
+                  {showAllProducts ? (
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                      {productOptions.map((item) => {
+                        const name = item.itemName || item.name;
+                        const active = selectedProduct && (selectedProduct.itemName || selectedProduct.name) === name;
+                        return (
+                          <button key={name} onClick={()=>setSelectedProductName(name)} style={{border:active ? "1.5px solid #6D28D9" : "1px solid #E5E7EB",background:active ? "#F5F3FF" : "#FFFFFF",color:active ? "#5B21B6" : "#374151",borderRadius:999,padding:"7px 10px",fontSize:12,fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}>
+                            {name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:6}}>
+                      <div style={{fontWeight:900,fontSize:14,color:"#111827",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selectedProduct?.itemName || selectedProduct?.name || "Produto"}</div>
+                      <div style={{fontSize:11,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 8px",whiteSpace:"nowrap"}}>var. {formatBRL(selectedProduct?.variation || 0)}</div>
+                    </div>
+                    <StatsLineChart series={selectedProduct ? [selectedProduct] : []} valueLabel="Preço" emptyText="Dados insuficientes." />
                   </div>
-                  <StatsLineChart series={[item]} valueLabel="Preço" emptyText="Dados insuficientes." />
-                </div>
-              ))}
-              {filteredProductSeries.length > 6 ? (
-                <button onClick={()=>setShowAllProducts(v=>!v)} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:16,padding:"12px 14px",fontSize:14,fontWeight:950,fontFamily:"inherit",cursor:"pointer"}}>
-                  {showAllProducts ? "Mostrar menos produtos" : `Ver todos os produtos (${filteredProductSeries.length})`}
-                </button>
-              ) : null}
+
+                  {productOptions.length > 1 ? (
+                    <button onClick={()=>setShowAllProducts(v=>!v)} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:16,padding:"12px 14px",fontSize:14,fontWeight:950,fontFamily:"inherit",cursor:"pointer",marginBottom:12}}>
+                      {showAllProducts ? "Ocultar lista de produtos" : `Ver todos os produtos (${productOptions.length})`}
+                    </button>
+                  ) : null}
+
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+                    <RankingMiniList title="🔺 Produtos que mais subiram" rows={topProductIncreases} positive={true} />
+                    <RankingMiniList title="🔻 Produtos que mais caíram" rows={topProductDrops} positive={false} />
+                  </div>
+                </>
+              )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="year" title="Evolução mensal consolidada" subtitle="Linha mensal com o total das compras registradas." openSection={openSection} setOpenSection={setOpenSection}>
-              <StatsLineChart series={[{name:"Total mensal", color:"#6D28D9", points:stats.annualTotals || []}]} valueLabel="Total" emptyText="Ainda não há evolução mensal registrada." />
-              <StatsDetailList rows={(stats.annualTotals || []).map(m => ({label:m.label, value:m.value}))} />
+            <StatsExpandableSection id="year" title="Evolução mensal consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={[consolidatedByListSeries]} valueLabel="Total" emptyText="Ainda não há evolução consolidada registrada." />
             </StatsExpandableSection>
           </>
         )}
