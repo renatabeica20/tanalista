@@ -8115,7 +8115,6 @@ const [lists,setLists]=useState(()=>{
                       <>
                         <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.42)",zIndex:1,pointerEvents:"none"}} />
                         <div style={{position:"absolute",top:10,right:10,background:"#F3F4F6",color:"#6B7280",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #D1D5DB",zIndex:3}}>Em breve</div>
-                        <div style={{position:"absolute",right:-34,bottom:14,width:128,transform:"rotate(-35deg)",background:"rgba(107,114,128,0.14)",color:"#6B7280",fontSize:9,fontWeight:900,textTransform:"uppercase",letterSpacing:"0.6px",padding:"5px 0",zIndex:2,pointerEvents:"none"}}>Em breve</div>
                       </>
                     )}
                     <div style={{position:"relative",zIndex:2,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"grayscale(1) saturate(0) contrast(0.88)",opacity:m.active?1:0.54}}>
