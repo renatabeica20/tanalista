@@ -8077,16 +8077,55 @@ const [lists,setLists]=useState(()=>{
                 {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
                 {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
                 {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
-              ].map(m=>(
-                <div key={m.name} onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
-                  style={{background:m.active?"#FFFFFF":"rgba(255,255,255,0.86)",borderRadius:24,padding:"18px 14px",cursor:m.active?"pointer":"default",boxShadow:m.active?"0 18px 38px rgba(109,40,217,0.14)":"0 10px 26px rgba(17,24,39,0.06)",border:m.active?"1.5px solid #C4B5FD":"1px solid #E9D5FF",position:"relative",overflow:"hidden",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:154,transition:"transform .2s ease, box-shadow .2s ease"}}>
-                  {!m.active&&<div style={{position:"absolute",top:10,right:10,background:"#F5F3FF",color:"#6D28D9",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #DDD6FE"}}>Em breve</div>}
-                  {m.active&&<div style={{position:"absolute",top:10,right:10,background:"#ECFDF5",color:"#047857",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #A7F3D0"}}>Ativo</div>}
-                  <div style={{display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"saturate(0.92)",opacity:m.active?1:0.88}}><ModuleIcon type={m.iconType} size={68} active={m.active} /></div>
-                  <div style={{fontWeight:900,fontSize:15,color:"#111827",textAlign:"center",width:"100%"}}>{m.name}</div>
-                  <div style={{fontSize:12,color:"#6B7280",marginTop:4,lineHeight:1.35,textAlign:"center",width:"100%",fontWeight:600}}>{m.desc}</div>
-                </div>
-              ))}
+              ].map(m=>{
+                const inactive = !m.active;
+                return (
+                  <div
+                    key={m.name}
+                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
+                    aria-disabled={inactive}
+                    title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
+                    style={{
+                      background:m.active
+                        ? "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)"
+                        : "linear-gradient(180deg,#FFFFFF 0%,#F8F8F9 100%)",
+                      borderRadius:24,
+                      padding:m.active?"20px 14px":"18px 14px",
+                      cursor:m.active?"pointer":"not-allowed",
+                      boxShadow:m.active
+                        ? "0 22px 48px rgba(109,40,217,0.20), 0 4px 10px rgba(109,40,217,0.08)"
+                        : "0 8px 22px rgba(17,24,39,0.045)",
+                      border:m.active?"2px solid #B794F6":"1px solid #E5E7EB",
+                      position:"relative",
+                      overflow:"hidden",
+                      textAlign:"center",
+                      display:"flex",
+                      flexDirection:"column",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      minHeight:m.active?164:154,
+                      transform:m.active?"translateY(-2px)":"none",
+                      transition:"transform .2s ease, box-shadow .2s ease, border-color .2s ease",
+                    }}
+                  >
+                    {m.active&&(
+                      <div style={{position:"absolute",top:10,right:10,background:"#ECFDF5",color:"#047857",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #A7F3D0",zIndex:3}}>Ativo</div>
+                    )}
+                    {inactive&&(
+                      <>
+                        <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.42)",zIndex:1,pointerEvents:"none"}} />
+                        <div style={{position:"absolute",top:10,right:10,background:"#F3F4F6",color:"#6B7280",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #D1D5DB",zIndex:3}}>Em breve</div>
+                        <div style={{position:"absolute",right:-34,bottom:14,width:128,transform:"rotate(-35deg)",background:"rgba(107,114,128,0.14)",color:"#6B7280",fontSize:9,fontWeight:900,textTransform:"uppercase",letterSpacing:"0.6px",padding:"5px 0",zIndex:2,pointerEvents:"none"}}>Em breve</div>
+                      </>
+                    )}
+                    <div style={{position:"relative",zIndex:2,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"grayscale(1) saturate(0) contrast(0.88)",opacity:m.active?1:0.54}}>
+                      <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
+                    </div>
+                    <div style={{position:"relative",zIndex:2,fontWeight:900,fontSize:m.active?16:15,color:m.active?"#111827":"#6B7280",textAlign:"center",width:"100%"}}>{m.name}</div>
+                    <div style={{position:"relative",zIndex:2,fontSize:12,color:m.active?"#6B7280":"#9CA3AF",marginTop:4,lineHeight:1.35,textAlign:"center",width:"100%",fontWeight:600}}>{m.desc}</div>
+                  </div>
+                );
+              })}
             </div>
 
             <PriceStatsEntryCard onClick={()=>{rebuildLocalPriceHistoryFromLists(lists);setShowPriceStatsScreen(true);}} />
