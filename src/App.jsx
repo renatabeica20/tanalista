@@ -4791,6 +4791,9 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
   const height = 138;
   const pad = 18;
   const colors = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F97316", "#0F766E"];
+  const axisTicks = [min, min + spread / 2, max].map((value) => Number(value || 0));
+  const firstAxisLabel = cleanSeries[0]?.points?.[0]?.label || "";
+  const lastAxisLabel = cleanSeries[0]?.points?.[cleanSeries[0]?.points?.length - 1]?.label || "";
 
   if (!cleanSeries.length || cleanSeries.every((s) => s.points.length < 2)) {
     return <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>{emptyText}</div>;
@@ -4829,7 +4832,16 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
         </div>
       )}
 
-      <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:160,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:174,display:"block",overflow:"visible"}} onClick={(e)=>{ if(e.target.tagName === "svg") setTooltip(null); }}>
+        {axisTicks.map((tick, idx) => {
+          const y = height - pad - ((tick - min) * (height - pad * 2)) / spread;
+          return (
+            <g key={`axis-${idx}`}>
+              <line x1={pad} y1={y} x2={width-pad} y2={y} stroke={idx === 0 ? "#E5E7EB" : "#F3F4F6"} strokeWidth="1.5" strokeDasharray={idx === 0 ? "0" : "4 5"} />
+              <text x={pad - 4} y={y + 4} textAnchor="end" fontSize="9" fontWeight="800" fill="#9CA3AF">{formatBRL(tick).replace("R$", "")}</text>
+            </g>
+          );
+        })}
         <line x1={pad} y1={height-pad} x2={width-pad} y2={height-pad} stroke="#E5E7EB" strokeWidth="2" />
         <line x1={pad} y1={pad} x2={pad} y2={height-pad} stroke="#F3F4F6" strokeWidth="2" />
         {cleanSeries.map((s, si) => {
@@ -4866,6 +4878,12 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
             </g>
           );
         })}
+        {firstAxisLabel || lastAxisLabel ? (
+          <>
+            <text x={pad} y={height + 12} textAnchor="start" fontSize="9" fontWeight="800" fill="#6B7280">{String(firstAxisLabel).slice(0, 18)}</text>
+            <text x={width - pad} y={height + 12} textAnchor="end" fontSize="9" fontWeight="800" fill="#6B7280">{String(lastAxisLabel).slice(0, 18)}</text>
+          </>
+        ) : null}
       </svg>
 
       <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#6B7280",fontWeight:800,marginTop:-2}}>
@@ -5123,6 +5141,11 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const categoryMovements = (stats.categorySeries || []).map(calcMovement).filter(Boolean);
   const topCategoryIncrease = categoryMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent)[0] || null;
   const topCategoryDrop = categoryMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent)[0] || null;
+  const budgetWithBalance = budgetRows
+    .filter((row) => Number(row.budget || 0) > 0 || Number(row.spent || 0) > 0)
+    .map((row) => ({ ...row, balance: Number((Number(row.budget || 0) - Number(row.spent || 0)).toFixed(2)) }));
+  const mostEconomicalList = budgetWithBalance.filter((row) => row.balance > 0).sort((a, b) => b.balance - a.balance)[0] || null;
+  const mostOverspentList = budgetWithBalance.filter((row) => row.balance < 0).sort((a, b) => a.balance - b.balance)[0] || null;
 
   const RankingMiniList = ({ title, rows = [], positive = true, emptyText = "Sem variação suficiente" }) => (
     <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
@@ -5209,7 +5232,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
 
             {Array.isArray(stats.smartInsights) && stats.smartInsights.length ? (
               <div style={{background:"#FFFFFF",border:"1px solid #EDE9FE",borderRadius:22,padding:14,marginBottom:12,boxShadow:"0 12px 26px rgba(109,40,217,0.06)"}}>
-                <div style={{fontWeight:950,color:"#4C1D95",fontSize:15,marginBottom:8}}>Insights rápidos</div>
+                <div style={{fontWeight:950,color:"#4C1D95",fontSize:15,marginBottom:8}}>Insights rápidos e rankings</div>
                 <div style={{display:"grid",gap:8}}>
                   {stats.smartInsights.slice(0,5).map((insight, idx) => (
                     <div key={idx} style={{background:"#F9FAFB",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px"}}>
@@ -5231,6 +5254,14 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
                 <div style={{fontSize:12,fontWeight:950,color:"#4C1D95",marginBottom:6}}>📉 Seção que mais caiu</div>
                 <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategoryDrop ? `${topCategoryDrop.name} · ${topCategoryDrop.percent}%` : "Sem variação suficiente"}</div>
+              </div>
+              <div style={{background:"#FFFFFF",border:"1px solid #DCFCE7",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(22,101,52,0.05)"}}>
+                <div style={{fontSize:12,fontWeight:950,color:"#166534",marginBottom:6}}>🏆 Lista mais econômica</div>
+                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mostEconomicalList ? `${mostEconomicalList.label} · ${formatBRL(mostEconomicalList.balance)}` : "Sem economia apurada"}</div>
+              </div>
+              <div style={{background:"#FFFFFF",border:"1px solid #FEE2E2",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(153,27,27,0.05)"}}>
+                <div style={{fontSize:12,fontWeight:950,color:"#991B1B",marginBottom:6}}>⚠️ Lista que mais estourou</div>
+                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mostOverspentList ? `${mostOverspentList.label} · ${formatBRL(Math.abs(mostOverspentList.balance))}` : "Sem estouro apurado"}</div>
               </div>
             </div>
 
