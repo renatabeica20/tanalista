@@ -4309,7 +4309,7 @@ function getStatsListKey(list) {
 
 function getStatsOrderedLists(sourceLists = []) {
   return (Array.isArray(sourceLists) ? sourceLists : [])
-    .filter((list) => list && Array.isArray(list.categories))
+    .filter((list) => list && Array.isArray(list.categories) && !list.isDeleted)
     .map((list, index) => ({
       ...list,
       __statsOriginalIndex: index,
@@ -4358,17 +4358,26 @@ function getPriceStatsSummary(sourceLists = []) {
   });
 
   const validHistory = history
-    .map((h) => ({
-      ...h,
-      unitPrice: Number(h.unitPrice || h.totalPrice || 0),
-      totalPrice: Number(h.totalPrice || h.unitPrice || 0),
-      quantity: Number(h.quantity || 1),
-      createdAt: h.createdAt || new Date().toISOString(),
-      monthKey: h.monthKey || String(h.createdAt || new Date().toISOString()).slice(0, 7),
-      statsListOrder: listOrderByKey.get(String(h.listId || ""))?.order || listOrderByKey.get(String(h.listName || ""))?.order || 0,
-      statsListLabel: listOrderByKey.get(String(h.listId || ""))?.label || listOrderByKey.get(String(h.listName || ""))?.label || h.listName || "Lista",
-    }))
-    .filter((h) => h.itemKey && Number.isFinite(h.unitPrice) && h.unitPrice > 0);
+    .map((h) => {
+      const listLookup =
+        listOrderByKey.get(String(h.listId || "")) ||
+        listOrderByKey.get(String(h.sharedId || "")) ||
+        listOrderByKey.get(String(h.listName || ""));
+      return {
+        ...h,
+        unitPrice: Number(h.unitPrice || h.totalPrice || 0),
+        totalPrice: Number(h.totalPrice || h.unitPrice || 0),
+        quantity: Number(h.quantity || 1),
+        createdAt: h.createdAt || new Date().toISOString(),
+        monthKey: h.monthKey || String(h.createdAt || new Date().toISOString()).slice(0, 7),
+        statsListOrder: listLookup?.order || 0,
+        statsListLabel: listLookup?.label || h.listName || "Lista",
+        __isCurrentSavedListRecord: orderedListsForStats.length ? Boolean(listLookup) : true,
+      };
+    })
+    // A tela de estatísticas deve refletir as listas salvas no app.
+    // Registros órfãos de histórico local (ex.: cópias antigas, testes apagados) são ignorados.
+    .filter((h) => h.__isCurrentSavedListRecord && h.itemKey && Number.isFinite(h.unitPrice) && h.unitPrice > 0);
 
   const byMonth = new Map();
   validHistory.forEach((h) => {
@@ -5183,8 +5192,45 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const topProductIncreases = productMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent).slice(0, 5);
   const topProductDrops = productMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent).slice(0, 5);
 
+  const getSeriesMovement = (series) => {
+    const points = Array.isArray(series?.points) ? series.points.filter((p) => Number(p?.value || 0) > 0) : [];
+    if (points.length < 2) return { diff:0, percent:0 };
+    const first = Number(points[0]?.value || 0);
+    const last = Number(points[points.length - 1]?.value || 0);
+    const diff = Number((last - first).toFixed(2));
+    const percent = first ? Number(((diff / first) * 100).toFixed(1)) : 0;
+    return { diff, percent };
+  };
+
+  const withBackwardVariation = (series, label = "Variação") => {
+    if (!series) return null;
+    const points = Array.isArray(series.points) ? series.points : [];
+    return {
+      ...series,
+      points: points.map((p, idx) => {
+        const prev = idx > 0 ? points[idx - 1] : null;
+        const current = Number(p?.value || 0);
+        const previous = Number(prev?.value || 0);
+        const diff = prev ? Number((current - previous).toFixed(2)) : 0;
+        const percent = prev && previous ? Number(((diff / previous) * 100).toFixed(1)) : 0;
+        const meta = [...(Array.isArray(p?.meta) ? p.meta : [])];
+        if (prev) {
+          meta.push({
+            label,
+            value: `${diff >= 0 ? "+" : ""}${formatBRL(diff)}${previous ? ` (${diff >= 0 ? "+" : ""}${percent}%)` : ""}`,
+            color: diff > 0 ? "#FCA5A5" : diff < 0 ? "#BBF7D0" : "#FFFFFF"
+          });
+        } else {
+          meta.push({ label, value:"Primeiro registro", color:"#FFFFFF" });
+        }
+        return { ...p, meta };
+      })
+    };
+  };
+
   const categorySeriesAll = stats.categorySeries || [];
-  const selectedCategory = categorySeriesAll.find((s) => (s.itemName || s.name) === selectedCategoryName) || categorySeriesAll[0] || null;
+  const selectedCategoryRaw = categorySeriesAll.find((s) => (s.itemName || s.name) === selectedCategoryName) || categorySeriesAll[0] || null;
+  const selectedCategory = withBackwardVariation(selectedCategoryRaw, "Variação anterior");
 
   useEffect(() => {
     if (!selectedCategoryName && categorySeriesAll.length) {
@@ -5195,7 +5241,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const productOptions = filteredProductSeries;
   const selectedProduct = productOptions.find((s) => (s.itemName || s.name) === selectedProductName) || productOptions[0] || null;
 
-  const consolidatedByListSeries = {
+  const consolidatedByListSeries = withBackwardVariation({
     name:"Gasto executado",
     color:"#DC2626",
     points:budgetRows.map((p) => ({
@@ -5206,7 +5252,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
       valueColor:"#FCA5A5",
       meta:[]
     }))
-  };
+  }, "Variação anterior");
 
   const RankingMiniList = ({ title, rows = [], positive = true, emptyText = "Sem variação suficiente" }) => (
     <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
@@ -5306,7 +5352,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
             <StatsExpandableSection id="product" title="Evolução do Preço por Produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
               <input
                 value={productQuery}
-                onChange={(e)=>{ setProductQuery(e.target.value); setSelectedProductName(""); }}
+                onChange={(e)=>{ setProductQuery(e.target.value); setSelectedProductName(""); setShowAllProducts(false); }}
                 placeholder="Buscar produto..."
                 style={{width:"100%",border:"1px solid #DDD6FE",borderRadius:16,padding:"12px 13px",fontSize:16,fontWeight:700,outline:"none",marginBottom:10,boxSizing:"border-box",fontFamily:"inherit"}}
               />
@@ -5314,31 +5360,27 @@ function PriceStatsScreen({ onBack, lists = [] }) {
                 <div style={{fontSize:13,color:"#6B7280",fontWeight:700,padding:"8px 2px"}}>Nenhum produto encontrado para este filtro.</div>
               ) : (
                 <>
-                  {showAllProducts ? (
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-                      {productOptions.map((item) => {
-                        const name = item.itemName || item.name;
-                        const active = selectedProduct && (selectedProduct.itemName || selectedProduct.name) === name;
-                        return (
-                          <button key={name} onClick={()=>setSelectedProductName(name)} style={{border:active ? "1.5px solid #6D28D9" : "1px solid #E5E7EB",background:active ? "#F5F3FF" : "#FFFFFF",color:active ? "#5B21B6" : "#374151",borderRadius:999,padding:"7px 10px",fontSize:12,fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}>
-                            {name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-
-                  <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:6}}>
-                      <div style={{fontWeight:900,fontSize:14,color:"#111827",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selectedProduct?.itemName || selectedProduct?.name || "Produto"}</div>
-                      <div style={{fontSize:11,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 8px",whiteSpace:"nowrap"}}>var. {formatBRL(selectedProduct?.variation || 0)}</div>
-                    </div>
-                    <StatsLineChart series={selectedProduct ? [selectedProduct] : []} valueLabel="Preço" emptyText="Dados insuficientes." />
-                  </div>
+                  {(showAllProducts ? productOptions : (selectedProduct ? [selectedProduct] : [])).map((productSeries) => {
+                    const movement = getSeriesMovement(productSeries);
+                    const variationColor = movement.diff > 0 ? "#991B1B" : movement.diff < 0 ? "#166534" : "#6D28D9";
+                    const variationBg = movement.diff > 0 ? "#FEE2E2" : movement.diff < 0 ? "#DCFCE7" : "#F5F3FF";
+                    const variationBorder = movement.diff > 0 ? "#FCA5A5" : movement.diff < 0 ? "#86EFAC" : "#DDD6FE";
+                    return (
+                      <div key={productSeries?.itemName || productSeries?.name} style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
+                        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:6}}>
+                          <div style={{fontWeight:900,fontSize:14,color:"#111827",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{productSeries?.itemName || productSeries?.name || "Produto"}</div>
+                          <div style={{fontSize:11,fontWeight:900,color:variationColor,background:variationBg,border:`1px solid ${variationBorder}`,borderRadius:999,padding:"4px 8px",whiteSpace:"nowrap"}}>
+                            {movement.diff > 0 ? "↑" : movement.diff < 0 ? "↓" : "→"} var. {movement.diff >= 0 ? "+" : ""}{formatBRL(movement.diff)}
+                          </div>
+                        </div>
+                        <StatsLineChart series={productSeries ? [productSeries] : []} valueLabel="Preço" emptyText="Dados insuficientes." />
+                      </div>
+                    );
+                  })}
 
                   {productOptions.length > 1 ? (
                     <button onClick={()=>setShowAllProducts(v=>!v)} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:16,padding:"12px 14px",fontSize:14,fontWeight:950,fontFamily:"inherit",cursor:"pointer",marginBottom:12}}>
-                      {showAllProducts ? "Ocultar lista de produtos" : `Ver todos os produtos (${productOptions.length})`}
+                      {showAllProducts ? "Mostrar apenas um produto" : `Ver todos os produtos (${productOptions.length})`}
                     </button>
                   ) : null}
 
@@ -7404,6 +7446,12 @@ const [lists,setLists]=useState(()=>{
       importedFrom:null,
       restoredFromCloud:false,
       createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      finishedAt:null,
+      completedAt:null,
+      finalizedAt:null,
+      isFinished:false,
+      status:"open",
       total:0,
       categories:(list.categories||[]).map(cat=>({
         ...cat,
