@@ -4568,13 +4568,12 @@ function getPriceStatsSummary(sourceLists = []) {
     });
   });
 
-  const topCategories = Array.from(categoryListMap.entries())
+  const allCategoriesForStats = Array.from(categoryListMap.entries())
     .map(([category, points]) => ({ category, total: points.reduce((sum, p) => sum + Number(p.value || 0), 0) }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 6)
+    .sort((a, b) => String(a.category || "").localeCompare(String(b.category || ""), "pt-BR"))
     .map((c) => c.category);
 
-  const categorySeries = topCategories.map((category) => {
+  const categorySeries = allCategoriesForStats.map((category) => {
     const pointMap = new Map((categoryListMap.get(category) || []).map((p) => [p.label, p]));
     const points = orderedListsForStats.map((list, idx) => {
       const label = getStatsListLabel(list, idx);
@@ -4793,7 +4792,7 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
   const colors = ["#6D28D9", "#16A34A", "#DC2626", "#2563EB", "#F97316", "#0F766E"];
   const axisTicks = [min, min + spread / 2, max].map((value) => Number(value || 0));
   const axisPoints = cleanSeries[0]?.points || [];
-  const labelStep = axisPoints.length <= 5 ? 1 : Math.ceil(axisPoints.length / 5);
+  const labelStep = 1;
 
   if (!cleanSeries.length || cleanSeries.every((s) => s.points.length < 2)) {
     return <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>{emptyText}</div>;
@@ -4830,7 +4829,7 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
         }}>
           <div style={{fontWeight:950,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tooltip.listName || tooltip.seriesName}</div>
           <div style={{opacity:.84,marginTop:2}}>{tooltip.date || tooltip.label || ""}</div>
-          <div style={{marginTop:5,color:"#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
+          <div style={{marginTop:5,color:tooltip.valueColor || "#C4B5FD"}}>{valueLabel}: {formatBRL(tooltip.value)}</div>
           {Array.isArray(tooltip.meta) && tooltip.meta.length ? (
             <div style={{marginTop:6,paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.16)",display:"grid",gap:3}}>
               {tooltip.meta.map((row, idx) => (
@@ -4879,6 +4878,7 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
                       x:p.x,
                       y:p.y,
                       value:p.value,
+                      valueColor:p.valueColor,
                       label:p.label,
                       date:p.date,
                       listName:p.listName,
@@ -4894,9 +4894,21 @@ function StatsLineChart({ series = [], emptyText = "Sem dados suficientes.", val
         {axisPoints.map((p, idx) => {
           if (idx !== 0 && idx !== axisPoints.length - 1 && idx % labelStep !== 0) return null;
           const x = axisPoints.length <= 1 ? width / 2 : pad + (idx * (width - pad * 2)) / Math.max(1, axisPoints.length - 1);
-          const label = String(p.label || p.listName || "").slice(0, 10);
+          const rawLabel = String(p.label || p.listName || "").replace(/\s+/g, " ").trim();
+          const maxChars = axisPoints.length >= 10 ? 4 : axisPoints.length >= 7 ? 6 : axisPoints.length >= 5 ? 8 : 11;
+          const label = rawLabel.length > maxChars ? rawLabel.slice(0, maxChars).trim() + "…" : rawLabel;
+          const rotate = axisPoints.length >= 5;
           return (
-            <text key={`xlabel-${idx}`} x={x} y={height + 13} textAnchor="middle" fontSize="9" fontWeight="900" fill="#6B7280">
+            <text
+              key={`xlabel-${idx}`}
+              x={x}
+              y={height + (rotate ? 17 : 13)}
+              textAnchor={rotate ? "end" : "middle"}
+              fontSize={axisPoints.length >= 9 ? "7" : "9"}
+              fontWeight="900"
+              fill="#6B7280"
+              transform={rotate ? `rotate(-32 ${x} ${height + 17})` : undefined}
+            >
               {label}
             </text>
           );
@@ -5101,9 +5113,11 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const [selectedCategoryName, setSelectedCategoryName] = useState("");
   const stats = getPriceStatsSummary(lists);
 
-  const shortListLabel = (value, fallback = "Lista") => {
-    const raw = String(value || fallback).trim();
-    return raw.length > 10 ? raw.slice(0, 10) + "…" : raw;
+  const shortListLabel = (value, fallback = "Lista", total = 1) => {
+    const raw = String(value || fallback).trim() || fallback;
+    const clean = raw.replace(/\s+/g, " ").trim();
+    const max = total >= 10 ? 4 : total >= 7 ? 6 : total >= 5 ? 8 : 12;
+    return clean.length > max ? clean.slice(0, max).trim() + "…" : clean;
   };
 
   const budgetRows = stats.budgetSeries || [];
@@ -5115,7 +5129,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
       const budget = Number(p.budget || 0);
       const balance = Number((budget - spent).toFixed(2));
       return {
-        label:shortListLabel(p.label || p.listName),
+        label:shortListLabel(p.label || p.listName, "Lista", budgetRows.length),
         date:p.date,
         listName:p.listName || p.label,
         value:spent,
@@ -5130,7 +5144,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
     name:"Orçamento",
     color:"#16A34A",
     points:budgetRows.filter((p)=>Number(p.budget || 0)>0).map((p) => ({
-      label:shortListLabel(p.label || p.listName),
+      label:shortListLabel(p.label || p.listName, "Lista", budgetRows.length),
       date:p.date,
       listName:p.listName || p.label,
       value:Number(p.budget || 0),
@@ -5172,21 +5186,25 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const categorySeriesAll = stats.categorySeries || [];
   const selectedCategory = categorySeriesAll.find((s) => (s.itemName || s.name) === selectedCategoryName) || categorySeriesAll[0] || null;
 
+  useEffect(() => {
+    if (!selectedCategoryName && categorySeriesAll.length) {
+      setSelectedCategoryName(categorySeriesAll[0].itemName || categorySeriesAll[0].name || "");
+    }
+  }, [selectedCategoryName, categorySeriesAll]);
+
   const productOptions = filteredProductSeries;
   const selectedProduct = productOptions.find((s) => (s.itemName || s.name) === selectedProductName) || productOptions[0] || null;
 
   const consolidatedByListSeries = {
     name:"Gasto executado",
-    color:"#6D28D9",
+    color:"#DC2626",
     points:budgetRows.map((p) => ({
-      label:shortListLabel(p.label || p.listName),
+      label:shortListLabel(p.label || p.listName, "Lista", budgetRows.length),
       date:p.date,
       listName:p.listName || p.label,
       value:Number(p.spent || 0),
-      meta:[
-        { label:"Lista", value:String(p.listName || p.label || "Lista") },
-        { label:"Orçamento", value:Number(p.budget || 0) > 0 ? formatBRL(p.budget) : "não definido" }
-      ]
+      valueColor:"#FCA5A5",
+      meta:[]
     }))
   };
 
@@ -5261,11 +5279,11 @@ function PriceStatsScreen({ onBack, lists = [] }) {
           </div>
         ) : (
           <>
-            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="budget" title="Orçamento x Gasto" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="category" title="Gastos por seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="category" title="Gasto por Seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
               {categorySeriesAll.length ? (
                 <>
                   <select
@@ -5285,7 +5303,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="product" title="Evolução do Preço por Produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
               <input
                 value={productQuery}
                 onChange={(e)=>{ setProductQuery(e.target.value); setSelectedProductName(""); }}
@@ -5332,8 +5350,8 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="year" title="Evolução mensal consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
-              <StatsLineChart series={[consolidatedByListSeries]} valueLabel="Total" emptyText="Ainda não há evolução consolidada registrada." />
+            <StatsExpandableSection id="year" title="Evolução Mensal Consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
+              <StatsLineChart series={[consolidatedByListSeries]} valueLabel="Valor gasto" emptyText="Ainda não há evolução consolidada registrada." />
             </StatsExpandableSection>
           </>
         )}
@@ -8160,7 +8178,11 @@ const [lists,setLists]=useState(()=>{
                         <div style={{width:42,height:42,borderRadius:16,background:"linear-gradient(135deg,#F5F3FF,#EEF2FF)",border:"1px solid #DDD6FE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{icons[list.type]||"📦"}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontWeight:900,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{list.name||"Lista sem nome"}</div>
-                          <div style={{fontSize:12,color:"#6B7280",marginTop:3,fontWeight:700}}>{formatListDate(list.createdAt)} · {finished?"Finalizada":"Em aberto"} · {fmtR(stats.fullTotal||list.total||0)}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
+                            <span style={{fontSize:12,color:"#6B7280",fontWeight:700}}>{formatListDate(list.createdAt)}</span>
+                            <span style={{fontSize:11,fontWeight:900,color:finished?"#B91C1C":"#047857",background:finished?"#FEE2E2":"#ECFDF5",border:"1px solid "+(finished?"#FCA5A5":"#A7F3D0"),borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>{finished?"Finalizada":"Em aberto"}</span>
+                            <span style={{fontSize:12,color:"#6B7280",fontWeight:800}}>{fmtR(stats.fullTotal||list.total||0)}</span>
+                          </div>
                           {originMeta&&<div style={{fontSize:11,color:originMeta.type==="received"?"#4C1D95":"#047857",fontWeight:800,marginTop:4}}>{originMeta.icon} {originMeta.text}</div>}
                         </div>
                         <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
