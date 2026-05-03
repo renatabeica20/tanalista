@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.58.1 - Correção emergencial: restaura estabilidade, mantém 7.57 e remove estatísticas instáveis
+// Etapa 7.59 - Base estável das estatísticas: ordenação lógica por lista e preparação segura dos dados
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -4276,6 +4276,58 @@ function PriceMemoryLine({ itemName }) {
 }
 
 
+
+function getStatsComparableDate(value) {
+  const t = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(t) && t > 0 ? t : 0;
+}
+
+function getStatsListOrderStamp(list, fallbackIndex = 0) {
+  const candidates = [
+    list?.statsSequence,
+    list?.listSequence,
+    list?.sequence,
+    list?.finishedAt,
+    list?.completedAt,
+    list?.createdAt,
+    list?.updatedAt,
+    list?.lastLocalUpdateAt,
+    list?.lastSyncedAt,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const t = getStatsComparableDate(value);
+    if (t) return t;
+  }
+  return fallbackIndex + 1;
+}
+
+function getStatsListKey(list) {
+  return String(list?.id || list?.sharedId || list?.name || "").trim();
+}
+
+function getStatsOrderedLists(sourceLists = []) {
+  return (Array.isArray(sourceLists) ? sourceLists : [])
+    .filter((list) => list && Array.isArray(list.categories))
+    .map((list, index) => ({
+      ...list,
+      __statsOriginalIndex: index,
+      __statsOrder: getStatsListOrderStamp(list, index),
+    }))
+    .sort((a, b) => {
+      const ao = Number(a.__statsOrder || 0);
+      const bo = Number(b.__statsOrder || 0);
+      if (ao !== bo) return ao - bo;
+      return Number(a.__statsOriginalIndex || 0) - Number(b.__statsOriginalIndex || 0);
+    });
+}
+
+function getStatsListLabel(list, index = 0) {
+  const name = String(list?.name || "Lista").trim() || "Lista";
+  return `${index + 1}. ${name}`;
+}
+
 function getPriceStatsSummary(sourceLists = []) {
   const history = readPriceHistory();
   if (!history.length) {
@@ -4294,6 +4346,17 @@ function getPriceStatsSummary(sourceLists = []) {
     };
   }
 
+  const orderedListsForStats = getStatsOrderedLists(sourceLists);
+  const listOrderByKey = new Map();
+  orderedListsForStats.forEach((list, index) => {
+    const keys = [getStatsListKey(list), list?.id, list?.sharedId, list?.name].filter(Boolean).map(String);
+    keys.forEach((key) => {
+      if (key && !listOrderByKey.has(key)) {
+        listOrderByKey.set(key, { order: index + 1, label: getStatsListLabel(list, index), stamp: list.__statsOrder });
+      }
+    });
+  });
+
   const validHistory = history
     .map((h) => ({
       ...h,
@@ -4302,6 +4365,8 @@ function getPriceStatsSummary(sourceLists = []) {
       quantity: Number(h.quantity || 1),
       createdAt: h.createdAt || new Date().toISOString(),
       monthKey: h.monthKey || String(h.createdAt || new Date().toISOString()).slice(0, 7),
+      statsListOrder: listOrderByKey.get(String(h.listId || ""))?.order || listOrderByKey.get(String(h.listName || ""))?.order || 0,
+      statsListLabel: listOrderByKey.get(String(h.listId || ""))?.label || listOrderByKey.get(String(h.listName || ""))?.label || h.listName || "Lista",
     }))
     .filter((h) => h.itemKey && Number.isFinite(h.unitPrice) && h.unitPrice > 0);
 
@@ -4325,7 +4390,12 @@ function getPriceStatsSummary(sourceLists = []) {
     .map((entries) => {
       const ordered = entries
         .slice()
-        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+        .sort((a, b) => {
+          const ao = Number(a.statsListOrder || 0);
+          const bo = Number(b.statsListOrder || 0);
+          if (ao && bo && ao !== bo) return ao - bo;
+          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+        });
       const prices = ordered.map((h) => Number(h.unitPrice || h.totalPrice || 0)).filter((n) => Number.isFinite(n) && n > 0);
       if (!prices.length) return null;
       const first = prices[0];
@@ -4395,16 +4465,21 @@ function getPriceStatsSummary(sourceLists = []) {
     .map((entries) => {
       const ordered = entries
         .slice()
-        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+        .sort((a, b) => {
+          const ao = Number(a.statsListOrder || 0);
+          const bo = Number(b.statsListOrder || 0);
+          if (ao && bo && ao !== bo) return ao - bo;
+          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+        });
       if (ordered.length < 2) return null;
       return {
         itemName: ordered[ordered.length - 1].itemName,
         points: ordered.map((h) => {
           const d = new Date(h.createdAt || Date.now());
           return {
-            label: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : (h.monthKey || ""),
+            label: h.statsListLabel || h.listName || (Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : (h.monthKey || "")),
             date: Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : (h.monthKey || ""),
-            listName: h.listName || "Lista",
+            listName: h.statsListLabel || h.listName || "Lista",
             value: Number(h.unitPrice || h.totalPrice || 0),
           };
         }).filter((p) => Number.isFinite(p.value) && p.value > 0),
@@ -4448,9 +4523,8 @@ function getPriceStatsSummary(sourceLists = []) {
     return Number((price * (Number.isFinite(qty) && qty > 0 ? qty : 1)).toFixed(2));
   };
 
-  const budgetSeries = (Array.isArray(sourceLists) ? sourceLists : [])
-    .filter((list) => list && Array.isArray(list.categories))
-    .map((list) => {
+  const budgetSeries = orderedListsForStats
+    .map((list, index) => {
       const spent = (list.categories || []).reduce((sum, cat) => {
         return sum + (Array.isArray(cat.items) ? cat.items : []).reduce((s, item) => s + calcStatsItemTotal(item), 0);
       }, 0);
@@ -4458,16 +4532,17 @@ function getPriceStatsSummary(sourceLists = []) {
       const d = new Date(dateRaw || Date.now());
       const dateLabel = Number.isFinite(d.getTime()) ? d.toLocaleDateString("pt-BR") : "";
       return {
-        label: list.name || "Lista",
+        label: getStatsListLabel(list, index),
         listName: list.name || "Lista",
         date: dateLabel,
         dateRaw: dateRaw || new Date().toISOString(),
+        statsOrder: Number(list.__statsOrder || index + 1),
         budget: Number(list.budget || 0),
         spent: Number((Number(list.total || 0) > 0 ? Number(list.total || 0) : spent).toFixed(2)),
       };
     })
     .filter((row) => row.spent > 0 || row.budget > 0)
-    .sort((a, b) => String(a.dateRaw || "").localeCompare(String(b.dateRaw || "")))
+    .sort((a, b) => Number(a.statsOrder || 0) - Number(b.statsOrder || 0) || String(a.dateRaw || "").localeCompare(String(b.dateRaw || "")))
     .slice(-12);
 
   const categoryMonthMap = new Map();
@@ -5035,7 +5110,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
           </div>
         ) : (
           <>
-            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista, na sequência em que foram criadas/finalizadas." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
               <div style={{display:"grid",gap:8,marginTop:12}}>
                 {(stats.budgetSeries || []).slice(-8).map((row, idx) => {
@@ -5057,7 +5132,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               </div>
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Veja a variação do preço unitário dos produtos ao longo das compras." openSection={openSection} setOpenSection={setOpenSection}>
+            <StatsExpandableSection id="product" title="Evolução do preço por produto" subtitle="Veja a variação do preço unitário dos produtos seguindo a sequência lógica das listas analisadas." openSection={openSection} setOpenSection={setOpenSection}>
               {(stats.priceSeries || []).slice(0,6).map((item, idx) => (
                 <div key={idx} style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:10}}>
                   <div style={{fontWeight:900,fontSize:14,marginBottom:6,color:"#111827"}}>
