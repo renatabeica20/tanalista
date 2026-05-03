@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.60 - Gráficos estáveis de orçamento, seções e produtos com filtros leves
+// Etapa 7.61 - Estatísticas inteligentes com rankings, busca e insights reforçados
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -5100,6 +5100,42 @@ function PriceStatsScreen({ onBack, lists = [] }) {
   const topCategory = (stats.categoryTotals || [])[0];
   const topProductVariation = (stats.priceSeries || [])[0];
 
+  const calcMovement = (series) => {
+    const points = Array.isArray(series?.points) ? series.points.filter((p) => Number(p?.value || 0) > 0) : [];
+    if (points.length < 2) return null;
+    const first = Number(points[0]?.value || 0);
+    const last = Number(points[points.length - 1]?.value || 0);
+    if (!first || !Number.isFinite(first) || !Number.isFinite(last)) return null;
+    const diff = Number((last - first).toFixed(2));
+    const percent = Number(((diff / first) * 100).toFixed(1));
+    return {
+      name: series?.itemName || series?.name || "Item",
+      first,
+      last,
+      diff,
+      percent,
+    };
+  };
+
+  const productMovements = (stats.priceSeries || []).map(calcMovement).filter(Boolean);
+  const topProductIncreases = productMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent).slice(0, 3);
+  const topProductDrops = productMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent).slice(0, 3);
+  const categoryMovements = (stats.categorySeries || []).map(calcMovement).filter(Boolean);
+  const topCategoryIncrease = categoryMovements.filter((m) => m.diff > 0).sort((a, b) => b.percent - a.percent)[0] || null;
+  const topCategoryDrop = categoryMovements.filter((m) => m.diff < 0).sort((a, b) => a.percent - b.percent)[0] || null;
+
+  const RankingMiniList = ({ title, rows = [], positive = true, emptyText = "Sem variação suficiente" }) => (
+    <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
+      <div style={{fontSize:12,fontWeight:950,color:positive ? "#991B1B" : "#166534",marginBottom:8}}>{title}</div>
+      {!rows.length ? <div style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>{emptyText}</div> : rows.map((row, idx) => (
+        <div key={`${title}-${row.name}-${idx}`} style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",padding:idx ? "7px 0 0" : "0",borderTop:idx ? "1px solid #F3F4F6" : "none",fontSize:12}}>
+          <span style={{fontWeight:900,color:"#111827",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.name}</span>
+          <span style={{fontWeight:950,color:row.diff >= 0 ? "#991B1B" : "#166534",whiteSpace:"nowrap"}}>{row.diff >= 0 ? "+" : ""}{row.percent}%</span>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{
       minHeight:"100vh",
@@ -5175,7 +5211,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               <div style={{background:"#FFFFFF",border:"1px solid #EDE9FE",borderRadius:22,padding:14,marginBottom:12,boxShadow:"0 12px 26px rgba(109,40,217,0.06)"}}>
                 <div style={{fontWeight:950,color:"#4C1D95",fontSize:15,marginBottom:8}}>Insights rápidos</div>
                 <div style={{display:"grid",gap:8}}>
-                  {stats.smartInsights.slice(0,3).map((insight, idx) => (
+                  {stats.smartInsights.slice(0,5).map((insight, idx) => (
                     <div key={idx} style={{background:"#F9FAFB",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px"}}>
                       <div style={{fontSize:13,fontWeight:950,color:"#111827"}}>{insight.title}</div>
                       <div style={{fontSize:12,fontWeight:700,color:"#6B7280",marginTop:3,lineHeight:1.35}}>{insight.text}</div>
@@ -5184,6 +5220,19 @@ function PriceStatsScreen({ onBack, lists = [] }) {
                 </div>
               </div>
             ) : null}
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
+              <RankingMiniList title="🔺 Produtos que mais subiram" rows={topProductIncreases} positive={true} />
+              <RankingMiniList title="🔻 Produtos que mais caíram" rows={topProductDrops} positive={false} />
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
+                <div style={{fontSize:12,fontWeight:950,color:"#4C1D95",marginBottom:6}}>📈 Seção que mais cresceu</div>
+                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategoryIncrease ? `${topCategoryIncrease.name} · +${topCategoryIncrease.percent}%` : "Sem variação suficiente"}</div>
+              </div>
+              <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12,boxShadow:"0 8px 20px rgba(17,24,39,0.04)"}}>
+                <div style={{fontSize:12,fontWeight:950,color:"#4C1D95",marginBottom:6}}>📉 Seção que mais caiu</div>
+                <div style={{fontSize:13,fontWeight:950,color:"#111827",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{topCategoryDrop ? `${topCategoryDrop.name} · ${topCategoryDrop.percent}%` : "Sem variação suficiente"}</div>
+              </div>
+            </div>
 
             <StatsExpandableSection id="budget" title="Orçamento x gastos" subtitle="Compare o limite definido com o gasto real de cada lista, na sequência em que foram criadas/finalizadas." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
