@@ -187,10 +187,13 @@ async function findAppUserByName(name) {
   const clean = String(name || "").trim();
   if (!clean || !hasSupabaseConfig()) return null;
 
+  const normalized = normalizeAuthName(clean);
+
   const tryFetch = async (filter) => {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?${filter}&select=id,nome,device_id&limit=1`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?${filter}&select=id,nome,device_id,nome_normalizado&limit=1`, {
       method: "GET",
-      headers: supabaseHeaders(),
+      headers: supabaseHeaders({ "Cache-Control": "no-store" }),
+      cache: "no-store",
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -198,7 +201,9 @@ async function findAppUserByName(name) {
   };
 
   try {
+    // A identidade principal agora é o nome normalizado, protegido por índice único no Supabase.
     return (
+      await tryFetch(`nome_normalizado=eq.${encodeURIComponent(normalized)}`) ||
       await tryFetch(`nome=eq.${encodeURIComponent(clean)}`) ||
       await tryFetch(`nome=ilike.${encodeURIComponent(clean)}`)
     );
@@ -305,17 +310,48 @@ async function registerAppUser(name, { force = false } = {}) {
       return foundByName.id;
     }
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+    const nomeNormalizado = normalizeAuthName(clean);
+    const payload = {
+      nome: clean,
+      nome_normalizado: nomeNormalizado,
+      device_id,
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?on_conflict=nome_normalizado`, {
       method: "POST",
-      headers: supabaseHeaders({ Prefer: "return=representation" }),
-      body: JSON.stringify({
-        nome: clean,
-        device_id,
+      headers: supabaseHeaders({
+        Prefer: "resolution=merge-duplicates,return=representation",
       }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      // Se o banco bloquear duplicidade por corrida de requisições, reaproveita o usuário já existente.
+      if (res.status === 409 || /duplicate key|users_nome_normalizado_unique|nome_normalizado/i.test(text)) {
+        const existing = await findAppUserByName(clean);
+        if (existing?.id) {
+          saveAppUserId(existing.id);
+          setStoredValue(APP_USER_REGISTERED_KEY, device_id);
+          if (existing.nome) saveAppUserName(existing.nome);
+          return existing.id;
+        }
+      }
+      // Compatibilidade temporária: se a coluna ainda não existir em algum ambiente, tenta o fluxo antigo.
+      if (/nome_normalizado|column/i.test(text)) {
+        const fallbackRes = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+          method: "POST",
+          headers: supabaseHeaders({ Prefer: "return=representation" }),
+          body: JSON.stringify({ nome: clean, device_id }),
+        });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json().catch(() => []);
+          const fallbackCreated = Array.isArray(fallbackData) ? fallbackData[0] : fallbackData;
+          if (fallbackCreated?.id) saveAppUserId(fallbackCreated.id);
+          setStoredValue(APP_USER_REGISTERED_KEY, device_id);
+          return fallbackCreated?.id || true;
+        }
+      }
       console.warn("Não foi possível registrar usuário:", res.status, text);
       return false;
     }
@@ -323,6 +359,7 @@ async function registerAppUser(name, { force = false } = {}) {
     const data = await res.json().catch(() => []);
     const created = Array.isArray(data) ? data[0] : data;
     if (created?.id) saveAppUserId(created.id);
+    if (created?.nome) saveAppUserName(created.nome);
     setStoredValue(APP_USER_REGISTERED_KEY, device_id);
     return created?.id || true;
   } catch (err) {
