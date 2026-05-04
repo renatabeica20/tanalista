@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.63 - Estatísticas de preços com UX limpa, safe area iPhone e gráficos focados
+// Etapa 7.68 - Fluxo Itens em Casa com salvamento seguro, leitura/edição e ajuda contextual
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -5565,7 +5565,7 @@ function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
     const sameUnit = normalizeUnitValue(item.unit) === normalizeUnitValue(match.unit);
     const itemQty = Number(item.qty || 1);
     const pantryQty = Number(match.qty || 1);
-    const pantryNote = `Já tem na despensa: ${formatQtyUnit(match.qty, match.unit)}`;
+    const pantryNote = `Já tem na Itens em Casa: ${formatQtyUnit(match.qty, match.unit)}`;
 
     if (sameUnit && Number.isFinite(itemQty) && Number.isFinite(pantryQty)) {
       if (pantryQty >= itemQty) {
@@ -5594,6 +5594,33 @@ function formatPantryDate(value) {
   } catch {
     return "";
   }
+}
+
+
+function HelpIcon({ text = "" }) {
+  return (
+    <span
+      title={text}
+      onClick={(e)=>{ e.stopPropagation(); if (text) alert(text); }}
+      style={{
+        display:"inline-flex",
+        alignItems:"center",
+        justifyContent:"center",
+        width:18,
+        height:18,
+        borderRadius:"50%",
+        background:"#EEF2FF",
+        color:"#5B21B6",
+        fontSize:12,
+        fontWeight:900,
+        cursor:"pointer",
+        border:"1px solid #C7D2FE",
+        flexShrink:0
+      }}
+    >
+      i
+    </span>
+  );
 }
 
 export default function App(){
@@ -5635,6 +5662,8 @@ const [lists,setLists]=useState(()=>{
   const [pantryCompared,setPantryCompared]=useState(false);
   const [pantryEditingId,setPantryEditingId]=useState(null);
   const [pantryReviewEdit,setPantryReviewEdit]=useState(null);
+  const [pantryReviewDirty,setPantryReviewDirty]=useState(false);
+  const [pantryReviewReadOnly,setPantryReviewReadOnly]=useState(false);
   const [showPantryComparisonDetails,setShowPantryComparisonDetails]=useState(false);
   const [currentInput,setCurrentInput]=useState("");
   const [editingListId,setEditingListId]=useState(null);
@@ -5845,6 +5874,8 @@ const [lists,setLists]=useState(()=>{
     setPantryReviewCategories([]);
     setPantryEditingId(null);
     setPantryReviewEdit(null);
+    setPantryReviewDirty(false);
+    setPantryReviewReadOnly(false);
   }, []);
 
   const openPantryCreator = useCallback(() => {
@@ -5853,8 +5884,52 @@ const [lists,setLists]=useState(()=>{
     setPantryReviewCategories([]);
     setPantryEditingId(null);
     setPantryReviewEdit(null);
+    setPantryReviewDirty(false);
+    setPantryReviewReadOnly(false);
     setScreen("pantry_create");
   }, []);
+
+
+  const openPantryViewer = useCallback(() => {
+    if (!activePantry) return;
+    setPantryEditingId(activePantry.id);
+    setPantryReviewCategories(activePantry.categories || []);
+    setPantryReviewEdit(null);
+    setPantryReviewDirty(false);
+    setPantryReviewReadOnly(true);
+    setScreen("pantry_review");
+  }, [activePantry]);
+
+  const openPantryEditor = useCallback(() => {
+    if (!activePantry) return;
+    setPantryEditingId(activePantry.id);
+    setPantryReviewCategories(activePantry.categories || []);
+    setPantryReviewEdit(null);
+    setPantryReviewDirty(false);
+    setPantryReviewReadOnly(false);
+    setScreen("pantry_review");
+  }, [activePantry]);
+
+  const removeActivePantry = useCallback(() => {
+    if (!activePantry) return;
+    const ok = window.confirm("Tem certeza que deseja excluir os Itens em Casa?");
+    if (!ok) return;
+    const now = new Date().toISOString();
+    savePantryLists(pantryLists.map(p => p.id === activePantry.id ? { ...p, status:"excluida", deletedAt: now } : p));
+    setPantryCompared(false);
+    setPantryComparison(null);
+    setShowPantryComparisonDetails(false);
+    showToast("🗑️ Itens em Casa excluídos");
+  }, [activePantry, pantryLists, savePantryLists, showToast]);
+
+  const leavePantryReview = useCallback(() => {
+    if (!pantryReviewReadOnly && pantryReviewDirty) {
+      showToast("⚠️ Salve os Itens antes de voltar.");
+      return;
+    }
+    resetPantryFlow();
+    setScreen("create");
+  }, [pantryReviewReadOnly, pantryReviewDirty, resetPantryFlow, showToast]);
 
   const getManualDialogUnits = useCallback(() => {
     const base = ["unidade", "pacote", "kg", "L", "caixa", "fardo"];
@@ -6566,6 +6641,7 @@ const [lists,setLists]=useState(()=>{
       }
     } catch {}
     if (itemDialogMode === "pantryReview") {
+      setPantryReviewDirty(true);
       if (pantryReviewEdit) {
         setPantryReviewCategories(prev => prev.map((cat,ci) => ci === pantryReviewEdit.catIndex ? {
           ...cat,
@@ -6575,7 +6651,7 @@ const [lists,setLists]=useState(()=>{
       setPantryReviewEdit(null);
       setItemDialog(null);
       setItemDialogMode("pending");
-      showToast("✏️ Item da despensa atualizado");
+      showToast("✏️ Item dos Itens em Casa atualizado");
       return;
     }
     if (itemDialogMode === "pantry") {
@@ -6588,7 +6664,7 @@ const [lists,setLists]=useState(()=>{
       setItemDialog(null);
       setItemDialogMode("pending");
       setPantryInput("");
-      showToast("✅ Item adicionado à despensa");
+      showToast("✅ Item adicionado à Itens em Casa");
       return;
     }
     if (itemDialogMode === "extra" && currentList) {
@@ -6644,15 +6720,16 @@ const [lists,setLists]=useState(()=>{
   };
 
   const removePantryReviewItem = (catIndex, itemIndex) => {
+    setPantryReviewDirty(true);
     setPantryReviewCategories(prev => prev
       .map((cat,ci) => ci === catIndex ? { ...cat, items: (cat.items || []).filter((_,ii) => ii !== itemIndex) } : cat)
       .filter(cat => (cat.items || []).length > 0)
     );
-    showToast("🗑️ Item removido da despensa");
+    showToast("🗑️ Item removido dos Itens em Casa");
   };
 
   const organizePantry = async () => {
-    if (pantryPendingItems.length === 0) { showToast("⚠️ Adicione itens à despensa"); return; }
+    if (pantryPendingItems.length === 0) { showToast("⚠️ Adicione itens em casa"); return; }
     setLoading(true);
     try {
       let categories;
@@ -6661,12 +6738,14 @@ const [lists,setLists]=useState(()=>{
       catch { categories = demoOrganize(itemsWithMemory); }
       categories = enforceKnownCategoryRules(categories);
       setPantryReviewCategories(categories);
+      setPantryReviewDirty(true);
+      setPantryReviewReadOnly(false);
       setScreen("pantry_review");
     } finally { setLoading(false); }
   };
 
   const savePantryFromReview = () => {
-    if (!pantryReviewCategories.length) { showToast("⚠️ Organize a despensa antes de salvar"); return; }
+    if (!pantryReviewCategories.length) { showToast("⚠️ Organize os Itens em Casa antes de salvar"); return; }
     const now = new Date().toISOString();
     if (pantryEditingId) {
       const updated = pantryLists.map(p => p.id === pantryEditingId ? {
@@ -6676,12 +6755,13 @@ const [lists,setLists]=useState(()=>{
         updatedAt: now,
       } : p);
       savePantryLists(updated);
+      setPantryReviewDirty(false);
       resetPantryFlow();
       setPantryCompared(false);
       setPantryComparison(null);
       setShowPantryComparisonDetails(false);
       setScreen("create");
-      showToast("✅ Despensa atualizada");
+      showToast("✅ Itens em Casa atualizados");
       return;
     }
     const newPantry = {
@@ -6693,16 +6773,17 @@ const [lists,setLists]=useState(()=>{
     };
     const updated = [newPantry, ...pantryLists.map(p => p.status === "ativa" ? { ...p, status: "concluida", replacedAt: now } : p)];
     savePantryLists(updated);
+    setPantryReviewDirty(false);
     resetPantryFlow();
     setPantryCompared(false);
     setPantryComparison(null);
     setShowPantryComparisonDetails(false);
     setScreen("create");
-    showToast("✅ Despensa salva e ativa");
+    showToast("✅ Itens em Casa salvos e ativos");
   };
 
   const compareWithActivePantry = () => {
-    if (!activePantry) { showToast("⚠️ Nenhuma despensa ativa"); return; }
+    if (!activePantry) { showToast("⚠️ Nenhuma lista de Itens em Casa ativa"); return; }
     if (pendingItems.length === 0) { showToast("⚠️ Faça sua pré-lista antes de comparar"); return; }
     const result = comparePendingItemsWithPantry(pendingItems, activePantry.categories);
     setPendingItems(result.items);
@@ -8329,23 +8410,25 @@ const [lists,setLists]=useState(()=>{
             </div>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
-            {/* MINHA DESPENSA */}
+            {/* ITENS EM CASA */}
             <div style={{...createCard,borderColor:activePantry?"#86EFAC":"#DDD6FE",background:activePantry?"#F0FDF4":"#FAF9FF"}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:44,height:44,borderRadius:16,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:"0 12px 24px rgba(109,40,217,0.18)"}}>🧺</div>
+                <div style={{width:48,height:48,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 12px 24px rgba(109,40,217,0.18)"}}>🏠</div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <div style={{fontWeight:900,fontSize:15,color:"#111827"}}>Minha Despensa</div>
-                    <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?"Ativa":"Opcional"}</span>
+                    <div style={{fontWeight:900,fontSize:15,color:"#111827"}}>Itens em Casa</div>
+                    <HelpIcon text="Registre os itens que você já tem em casa. Enquanto a lista de compras estiver aberta, você pode comparar/recomparar para evitar compras desnecessárias." />
+                    <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?(pantryCompared?"Comparado com esta lista":"Lista ativa"):"Opcional"}</span>
+                    {activePantry&&(<button onClick={removeActivePantry} style={{marginLeft:"auto",border:"1px solid #FECACA",background:"#FEF2F2",color:"#B91C1C",borderRadius:999,padding:"4px 8px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Excluir</button>)}
                   </div>
                   <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:4,lineHeight:1.35}}>
-                    {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Monte sua despensa antes de criar a lista de compras."}
+                    {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
                   </div>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:12}}>
-                {activePantry&&(<button onClick={()=>{setPantryEditingId(activePantry.id);setPantryReviewCategories(activePantry.categories||[]);setScreen("pantry_review");}} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver despensa</button>)}
-                <button onClick={openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6"}}>{activePantry?"Criar nova despensa":"Criar despensa"}</button>
+                {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
+                <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6"}}>{activePantry?"Editar lista":"Criar lista"}</button>
               </div>
             </div>
             {/* ORÇAMENTO */}
@@ -8437,14 +8520,14 @@ const [lists,setLists]=useState(()=>{
               <div style={{background:"#ECFDF5",border:"1px solid #86EFAC",borderRadius:20,padding:14,color:"#166534",display:"flex",gap:10,alignItems:"flex-start"}}>
                 <div style={{fontSize:18}}>✅</div>
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:900,fontSize:14}}>Despensa ativa detectada</div>
-                  <div style={{fontSize:12,fontWeight:700,lineHeight:1.4,marginTop:3}}>Sua pré-lista pode ser comparada com a despensa antes de organizar.</div>
+                  <div style={{fontWeight:900,fontSize:14}}>Itens em Casa ativa detectada</div>
+                  <div style={{fontSize:12,fontWeight:700,lineHeight:1.4,marginTop:3}}>Sua pré-lista pode ser comparada com a Itens em Casa antes de organizar.</div>
                 </div>
               </div>
             )}
-            <button onClick={(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?compareWithActivePantry:organizeList} disabled={loading||pendingItems.length===0}
-              style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
-              {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId)?"Comparar com a Despensa":(editingListId?"Salvar alterações":"Organizar lista")} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+            <button onClick={(activePantry && pendingItems.length>0 && !pantryCompared)?compareWithActivePantry:organizeList} disabled={loading||pendingItems.length===0}
+              style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+              {(activePantry && pendingItems.length>0 && !pantryCompared)?"Comparar com Itens em Casa":(editingListId?"Salvar alterações":"Organizar lista")} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
         </div>
@@ -8457,19 +8540,18 @@ const [lists,setLists]=useState(()=>{
       {screen==="pantry_create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <button onClick={()=>{resetPantryFlow();setScreen("create");}}
-              style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{width:36}} />
             <div style={{flex:1,textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:18,color:"#111827"}}>Criar/Editar Despensa</div>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>Itens em Casa <HelpIcon text="Adicione aqui os itens que você já tem em casa. Depois organize e salve para usar na comparação com sua lista de compras." /></div>
               <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Itens que você já tem em casa</div>
             </div>
             <div style={{width:36}} />
           </div>
           <div style={{padding:20,display:"flex",flexDirection:"column",gap:14,paddingBottom:42}}>
             <div style={createCard}>
-              <label style={lbl}>Adicionar itens na despensa</label>
+              <label style={lbl}>Adicionar itens em casa</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
-                <input value={pantryInput} onChange={e=>setPantryInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddPantryItem()} placeholder="Digite um item da despensa" style={inp({height:56})}/>
+                <input value={pantryInput} onChange={e=>setPantryInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddPantryItem()} placeholder="Digite um item que você já tem em casa" style={inp({height:56})}/>
                 <button onClick={handleAddPantryItem} style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>Inserir</button>
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale os itens existentes em casa. Você poderá editar antes de salvar.</div>
@@ -8497,7 +8579,7 @@ const [lists,setLists]=useState(()=>{
                 ))}
               </div>
             )}
-            <button onClick={organizePantry} disabled={loading||pantryPendingItems.length===0} style={{...createPrimaryBtn,opacity:(loading||pantryPendingItems.length===0)?0.5:1,cursor:(loading||pantryPendingItems.length===0)?"not-allowed":"pointer"}}>Organizar despensa {pantryPendingItems.length>0&&`(${pantryPendingItems.length})`}</button>
+            <button onClick={organizePantry} disabled={loading||pantryPendingItems.length===0} style={{...createPrimaryBtn,opacity:(loading||pantryPendingItems.length===0)?0.5:1,cursor:(loading||pantryPendingItems.length===0)?"not-allowed":"pointer"}}>Organizar Lista em Casa {pantryPendingItems.length>0&&`(${pantryPendingItems.length})`}</button>
           </div>
         </div>
       )}
@@ -8506,10 +8588,10 @@ const [lists,setLists]=useState(()=>{
       {screen==="pantry_review"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <button onClick={()=>setScreen("create")} style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <button onClick={leavePantryReview} style={{width:40,height:40,borderRadius:"50%",background:"#EEF2FF",border:"1px solid #C7D2FE",cursor:"pointer",fontSize:20,color:"#4C1D95",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 18px rgba(76,29,149,0.12)"}}>←</button>
             <div style={{flex:1,textAlign:"center"}}>
-              <div style={{fontWeight:900,fontSize:18,color:"#111827"}}>Minha Despensa</div>
-              <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Conferência por seções, sem preços</div>
+              <div style={{fontWeight:900,fontSize:18,color:"#111827",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>Itens em Casa <HelpIcon text={pantryReviewReadOnly ? "Visualização dos seus itens em casa. Esta tela não altera a lista." : "Edite seus itens em casa e salve antes de voltar."} /></div>
+              <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Lista organizada por seções, sem preços</div>
             </div>
             <div style={{width:36}} />
           </div>
@@ -8528,19 +8610,19 @@ const [lists,setLists]=useState(()=>{
                       {item.detail&&<div style={{fontSize:12,color:"#6B7280",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.detail}</div>}
                     </div>
                     <div style={{fontSize:13,fontWeight:800,color:"#6B7280",whiteSpace:"nowrap"}}>{formatQtyUnit(item.qty,item.unit)}</div>
-                    <button onClick={()=>editPantryReviewItem(ci,i)} style={{background:"#F5F3FF",border:"none",borderRadius:8,padding:"5px 9px",color:"#6D28D9",cursor:"pointer",fontSize:13,fontWeight:900}}>✏️</button>
-                    <button onClick={()=>removePantryReviewItem(ci,i)} style={{background:"#FEF2F2",border:"none",borderRadius:8,padding:"5px 9px",color:"#DC2626",cursor:"pointer",fontSize:13,fontWeight:900}}>×</button>
+                    {!pantryReviewReadOnly&&(<button onClick={()=>editPantryReviewItem(ci,i)} style={{background:"#F5F3FF",border:"none",borderRadius:8,padding:"5px 9px",color:"#6D28D9",cursor:"pointer",fontSize:13,fontWeight:900}}>✏️</button>)}
+                    {!pantryReviewReadOnly&&(<button onClick={()=>removePantryReviewItem(ci,i)} style={{background:"#FEF2F2",border:"none",borderRadius:8,padding:"5px 9px",color:"#DC2626",cursor:"pointer",fontSize:13,fontWeight:900}}>×</button>)}
                   </div>
                 ))}
               </div>
             );})}
-            <div style={{background:"#F8FAFC",border:"1px solid #E5E7EB",borderRadius:18,padding:12,fontSize:12,color:"#6B7280",fontWeight:700,lineHeight:1.45}}>A despensa serve apenas como base de comparação para a próxima lista. Ela ficará ativa até a compra da lista comparada ser finalizada.</div>
-            <button onClick={savePantryFromReview} style={createPrimaryBtn}>{pantryEditingId?"Salvar alterações da despensa":"Salvar despensa"}</button>
+            <div style={{background:"#F8FAFC",border:"1px solid #E5E7EB",borderRadius:18,padding:12,fontSize:12,color:"#6B7280",fontWeight:700,lineHeight:1.45}}>Os Itens em Casa servem como base de comparação para evitar compras desnecessárias. A lista fica ativa até ser excluída ou substituída.</div>
+            {!pantryReviewReadOnly&&(<button onClick={savePantryFromReview} style={createPrimaryBtn}>Salvar Itens</button>)}
           </div>
         </div>
       )}
 
-      {/* DESPENSA: RESULTADO DA COMPARAÇÃO */}
+      {/* ITENS EM CASA: RESULTADO DA COMPARAÇÃO */}
       {screen==="pantry_compare_result"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
@@ -8554,7 +8636,7 @@ const [lists,setLists]=useState(()=>{
           <div style={{padding:20,display:"flex",flexDirection:"column",gap:14}}>
             <div style={{...createCard,textAlign:"center",borderColor:"#BBF7D0",background:"#F0FDF4"}}>
               <div style={{width:68,height:68,borderRadius:"50%",background:"#22C55E",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,fontWeight:900,margin:"0 auto 12px"}}>✓</div>
-              <div style={{fontWeight:900,fontSize:18,color:"#166534",marginBottom:6}}>Despensa confrontada</div>
+              <div style={{fontWeight:900,fontSize:18,color:"#166534",marginBottom:6}}>Itens em Casa comparados</div>
               <div style={{fontSize:13,color:"#166534",fontWeight:700,lineHeight:1.45}}>Mantivemos na pré-lista somente o que ainda precisa ser comprado ou complementado.</div>
             </div>
             <div style={createCard}>
@@ -8571,16 +8653,16 @@ const [lists,setLists]=useState(()=>{
             {showPantryComparisonDetails&&pantryComparison&&(<div style={createCard}>
               <label style={lbl}>Detalhes da comparação</label>
               {(pantryComparison.removed||[]).length>0&&(<div style={{marginBottom:12}}>
-                <div style={{fontWeight:900,color:"#B91C1C",fontSize:13,marginBottom:6}}>Itens removidos porque já estavam na despensa</div>
+                <div style={{fontWeight:900,color:"#B91C1C",fontSize:13,marginBottom:6}}>Itens removidos porque já estavam na Itens em Casa</div>
                 {pantryComparison.removed.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.item?.name} — {r.reason}</div>)}
               </div>)}
               {(pantryComparison.adjusted||[]).length>0&&(<div style={{marginBottom:12}}>
                 <div style={{fontWeight:900,color:"#B45309",fontSize:13,marginBottom:6}}>Itens ajustados ou sinalizados</div>
-                {pantryComparison.adjusted.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.before?.name} — {r.after?.pantryNote || "ajustado pela despensa"}</div>)}
+                {pantryComparison.adjusted.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.before?.name} — {r.after?.pantryNote || "ajustado pela Itens em Casa"}</div>)}
               </div>)}
               {(pantryComparison.kept||[]).length>0&&(<div>
                 <div style={{fontWeight:900,color:"#166534",fontSize:13,marginBottom:6}}>Itens mantidos na lista</div>
-                {pantryComparison.kept.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.name} — não encontrado na despensa</div>)}
+                {pantryComparison.kept.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.name} — não encontrado na Itens em Casa</div>)}
               </div>)}
               <div style={{marginTop:10,fontSize:12,color:"#6B7280",fontWeight:700}}>Visualização apenas informativa. Para alterar, volte à pré-lista.</div>
             </div>)}
@@ -8592,7 +8674,7 @@ const [lists,setLists]=useState(()=>{
       {/* DIALOG: PRODUTO */}
       {itemDialog&&(
         <ModalSheet onClose={()=>{setItemDialog(null);setItemDialogMode("pending");setEditPendingIdx(null);setCurrentInput("");}}>
-          <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialogMode==="pantryReview"?"Editar item da despensa":itemDialog.name}</div>
+          <div style={{fontWeight:900,fontSize:20,color:"#111827",marginBottom:4}}>🛒 {itemDialogMode==="pantryReview"?"Editar item da Itens em Casa":itemDialog.name}</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>{dlgLoading?"":itemDialogMode==="extra"?"Defina os detalhes do item extra":(editPendingIdx!=null||itemDialogMode==="pantryReview")?"Editar item":"Defina os detalhes"}</div>
           {!dlgLoading&&dlgConfig&& (editPendingIdx!=null || itemDialogMode==="pantryReview" || itemDialogMode==="pantry") && (
             <div style={{marginBottom:16}}>
