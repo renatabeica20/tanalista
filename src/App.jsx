@@ -8540,7 +8540,9 @@ const [lists,setLists]=useState(()=>{
       {screen==="pantry_create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF,#FFFFFF)"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <div style={{width:36}} />
+            {pantryPendingItems.length===0 ? (
+              <button onClick={()=>{resetPantryFlow();setScreen("create");}} style={{width:40,height:40,borderRadius:"50%",background:"#EEF2FF",border:"1px solid #C7D2FE",cursor:"pointer",fontSize:20,color:"#4C1D95",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 18px rgba(76,29,149,0.12)"}}>←</button>
+            ) : <div style={{width:40}} />}
             <div style={{flex:1,textAlign:"center"}}>
               <div style={{fontWeight:900,fontSize:18,color:"#111827",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>Itens em Casa <HelpIcon text="Adicione aqui os itens que você já tem em casa. Depois organize e salve para usar na comparação com sua lista de compras." /></div>
               <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Itens que você já tem em casa</div>
@@ -8579,7 +8581,7 @@ const [lists,setLists]=useState(()=>{
                 ))}
               </div>
             )}
-            <button onClick={organizePantry} disabled={loading||pantryPendingItems.length===0} style={{...createPrimaryBtn,opacity:(loading||pantryPendingItems.length===0)?0.5:1,cursor:(loading||pantryPendingItems.length===0)?"not-allowed":"pointer"}}>Organizar Lista em Casa {pantryPendingItems.length>0&&`(${pantryPendingItems.length})`}</button>
+            <button onClick={organizePantry} disabled={loading||pantryPendingItems.length===0} style={{...createPrimaryBtn,opacity:(loading||pantryPendingItems.length===0)?0.5:1,cursor:(loading||pantryPendingItems.length===0)?"not-allowed":"pointer"}}>Organizar Lista {pantryPendingItems.length>0&&`(${pantryPendingItems.length})`}</button>
           </div>
         </div>
       )}
@@ -8617,7 +8619,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             );})}
             <div style={{background:"#F8FAFC",border:"1px solid #E5E7EB",borderRadius:18,padding:12,fontSize:12,color:"#6B7280",fontWeight:700,lineHeight:1.45}}>Os Itens em Casa servem como base de comparação para evitar compras desnecessárias. A lista fica ativa até ser excluída ou substituída.</div>
-            {!pantryReviewReadOnly&&(<button onClick={savePantryFromReview} style={createPrimaryBtn}>Salvar Itens</button>)}
+            {!pantryReviewReadOnly&&(<button onClick={savePantryFromReview} style={createPrimaryBtn}>{pantryEditingId ? "Salvar Lista" : "Salvar Itens"}</button>)}
           </div>
         </div>
       )}
