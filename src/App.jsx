@@ -28,6 +28,50 @@ function supabaseHeaders(extra = {}) {
 }
 
 
+// ── EVENTOS ANALÍTICOS (Supabase app_events) ─────────────────────────────
+// Registra ações relevantes para medir uso, frequência, listas criadas/concluídas
+// e comportamento comercial do app. Mantém compatibilidade com a arquitetura REST atual.
+async function registrarEvento(eventType, metadata = {}) {
+  try {
+    if (!hasSupabaseConfig()) return false;
+
+    const userId = getAppUserId() || null;
+    const userName = getAppUserName() || "";
+    const deviceId = getAppDeviceId();
+
+    const payload = {
+      user_id: userId,
+      event_type: String(eventType || "").trim(),
+      metadata: {
+        ...(metadata && typeof metadata === "object" ? metadata : {}),
+        user_name: userName,
+        device_id: deviceId,
+        app_version: "etapa-7.68-analytics",
+      },
+    };
+
+    if (!payload.event_type) return false;
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_events`, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn("Erro ao registrar evento analítico:", res.status, text);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("Erro ao registrar evento analítico:", err);
+    return false;
+  }
+}
+
+
 function ensureMobileViewport() {
   try {
     let meta = document.querySelector('meta[name="viewport"]');
@@ -6246,6 +6290,9 @@ const [lists,setLists]=useState(()=>{
 
       const userId=await registerAppUser(savedName,{force:true});
       if(userId)await restoreUserListsFromCloud(userId,savedName);
+      await registrarEvento(pinResult.mode==="created" ? "user_created" : "login", {
+        auth_mode: pinResult.mode || "login",
+      });
 
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
@@ -6488,6 +6535,12 @@ const [lists,setLists]=useState(()=>{
     const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString(),isShared:true};
     setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
     saveLists(lists.map(l=>l.id===list.id?updated:l));
+    await registrarEvento("share_list", {
+      list_id: updated.id || null,
+      shared_id: updated.sharedId || null,
+      list_name: updated.name || "",
+      list_type: updated.type || "",
+    });
     return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
   };
 
@@ -6677,6 +6730,14 @@ const [lists,setLists]=useState(()=>{
       cat.items.push({ ...newItem, extra: true, checked: false, notFound: false });
       l.categories = sanitizeCategories(l.categories);
       updateList(l);
+      registrarEvento("add_extra_item", {
+        list_id: l.id || null,
+        shared_id: l.sharedId || null,
+        list_name: l.name || "",
+        item_name: newItem.name || "",
+        item_qty: Number(newItem.qty || 1),
+        item_unit: newItem.unit || "unidade",
+      });
       setItemDialog(null);
       setItemDialogMode("pending");
       setCurrentInput("");
@@ -6858,6 +6919,14 @@ const [lists,setLists]=useState(()=>{
       // Toda lista criada pelo usuário passa a ser salva também na nuvem.
       // Assim ela aparece no computador e no celular com o mesmo nome de usuário.
       newList=await persistListRecordToCloud(newList,{silent:false});
+      await registrarEvento(editingOriginal ? "update_list" : "create_list", {
+        list_id: newList.id || null,
+        shared_id: newList.sharedId || null,
+        list_name: newList.name || "",
+        list_type: newList.type || listType,
+        budget: Number(newList.budget || 0),
+        item_count: countCategoryItems(newList.categories || []),
+      });
 
       const nl=editingOriginal
         ? lists.map(l=>l.id===editingOriginal.id?newList:l)
@@ -7724,6 +7793,12 @@ const [lists,setLists]=useState(()=>{
     const item=l.categories[ci].items[ii];
     item.notFound=!item.notFound;
     if(item.notFound){ item.checked=false; item.price=null; }
+    registrarEvento(item.notFound ? "item_not_found" : "item_pending", {
+      list_id: l.id || null,
+      shared_id: l.sharedId || null,
+      list_name: l.name || "",
+      item_name: item.name || "",
+    });
     updateList(l); returnToSearch();
     showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
   };
@@ -7795,6 +7870,12 @@ const [lists,setLists]=useState(()=>{
 
     if (!mNotFound && !l.startedAt) {
       l.startedAt = new Date().toISOString();
+      registrarEvento("start_shopping", {
+        list_id: l.id || null,
+        shared_id: l.sharedId || null,
+        list_name: l.name || "",
+        list_type: l.type || "",
+      });
       if (isReallyShared) {
         const startedEvent = buildSharedListEvent(l.sharedId, l, {
           type:"started",
@@ -7809,6 +7890,18 @@ const [lists,setLists]=useState(()=>{
 
     if (allDone && !l.finishedAt) {
       l.finishedAt = new Date().toISOString();
+      l.completedAt = l.finishedAt;
+      l.finalizedAt = l.finishedAt;
+      l.status = "completed";
+      registrarEvento("complete_list", {
+        list_id: l.id || null,
+        shared_id: l.sharedId || null,
+        list_name: l.name || "",
+        list_type: l.type || "",
+        budget: Number(l.budget || 0),
+        total: Number(getProgress(l).fullTotal || 0),
+        item_count: countCategoryItems(l.categories || []),
+      });
       if (isReallyShared) {
         const finishedEvent = buildSharedListEvent(l.sharedId, l, {
           type:"finished",
@@ -7821,6 +7914,17 @@ const [lists,setLists]=useState(()=>{
       }
     }
 
+    registrarEvento(mNotFound ? "item_not_found" : "item_checked", {
+      list_id: l.id || null,
+      shared_id: l.sharedId || null,
+      list_name: l.name || "",
+      item_name: item.name || "",
+      item_qty: Number(item.qty || 1),
+      item_unit: item.unit || "unidade",
+      item_price: Number(item.price || 0),
+      item_total: Number(getItemLineTotal(item) || 0),
+      price_mode: item.priceMode || "",
+    });
     updateList(l);
     showToast(mNotFound?"❌ Nao encontrado":"✅ "+item.name);
     setItemModal(null);
@@ -7891,6 +7995,15 @@ const [lists,setLists]=useState(()=>{
     cat.items.push({name:exName.trim(),detail:"",qty:exQty,originalQty:exQty,unit:exUnit,price:parseBRL(exPrice),priceMode:parseBRL(exPrice)!=null?"total":undefined,checked:false,notFound:false,extra:true});
     l.categories = sanitizeCategories(l.categories);
     updateList(l);setExtraModal(false);
+    registrarEvento("add_extra_item", {
+      list_id: l.id || null,
+      shared_id: l.sharedId || null,
+      list_name: l.name || "",
+      item_name: exName.trim(),
+      item_qty: Number(exQty || 1),
+      item_unit: exUnit || "unidade",
+      item_price: Number(parseBRL(exPrice) || 0),
+    });
     setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
     showToast("⭐ Item extra adicionado!");
   };
