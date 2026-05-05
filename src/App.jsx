@@ -160,6 +160,41 @@ const APP_USER_REGISTERED_KEY = "tnl_user_registered_device_id";
 const APP_USER_ID_KEY = "tnl_user_id";
 const APP_PIN_SESSION_NAME_KEY = "tnl_pin_verified_name";
 const APP_PIN_SESSION_AT_KEY = "tnl_pin_verified_at";
+const APP_INSTALL_PROMPT_DISMISSED_KEY = "tnl_install_prompt_dismissed";
+const APP_INSTALL_PROMPT_LAST_SHOWN_KEY = "tnl_install_prompt_last_shown";
+
+function isAppRunningStandalone() {
+  try {
+    return Boolean(
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      window.navigator?.standalone === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getInstallPlatform() {
+  const ua = String(navigator?.userAgent || "");
+  const isIOS = /iPad|iPhone|iPod/i.test(ua) || (navigator?.platform === "MacIntel" && navigator?.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  if (isIOS) return "ios";
+  if (isAndroid) return "android";
+  return "desktop";
+}
+
+function shouldShowInstallPromptNotice() {
+  try {
+    if (isAppRunningStandalone()) return false;
+    if (localStorage.getItem(APP_INSTALL_PROMPT_DISMISSED_KEY) === "1") return false;
+    const lastShown = Number(localStorage.getItem(APP_INSTALL_PROMPT_LAST_SHOWN_KEY) || 0);
+    if (!lastShown) return true;
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    return Date.now() - lastShown > sevenDays;
+  } catch {
+    return !isAppRunningStandalone();
+  }
+}
 
 function getStoredValue(key) {
   try {
@@ -5805,6 +5840,7 @@ const [lists,setLists]=useState(()=>{
   const [showSuggestions,setShowSuggestions]=useState(false);
   const [installPrompt,setInstallPrompt]=useState(null);
   const [installAvailable,setInstallAvailable]=useState(false);
+  const [showInstallNotice,setShowInstallNotice]=useState(false);
   const [notifications,setNotifications]=useState(()=>loadStoredNotifications());
   const [showNotificationsScreen,setShowNotificationsScreen]=useState(false);
 
@@ -6398,15 +6434,49 @@ const [lists,setLists]=useState(()=>{
     return()=>window.removeEventListener("beforeinstallprompt",handler);
   },[]);
 
+  useEffect(()=>{
+    if (userNameModal || loading || sharedLandingRecord || isAppRunningStandalone()) return;
+    if (!shouldShowInstallPromptNotice()) return;
+    const timer = setTimeout(()=>{
+      try { localStorage.setItem(APP_INSTALL_PROMPT_LAST_SHOWN_KEY, String(Date.now())); } catch {}
+      setShowInstallNotice(true);
+      registrarEvento("install_notice_shown", { platform: getInstallPlatform(), screen });
+    }, 1800);
+    return()=>clearTimeout(timer);
+  },[userNameModal, loading, sharedLandingRecord, screen]);
+
+  const closeInstallNotice=(neverShow=false)=>{
+    if (neverShow) {
+      try { localStorage.setItem(APP_INSTALL_PROMPT_DISMISSED_KEY, "1"); } catch {}
+      registrarEvento("install_notice_dismissed", { platform: getInstallPlatform(), never_show: true });
+    } else {
+      try { localStorage.setItem(APP_INSTALL_PROMPT_LAST_SHOWN_KEY, String(Date.now())); } catch {}
+      registrarEvento("install_notice_later", { platform: getInstallPlatform() });
+    }
+    setShowInstallNotice(false);
+  };
+
   const installApp=async()=>{
+    const platform = getInstallPlatform();
+    registrarEvento("install_button_clicked", { platform, install_available: Boolean(installPrompt || installAvailable) });
+
     if(!installPrompt){
-      showToast("Para adicionar à Tela de Início, toque no menu do navegador e escolha Adicionar à Tela de Início.",6500);
+      if (platform === "ios") {
+        showToast("No iPhone: toque no botão Compartilhar do Safari e escolha ‘Adicionar à Tela de Início’.",7500);
+      } else if (platform === "android") {
+        showToast("No Android: toque nos três pontinhos do Chrome e escolha ‘Adicionar à tela inicial’.",7500);
+      } else {
+        showToast("No navegador, abra o menu e escolha a opção para instalar ou adicionar o app à tela inicial.",7500);
+      }
+      setShowInstallNotice(true);
       return;
     }
     installPrompt.prompt();
-    await installPrompt.userChoice.catch(()=>null);
+    const choice = await installPrompt.userChoice.catch(()=>null);
+    registrarEvento("install_prompt_result", { platform, outcome: choice?.outcome || "unknown" });
     setInstallPrompt(null);
     setInstallAvailable(false);
+    setShowInstallNotice(false);
   };
 
   const makeShareUrl=(sharedId)=>{
@@ -8218,6 +8288,56 @@ const [lists,setLists]=useState(()=>{
       <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
         {toast.msg}
       </div>
+
+      {/* AVISO PARA ADICIONAR À TELA INICIAL */}
+      {showInstallNotice && !isAppRunningStandalone() && (()=>{
+        const platform = getInstallPlatform();
+        const isIOS = platform === "ios";
+        const isAndroid = platform === "android";
+        const steps = isIOS
+          ? ["Abra este app pelo Safari.", "Toque no botão Compartilhar (quadrado com seta para cima).", "Selecione ‘Adicionar à Tela de Início’ e confirme em ‘Adicionar’."]
+          : isAndroid
+            ? ["Abra este app pelo Google Chrome.", "Toque nos três pontinhos (⋮) no canto superior.", "Selecione ‘Adicionar à tela inicial’ e confirme em ‘Adicionar’."]
+            : ["Abra o menu do navegador.", "Escolha ‘Instalar app’ ou ‘Adicionar à tela inicial’.", "Confirme para criar o atalho do Tá na Lista."];
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.58)",zIndex:610,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:22,boxShadow:"0 28px 70px rgba(17,24,39,0.22)",border:"1px solid #E9D5FF"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+                <AppLogo size={52} radius={16} />
+                <div>
+                  <div style={{fontSize:20,fontWeight:950,color:"#111827",lineHeight:1.1}}>Adicionar à tela inicial</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#6B7280",marginTop:4}}>Acesse o Tá na Lista como aplicativo.</div>
+                </div>
+              </div>
+
+              <div style={{background:"linear-gradient(135deg,#F5F3FF,#ECFDF5)",border:"1px solid #DDD6FE",borderRadius:20,padding:15,marginBottom:16}}>
+                <div style={{fontSize:14,fontWeight:900,color:"#4C1D95",marginBottom:10}}>
+                  {isIOS ? "📱 No iPhone" : isAndroid ? "🤖 No Android" : "💻 No navegador"}
+                </div>
+                <ol style={{margin:"0",paddingLeft:20,color:"#374151",fontSize:14,fontWeight:700,lineHeight:1.45}}>
+                  {steps.map((step,idx)=>(
+                    <li key={idx} style={{marginBottom:idx===steps.length-1?0:8}}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+
+              <div style={{fontSize:13,color:"#6B7280",fontWeight:700,lineHeight:1.45,marginBottom:16}}>
+                Isso cria um ícone na tela do celular e facilita o acesso às suas listas sem precisar procurar o link novamente.
+              </div>
+
+              <button onClick={installApp} style={{width:"100%",border:"none",borderRadius:18,padding:"14px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"white",fontWeight:950,fontSize:15,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 14px 28px rgba(109,40,217,0.24)"}}>
+                {installAvailable ? "📲 Instalar agora" : "📲 Ver instruções de instalação"}
+              </button>
+              <button onClick={()=>closeInstallNotice(false)} style={{width:"100%",marginTop:10,border:"2px solid #E5E7EB",borderRadius:18,padding:"12px 16px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
+                Adicionar depois
+              </button>
+              <button onClick={()=>closeInstallNotice(true)} style={{width:"100%",marginTop:8,border:"none",background:"transparent",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+                Não mostrar novamente
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* LISTA COMPARTILHADA RECEBIDA */}
       {sharedLandingRecord&&(()=>{
