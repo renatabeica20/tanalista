@@ -9296,9 +9296,9 @@ const [lists,setLists]=useState(()=>{
       {screen==="list"&&currentList&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF 0%,#F8FAFC 48%,#FFFFFF 100%)"}}>
           <div style={{padding:"18px 16px 22px"}}>
-            <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 54%,#8B5CF6 100%)",borderRadius:28,padding:"18px 18px 20px",boxShadow:"0 22px 48px rgba(91,33,182,0.24)",border:"1px solid rgba(255,255,255,0.28)"}}>
+            <div style={{position:"relative",overflow:isTourStep("list_back_home")||isTourStep("list_share")||isTourStep("list_progress")?"visible":"hidden",zIndex:isTourStep("list_back_home")||isTourStep("list_share")||isTourStep("list_progress")?636:"auto",background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 54%,#8B5CF6 100%)",borderRadius:28,padding:"18px 18px 20px",boxShadow:"0 22px 48px rgba(91,33,182,0.24)",border:"1px solid rgba(255,255,255,0.28)"}}>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 18% 8%,rgba(255,255,255,0.22),transparent 32%),radial-gradient(circle at 90% 0%,rgba(255,255,255,0.14),transparent 34%)",pointerEvents:"none"}}/>
-              <div style={{position:"relative",zIndex:1}}>
+              <div style={{position:"relative",zIndex:isTourStep("list_back_home")||isTourStep("list_share")||isTourStep("list_progress")?637:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>archiveFinishedListsBeforeHome()}
                     title="Voltar para a tela inicial"
