@@ -72,6 +72,69 @@ async function registrarEvento(eventType, metadata = {}) {
 }
 
 
+// ── ATUALIZAÇÃO DO APP (PWA/cache) ───────────────────────────────────────
+// Detecta quando uma nova versão foi publicada no servidor e avisa o usuário.
+// Isso evita que quem adicionou o app à tela inicial continue usando arquivos antigos em cache.
+const APP_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+
+function getCurrentAppAssetSignature() {
+  try {
+    if (typeof document === "undefined") return "";
+    const scripts = Array.from(document.querySelectorAll('script[src]')).map((el) => el.getAttribute("src") || "");
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]')).map((el) => el.getAttribute("href") || "");
+    return [...scripts, ...styles].filter(Boolean).sort().join("|");
+  } catch {
+    return "";
+  }
+}
+
+async function fetchFreshAppAssetSignature() {
+  try {
+    if (typeof window === "undefined") return "";
+    const url = `${window.location.origin}/?tnl_update_check=${Date.now()}`;
+    const res = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+      },
+    });
+    if (!res.ok) return "";
+    const html = await res.text();
+    if (!html) return "";
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const scripts = Array.from(doc.querySelectorAll('script[src]')).map((el) => el.getAttribute("src") || "");
+    const styles = Array.from(doc.querySelectorAll('link[rel="stylesheet"][href]')).map((el) => el.getAttribute("href") || "");
+    return [...scripts, ...styles].filter(Boolean).sort().join("|");
+  } catch (err) {
+    console.warn("Não foi possível verificar atualização do app:", err);
+    return "";
+  }
+}
+
+async function clearAppCachesBeforeReload() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker?.getRegistration) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration?.waiting) {
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+      if (registration?.update) {
+        await registration.update().catch(() => null);
+      }
+    }
+  } catch {}
+
+  try {
+    if (typeof caches !== "undefined" && caches.keys) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch {}
+}
+
+
 function ensureMobileViewport() {
   try {
     let meta = document.querySelector('meta[name="viewport"]');
@@ -5956,6 +6019,48 @@ export default function App(){
     ensureMobileViewport();
   }, []);
 
+  useEffect(() => {
+    const currentSignature = getCurrentAppAssetSignature();
+    if (!currentSignature) return;
+
+    let cancelled = false;
+
+    const checkForUpdate = async () => {
+      if (cancelled || updateNoticeShownRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
+      const freshSignature = await fetchFreshAppAssetSignature();
+      if (cancelled || updateNoticeShownRef.current) return;
+
+      if (freshSignature && freshSignature !== currentSignature) {
+        updateNoticeShownRef.current = true;
+        setUpdateNotice({ show: true, checking: false });
+        registrarEvento("app_update_available", {
+          current_signature: currentSignature,
+          fresh_signature: freshSignature,
+        });
+      }
+    };
+
+    const handleFocus = () => checkForUpdate();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
+
+    const firstTimer = window.setTimeout(checkForUpdate, 7000);
+    const interval = window.setInterval(checkForUpdate, APP_UPDATE_CHECK_INTERVAL_MS);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(firstTimer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   const [screen,setScreen]=useState("home");
   
   const [showPriceStatsScreen, setShowPriceStatsScreen] = useState(false);
@@ -5969,6 +6074,8 @@ const [lists,setLists]=useState(()=>{
   const [currentList,setCurrentList]=useState(null);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState({show:false,msg:""});
+  const [updateNotice,setUpdateNotice]=useState({show:false,checking:false});
+  const updateNoticeShownRef=useRef(false);
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
   const toastTimer=useRef(null);
@@ -8546,6 +8653,16 @@ const [lists,setLists]=useState(()=>{
   // ── Preview do item no diálogo ────────────────────────────────────────
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
+  const updateAppNow=async()=>{
+    try {
+      setUpdateNotice({show:true,checking:true});
+      registrarEvento("app_update_clicked", { source: "update_notice" });
+      await clearAppCachesBeforeReload();
+    } finally {
+      window.location.reload();
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────────
   if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
   if(showPriceStatsScreen) return <PriceStatsScreen lists={lists} onBack={()=>setShowPriceStatsScreen(false)} />;
@@ -8630,6 +8747,27 @@ const [lists,setLists]=useState(()=>{
       <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
         {toast.msg}
       </div>
+
+      {/* AVISO DE NOVA VERSÃO DISPONÍVEL */}
+      {updateNotice.show && (
+        <div style={{position:"fixed",left:14,right:14,bottom:86,zIndex:650,display:"flex",justifyContent:"center",pointerEvents:"none"}}>
+          <div style={{width:"100%",maxWidth:420,background:"#FFFFFF",border:"1px solid #DDD6FE",borderRadius:22,padding:16,boxShadow:"0 24px 60px rgba(17,24,39,0.22)",pointerEvents:"auto"}}>
+            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              <div style={{width:44,height:44,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontSize:22,boxShadow:"0 14px 28px rgba(109,40,217,0.24)",flexShrink:0}}>✨</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:950,fontSize:16,color:"#111827",lineHeight:1.2}}>Nova atualização disponível</div>
+                <div style={{fontWeight:700,fontSize:13,color:"#6B7280",lineHeight:1.35,marginTop:4}}>Atualize para receber as melhorias mais recentes do Tá na Lista.</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:14}}>
+              <button onClick={updateAppNow} disabled={updateNotice.checking} style={{flex:1,border:"none",borderRadius:16,padding:"12px 14px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:14,cursor:updateNotice.checking?"wait":"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)",opacity:updateNotice.checking?0.75:1}}>
+                {updateNotice.checking ? "Atualizando..." : "Atualizar agora"}
+              </button>
+              <button onClick={()=>{setUpdateNotice({show:false,checking:false}); registrarEvento("app_update_later", { source: "update_notice" });}} disabled={updateNotice.checking} style={{border:"2px solid #E5E7EB",borderRadius:16,padding:"12px 14px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:updateNotice.checking?"wait":"pointer",fontFamily:"inherit"}}>Depois</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AVISO PARA ADICIONAR À TELA INICIAL */}
       {showInstallNotice && !isAppRunningStandalone() && (()=>{
