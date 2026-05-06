@@ -7,6 +7,10 @@ const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY |
 const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
 const ANTHROPIC_MODEL_VISION = import.meta.env.VITE_ANTHROPIC_MODEL_VISION || "claude-3-5-sonnet-latest";
 
+// ── Domínio público oficial do app ───────────────────────────────────────
+// Use esta URL em todos os links compartilhados para evitar que usuários recebam links do domínio vercel.app.
+const APP_PUBLIC_URL = (import.meta.env.VITE_APP_PUBLIC_URL || "https://tanalistaapp.com.br").replace(/\/+$/, "");
+
 // ── Supabase: listas compartilháveis ──────────────────────────────────────
 // Usa a REST API do Supabase diretamente para evitar dependência adicional.
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "")
@@ -6801,12 +6805,7 @@ const [lists,setLists]=useState(()=>{
     },delay);
   },[scrollToListTop]);
 
-  const getPublicAppUrl=()=>{
-    const origin=window.location?.origin;
-    if(origin && origin!=="null") return origin;
-    const href=String(window.location?.href || "").split("#")[0].split("?")[0];
-    return href.replace(/\/l\/.*$/,"/").replace(/\/lista\/.*$/,"/").replace(/\/index\.html$/,"/").replace(/\/$/,"");
-  };
+  const getPublicAppUrl=()=>APP_PUBLIC_URL;
 
   const openWhatsAppDirect=(text)=>{
     const encoded=encodeURIComponent(text);
@@ -6887,14 +6886,7 @@ const [lists,setLists]=useState(()=>{
 
   const makeShareUrl=(sharedId)=>{
     const encoded=encodeURIComponent(sharedId);
-    const origin=window.location?.origin;
-    if(origin && origin!=="null") return `${origin}/?lista=${encoded}`;
-    const href=String(window.location?.href || "").split("?")[0].split("#")[0]
-      .replace(/\/l\/.*$/,"/")
-      .replace(/\/lista\/.*$/,"/")
-      .replace(/\/index\.html$/,"/")
-      .replace(/\/+$/,"/");
-    return `${href}?lista=${encoded}`;
+    return `${APP_PUBLIC_URL}/?lista=${encoded}`;
   };
 
   const extractSharedIdFromUrl=()=>{
@@ -6924,8 +6916,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   const makeEmbeddedShareUrl=(list)=>{
-    const origin=(window.location?.origin&&window.location.origin!=="null")?window.location.origin:String(window.location?.href||"").split("?")[0].split("#")[0];
-    return `${origin}/?listaData=${encodeURIComponent(encodeListForUrl(list))}`;
+    return `${APP_PUBLIC_URL}/?listaData=${encodeURIComponent(encodeListForUrl(list))}`;
   };
 
   const extractEmbeddedListFromUrl=()=>{
@@ -7059,7 +7050,7 @@ const [lists,setLists]=useState(()=>{
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
-    try { window.history.replaceState({}, document.title, window.location.origin + "/"); } catch {}
+    try { window.history.replaceState({}, document.title, "/"); } catch {}
     const actorName = getAppUserName() || "Usuário";
     if (received.sharedId) {
       appendSharedListEvent(received.sharedId, {
@@ -7092,7 +7083,7 @@ const [lists,setLists]=useState(()=>{
         setUserNameModal(true);
       }
       // Mantém o link em formato de query string para evitar 404 em hospedagens SPA/Vercel sem rewrite.
-      try { window.history.replaceState({}, document.title, window.location.origin + "/?lista=" + encodeURIComponent(sharedId)); } catch {}
+      try { window.history.replaceState({}, document.title, "/?lista=" + encodeURIComponent(sharedId)); } catch {}
     }catch(err){
       showToast("⚠️ Não foi possível abrir a lista: "+(err?.message||"erro"),5200);
     }finally{
