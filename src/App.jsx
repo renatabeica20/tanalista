@@ -208,11 +208,43 @@ const GUIDED_TOUR_STEPS = [
     position: "bottom",
   },
   {
-    id: "create_items",
+    id: "create_item_input",
     screen: "create",
     icon: "✍️",
-    title: "Insira os itens da lista",
-    text: "Digite item por item, cole uma lista pronta ou use a opção de falar a lista.",
+    title: "Digite um item",
+    text: "Use este campo para inserir os produtos um por um, como arroz, leite ou café.",
+    position: "top",
+  },
+  {
+    id: "create_item_insert",
+    screen: "create",
+    icon: "➕",
+    title: "Confirme a inclusão",
+    text: "Depois de digitar o produto, toque em Inserir para adicioná-lo à pré-lista.",
+    position: "top",
+  },
+  {
+    id: "create_item_paste",
+    screen: "create",
+    icon: "📋",
+    title: "Cole uma lista pronta",
+    text: "Use esta opção quando já tiver uma lista copiada de mensagem, bloco de notas ou outro aplicativo.",
+    position: "top",
+  },
+  {
+    id: "create_item_voice",
+    screen: "create",
+    icon: "🎙️",
+    title: "Fale sua lista",
+    text: "Use a voz para ditar vários itens. O app transforma sua fala em itens organizáveis.",
+    position: "top",
+  },
+  {
+    id: "create_items_preview",
+    screen: "create",
+    icon: "🧾",
+    title: "Revise os itens inseridos",
+    text: "Os itens adicionados aparecem aqui. Você pode editar, remover ou limpar antes de organizar.",
     position: "top",
   },
   {
@@ -332,7 +364,7 @@ function tourHighlightStyle(active) {
   };
 }
 
-function GuidedTourOverlay({ step, index, total, onNext, onPrev, onClose, showPrev = true }) {
+function GuidedTourOverlay({ step, index, total, onNext, onPrev, onClose, onSkip, showPrev = true, showSkip = false }) {
   if (!step) return null;
   const isLast = index >= total - 1;
   const topPosition = step.position === "top";
@@ -371,6 +403,9 @@ function GuidedTourOverlay({ step, index, total, onNext, onPrev, onClose, showPr
           )}
           <button onClick={isLast ? onClose : onNext} style={{border:"none",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:16,padding:"12px 14px",fontWeight:950,color:"#FFFFFF",fontFamily:"inherit",cursor:"pointer",boxShadow:"0 12px 26px rgba(109,40,217,0.24)"}}>{primaryLabel}</button>
         </div>
+        {showSkip && !isLast && (
+          <button onClick={onSkip || onClose} style={{marginTop:10,width:"100%",border:"none",background:"transparent",color:"#6B7280",fontSize:12,fontWeight:900,fontFamily:"inherit",cursor:"pointer",padding:"6px 0"}}>Pular tutorial</button>
+        )}
       </div>
     </div>
   );
@@ -8660,7 +8695,9 @@ const [lists,setLists]=useState(()=>{
           onNext={nextGuidedTourStep}
           onPrev={prevGuidedTourStep}
           onClose={()=>finishGuidedTour("done")}
+          onSkip={()=>finishGuidedTour("skip")}
           showPrev={screen !== "home"}
+          showSkip={screen !== "home" && guidedTourLocalTotal > 1}
         />
       )}
 
@@ -9035,30 +9072,30 @@ const [lists,setLists]=useState(()=>{
                 <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
-            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_items"))}}>
+            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
               <label style={lbl}>Adicionar itens</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
                   placeholder="Digite um item da lista"
-                  style={inp({height:56})} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+                  style={{...inp({height:56}),...tourHighlightStyle(isTourStep("create_item_input"))}} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
                 <button onClick={handleAddItem}
-                  style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>Inserir</button>
+                  style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
-                  style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
+                  style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
                   Colar lista
                 </button>
                 <button onClick={()=>{voiceTargetRef.current="list";setVoiceTarget("list");startVoiceInput();}} disabled={voiceProcessing}
-                  style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1}}>
+                  style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1,...tourHighlightStyle(isTourStep("create_item_voice"))}}>
                   {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
                 </button>
               </div>
             </div>
             {pendingItems.length>0&&(
-              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
                 <div style={{padding:"10px 14px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",fontSize:12,fontWeight:700,color:"#6B7280",display:"flex",justifyContent:"space-between"}}>
                   <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"}</span>
                   <button onClick={()=>setPendingItems([])} style={{background:"none",border:"none",color:"#FF4444",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Limpar tudo</button>
@@ -9120,7 +9157,7 @@ const [lists,setLists]=useState(()=>{
               <label style={lbl}>Adicionar itens em casa</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={pantryInput} onChange={e=>setPantryInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddPantryItem()} placeholder="Digite um item que você já tem em casa" style={inp({height:56})}/>
-                <button onClick={handleAddPantryItem} style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)"}}>Inserir</button>
+                <button onClick={handleAddPantryItem} style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
               </div>
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale os itens existentes em casa. Você poderá editar antes de salvar.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
@@ -9129,7 +9166,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {pantryPendingItems.length>0&&(
-              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+              <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
                 <div style={{padding:"10px 14px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",fontSize:12,fontWeight:800,color:"#6B7280",display:"flex",justifyContent:"space-between"}}>
                   <span>{pantryPendingItems.length} {pantryPendingItems.length===1?"item inserido":"itens inseridos"}</span>
                   <button onClick={()=>setPantryPendingItems([])} style={{background:"none",border:"none",color:"#FF4444",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Limpar tudo</button>
@@ -9346,8 +9383,7 @@ const [lists,setLists]=useState(()=>{
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
                     style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,...(isTourStep("list_share") ? {background:"#FFFFFF",color:"#4C1D95",border:"3px solid #FFFFFF"} : {}),...tourHighlightStyle(isTourStep("list_share"))}}><WhatsAppIcon size={17} /> Enviar lista</button>
                 </div>
-                <button onClick={()=>startGuidedTour("list")} style={{width:"100%",margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,0.32)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",borderRadius:999,padding:"9px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)"}}>✨ Como usar esta tela</button>
-                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...(isTourStep("list_progress") ? {background:"#FFFFFF",border:"3px solid #FFFFFF",color:"#111827"} : {}),...tourHighlightStyle(isTourStep("list_progress"))}}>
+                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...(isTourStep("list_progress") ? {border:"3px solid rgba(255,255,255,0.98)",background:"rgba(255,255,255,0.18)"} : {}),...tourHighlightStyle(isTourStep("list_progress"))}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
@@ -9463,6 +9499,9 @@ const [lists,setLists]=useState(()=>{
           )}
 
           {/* Search */}
+          <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
+            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Como usar esta tela</button>
+          </div>
           <div style={{margin:"14px 20px 0",position:"relative",...tourHighlightStyle(isTourStep("list_search"))}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#9CA3AF"}}>🔍</span>
             <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)}
