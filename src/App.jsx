@@ -168,11 +168,19 @@ const APP_GUIDED_TOUR_DISMISSED_KEY = "tnl_guided_tour_dismissed_v2";
 
 const GUIDED_TOUR_STEPS = [
   {
+    id: "home_compras",
+    screen: "home",
+    icon: "🛒",
+    title: "Comece pelo módulo Compras",
+    text: "Toque em Compras quando quiser criar uma lista. Este tutorial acompanha você apenas quando você decidir continuar.",
+    position: "bottom",
+  },
+  {
     id: "create_pantry",
     screen: "create",
     icon: "🏠",
     title: "Comece pelos Itens em Casa",
-    text: "Registre o que você já tem antes de montar a lista. Isso ajuda a evitar compras repetidas.",
+    text: "Antes de montar a compra, registre o que você já tem. Isso evita compras repetidas.",
     position: "bottom",
   },
   {
@@ -188,7 +196,7 @@ const GUIDED_TOUR_STEPS = [
     screen: "create",
     icon: "💰",
     title: "Defina o orçamento",
-    text: "Informe o valor máximo da compra para acompanhar seus gastos em tempo real.",
+    text: "Informe quanto pretende gastar para acompanhar o limite durante a compra.",
     position: "bottom",
   },
   {
@@ -212,10 +220,55 @@ const GUIDED_TOUR_STEPS = [
     screen: "create",
     icon: "🤖",
     title: "Compare ou organize a lista",
-    text: "Se houver Itens em Casa ativos, compare antes. Caso contrário, organize a lista automaticamente.",
+    text: "Se houver Itens em Casa ativos, compare antes. Caso contrário, organize automaticamente.",
     position: "top",
   },
+  {
+    id: "list_progress",
+    screen: "list",
+    icon: "📊",
+    title: "Acompanhe o progresso",
+    text: "Aqui você vê itens concluídos, gasto total e situação do orçamento em tempo real.",
+    position: "bottom",
+  },
+  {
+    id: "list_search",
+    screen: "list",
+    icon: "🔎",
+    title: "Busque itens rapidamente",
+    text: "Use a busca para localizar produtos sem precisar percorrer a lista inteira.",
+    position: "bottom",
+  },
+  {
+    id: "list_items",
+    screen: "list",
+    icon: "✔️",
+    title: "Marque os itens durante a compra",
+    text: "Toque nos produtos conforme forem colocados no carrinho. Você também pode ajustar preço e quantidade.",
+    position: "top",
+  },
+  {
+    id: "list_share",
+    screen: "list",
+    icon: "🤝",
+    title: "Compartilhe quando precisar",
+    text: "Envie a lista para outra pessoa acompanhar ou ajudar nas compras.",
+    position: "bottom",
+  },
+  {
+    id: "list_back_home",
+    screen: "list",
+    icon: "🏁",
+    title: "Finalize e volte ao início",
+    text: "Ao voltar, a lista finalizada é salva no histórico e fica protegida contra alterações.",
+    position: "bottom",
+  },
 ];
+
+const GUIDED_TOUR_FIRST_STEP_BY_SCREEN = GUIDED_TOUR_STEPS.reduce((acc, step, index) => {
+  if (step?.screen && acc[step.screen] === undefined) acc[step.screen] = index;
+  return acc;
+}, {});
 
 function hasCompletedGuidedTour() {
   try {
@@ -5973,6 +6026,13 @@ const [lists,setLists]=useState(()=>{
   const guidedTourStep = GUIDED_TOUR_STEPS[guidedTourIndex] || null;
   const isTourStep = useCallback((id)=>Boolean(showGuidedTour && guidedTourStep?.id === id),[showGuidedTour,guidedTourStep]);
 
+  const startGuidedTour = useCallback(() => {
+    setScreen("home");
+    setGuidedTourIndex(GUIDED_TOUR_FIRST_STEP_BY_SCREEN.home || 0);
+    setShowGuidedTour(true);
+    registrarEvento("guided_tour_started", { screen: "home", trigger: "manual_button" });
+  }, []);
+
   const showToast=useCallback((msg,duration=1000)=>{
     clearTimeout(toastTimer.current);
     setToast({show:true,msg});
@@ -5982,44 +6042,56 @@ const [lists,setLists]=useState(()=>{
 
 
 
-  useEffect(() => {
-    if (hasCompletedGuidedTour()) return;
-    if (userNameModal || loading || sharedLandingRecord || showInstallNotice || showNotificationsScreen || showGuidedTour) return;
-    const timer = setTimeout(() => {
-      setGuidedTourIndex(0);
-      setShowGuidedTour(true);
-      registrarEvento("guided_tour_started", { screen });
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [userNameModal, loading, sharedLandingRecord, showInstallNotice, showNotificationsScreen, showGuidedTour, screen]);
+  // O tutorial guiado não inicia automaticamente.
+  // Ele só começa quando o usuário tocar no botão "Como usar" na tela inicial.
 
   useEffect(() => {
-    if (!showGuidedTour || !guidedTourStep?.screen) return;
-    if (screen !== guidedTourStep.screen) setScreen(guidedTourStep.screen);
-  }, [showGuidedTour, guidedTourStep, screen]);
+    if (!showGuidedTour || !screen) return;
+    const currentStep = GUIDED_TOUR_STEPS[guidedTourIndex];
+    if (currentStep?.screen === screen) return;
+    const firstIndexForScreen = GUIDED_TOUR_FIRST_STEP_BY_SCREEN[screen];
+    if (firstIndexForScreen !== undefined) {
+      setGuidedTourIndex(firstIndexForScreen);
+      registrarEvento("guided_tour_screen_entered", { screen, step: GUIDED_TOUR_STEPS[firstIndexForScreen]?.id || "" });
+    }
+  }, [showGuidedTour, screen, guidedTourIndex]);
 
   const finishGuidedTour = useCallback((mode = "done") => {
     setGuidedTourCompleted(mode === "skip" ? "dismissed" : "done");
     setShowGuidedTour(false);
-    registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_completed", { step: guidedTourStep?.id || "" });
-  }, [guidedTourStep]);
+    registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_completed", { step: guidedTourStep?.id || "", screen });
+  }, [guidedTourStep, screen]);
 
   const nextGuidedTourStep = useCallback(() => {
     if (guidedTourIndex >= GUIDED_TOUR_STEPS.length - 1) {
       finishGuidedTour("done");
       return;
     }
+
     const nextIndex = guidedTourIndex + 1;
-    setGuidedTourIndex(nextIndex);
     const nextStep = GUIDED_TOUR_STEPS[nextIndex];
-    if (nextStep?.screen && nextStep.screen !== screen) setScreen(nextStep.screen);
-    registrarEvento("guided_tour_next", { from_step: guidedTourStep?.id || "", to_step: nextStep?.id || "" });
-  }, [guidedTourIndex, guidedTourStep, screen, finishGuidedTour]);
+    const currentStep = GUIDED_TOUR_STEPS[guidedTourIndex];
+
+    // O tutorial é contextual e não força a navegação.
+    // Quando o próximo passo pertence a outra tela, o usuário deve tocar no botão real do app
+    // para avançar naturalmente. Ex.: na Home, tocar em Compras.
+    if (nextStep?.screen && nextStep.screen !== screen) {
+      const msg = currentStep?.screen === "home"
+        ? "Toque no módulo Compras para continuar o tutorial."
+        : "Avance pelo botão da tela para continuar o tutorial.";
+      showToast(msg, 1800);
+      registrarEvento("guided_tour_waiting_user_action", { from_step: currentStep?.id || "", next_screen: nextStep?.screen || "", current_screen: screen });
+      return;
+    }
+
+    setGuidedTourIndex(nextIndex);
+    registrarEvento("guided_tour_next", { from_step: currentStep?.id || "", to_step: nextStep?.id || "", from_screen: currentStep?.screen || "", to_screen: nextStep?.screen || "" });
+  }, [guidedTourIndex, screen, finishGuidedTour, showToast]);
 
   const prevGuidedTourStep = useCallback(() => {
     const prevIndex = Math.max(0, guidedTourIndex - 1);
-    setGuidedTourIndex(prevIndex);
     const prevStep = GUIDED_TOUR_STEPS[prevIndex];
+    setGuidedTourIndex(prevIndex);
     if (prevStep?.screen && prevStep.screen !== screen) setScreen(prevStep.screen);
   }, [guidedTourIndex, screen]);
 
@@ -8655,6 +8727,12 @@ const [lists,setLists]=useState(()=>{
               <div style={{textAlign:"center",background:"rgba(255,255,255,0.58)",border:"1px solid rgba(221,214,254,0.72)",borderRadius:28,padding:"18px 18px 16px",width:"100%",boxShadow:"0 18px 42px rgba(109,40,217,0.08)",backdropFilter:"blur(8px)"}}>
                 <BrandWordmark />
                 <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
+                <button
+                  onClick={startGuidedTour}
+                  style={{marginTop:14,border:"none",borderRadius:999,padding:"11px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)"}}
+                >
+                  ✨ Como usar o app
+                </button>
               </div>
             </div>
           </div>
@@ -8676,7 +8754,7 @@ const [lists,setLists]=useState(()=>{
                 return (
                   <div
                     key={m.name}
-                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
+                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create"); if(showGuidedTour) setGuidedTourIndex(GUIDED_TOUR_FIRST_STEP_BY_SCREEN.create || 1);}}}
                     aria-disabled={inactive}
                     title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
                     style={{
@@ -9238,15 +9316,15 @@ const [lists,setLists]=useState(()=>{
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
                   <button onClick={()=>archiveFinishedListsBeforeHome()}
                     title="Voltar para a tela inicial"
-                    style={{background:"rgba(255,255,255,0.96)",border:"2px solid rgba(255,255,255,0.92)",borderRadius:"50%",width:44,height:44,color:"#4C1D95",fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",boxShadow:"0 12px 28px rgba(17,24,39,0.24)",animation:showFinished?"tnlPulseBack 1.2s ease-in-out infinite":"none"}}>←</button>
+                    style={{background:"rgba(255,255,255,0.96)",border:"2px solid rgba(255,255,255,0.92)",borderRadius:"50%",width:44,height:44,color:"#4C1D95",fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",boxShadow:"0 12px 28px rgba(17,24,39,0.24)",animation:showFinished?"tnlPulseBack 1.2s ease-in-out infinite":"none",...tourHighlightStyle(isTourStep("list_back_home"))}}>←</button>
                   <div style={{flex:1,minWidth:0,textAlign:"center"}}>
                     <div style={{fontWeight:900,fontSize:20,color:"white",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentList.name}</div>
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
                   </div>
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}><WhatsAppIcon size={17} /> Enviar lista</button>
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,...tourHighlightStyle(isTourStep("list_share"))}}><WhatsAppIcon size={17} /> Enviar lista</button>
                 </div>
-                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)"}}>
+                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...tourHighlightStyle(isTourStep("list_progress"))}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
@@ -9362,7 +9440,7 @@ const [lists,setLists]=useState(()=>{
           )}
 
           {/* Search */}
-          <div style={{margin:"14px 20px 0",position:"relative"}}>
+          <div style={{margin:"14px 20px 0",position:"relative",...tourHighlightStyle(isTourStep("list_search"))}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#9CA3AF"}}>🔍</span>
             <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)}
               placeholder="Buscar item na lista..."
@@ -9375,7 +9453,7 @@ const [lists,setLists]=useState(()=>{
           </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
+          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
