@@ -296,10 +296,11 @@ function tourHighlightStyle(active) {
   };
 }
 
-function GuidedTourOverlay({ step, index, total, onNext, onPrev, onSkip }) {
+function GuidedTourOverlay({ step, index, total, onNext, onPrev, onClose, showPrev = true }) {
   if (!step) return null;
   const isLast = index >= total - 1;
   const topPosition = step.position === "top";
+  const primaryLabel = isLast ? "Fechar" : "Próximo";
   return (
     <div style={{position:"fixed",inset:0,zIndex:620,pointerEvents:"none"}}>
       <div style={{position:"absolute",inset:0,background:"rgba(17,24,39,0.68)",backdropFilter:"blur(2px)"}} />
@@ -326,20 +327,18 @@ function GuidedTourOverlay({ step, index, total, onNext, onPrev, onSkip }) {
           </div>
         </div>
         <div style={{height:7,background:"#F3F4F6",borderRadius:999,overflow:"hidden",margin:"12px 0 16px"}}>
-          <div style={{height:"100%",width:`${((index + 1) / total) * 100}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
+          <div style={{height:"100%",width:`${((index + 1) / Math.max(total,1)) * 100}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
         </div>
-        <div style={{display:"grid",gridTemplateColumns:index>0?"1fr 1.4fr":"1.4fr",gap:10}}>
-          {index>0&&(
+        <div style={{display:"grid",gridTemplateColumns:(showPrev && index>0)?"1fr 1.4fr":"1fr",gap:10}}>
+          {showPrev && index>0&&(
             <button onClick={onPrev} style={{border:"2px solid #E5E7EB",background:"#FFFFFF",borderRadius:16,padding:"12px 14px",fontWeight:900,color:"#374151",fontFamily:"inherit",cursor:"pointer"}}>Voltar</button>
           )}
-          <button onClick={onNext} style={{border:"none",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:16,padding:"12px 14px",fontWeight:950,color:"#FFFFFF",fontFamily:"inherit",cursor:"pointer",boxShadow:"0 12px 26px rgba(109,40,217,0.24)"}}>{isLast ? "Finalizar" : "Próximo"}</button>
+          <button onClick={isLast ? onClose : onNext} style={{border:"none",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:16,padding:"12px 14px",fontWeight:950,color:"#FFFFFF",fontFamily:"inherit",cursor:"pointer",boxShadow:"0 12px 26px rgba(109,40,217,0.24)"}}>{primaryLabel}</button>
         </div>
-        <button onClick={onSkip} style={{width:"100%",marginTop:10,border:"none",background:"transparent",color:"#6B7280",fontSize:13,fontWeight:850,fontFamily:"inherit",cursor:"pointer"}}>Pular tutorial</button>
       </div>
     </div>
   );
 }
-
 
 function isAppRunningStandalone() {
   try {
@@ -6024,14 +6023,18 @@ const [lists,setLists]=useState(()=>{
   const [showGuidedTour,setShowGuidedTour]=useState(false);
   const [guidedTourIndex,setGuidedTourIndex]=useState(0);
   const guidedTourStep = GUIDED_TOUR_STEPS[guidedTourIndex] || null;
-  const isTourStep = useCallback((id)=>Boolean(showGuidedTour && guidedTourStep?.id === id),[showGuidedTour,guidedTourStep]);
+  const currentScreenTourSteps = GUIDED_TOUR_STEPS.filter(step => step.screen === screen);
+  const guidedTourLocalIndex = Math.max(0, currentScreenTourSteps.findIndex(step => step.id === guidedTourStep?.id));
+  const guidedTourLocalTotal = Math.max(1, currentScreenTourSteps.length);
+  const isTourStep = useCallback((id)=>Boolean(showGuidedTour && guidedTourStep?.id === id && guidedTourStep?.screen === screen),[showGuidedTour,guidedTourStep,screen]);
 
-  const startGuidedTour = useCallback(() => {
-    setScreen("home");
-    setGuidedTourIndex(GUIDED_TOUR_FIRST_STEP_BY_SCREEN.home || 0);
+  const startGuidedTour = useCallback((screenName = screen) => {
+    const targetScreen = screenName || "home";
+    const firstIndex = GUIDED_TOUR_FIRST_STEP_BY_SCREEN[targetScreen] ?? 0;
+    setGuidedTourIndex(firstIndex);
     setShowGuidedTour(true);
-    registrarEvento("guided_tour_started", { screen: "home", trigger: "manual_button" });
-  }, []);
+    registrarEvento("guided_tour_started", { screen: targetScreen, trigger: "manual_button" });
+  }, [screen]);
 
   const showToast=useCallback((msg,duration=1000)=>{
     clearTimeout(toastTimer.current);
@@ -6042,57 +6045,38 @@ const [lists,setLists]=useState(()=>{
 
 
 
-  // O tutorial guiado não inicia automaticamente.
-  // Ele só começa quando o usuário tocar no botão "Como usar" na tela inicial.
-
-  useEffect(() => {
-    if (!showGuidedTour || !screen) return;
-    const currentStep = GUIDED_TOUR_STEPS[guidedTourIndex];
-    if (currentStep?.screen === screen) return;
-    const firstIndexForScreen = GUIDED_TOUR_FIRST_STEP_BY_SCREEN[screen];
-    if (firstIndexForScreen !== undefined) {
-      setGuidedTourIndex(firstIndexForScreen);
-      registrarEvento("guided_tour_screen_entered", { screen, step: GUIDED_TOUR_STEPS[firstIndexForScreen]?.id || "" });
-    }
-  }, [showGuidedTour, screen, guidedTourIndex]);
+  // O tutorial guiado não inicia automaticamente e não muda de página sozinho.
+  // Cada tela possui seu próprio botão "Como usar o app".
 
   const finishGuidedTour = useCallback((mode = "done") => {
-    setGuidedTourCompleted(mode === "skip" ? "dismissed" : "done");
     setShowGuidedTour(false);
-    registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_completed", { step: guidedTourStep?.id || "", screen });
+    registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_closed", { step: guidedTourStep?.id || "", screen });
   }, [guidedTourStep, screen]);
 
   const nextGuidedTourStep = useCallback(() => {
-    if (guidedTourIndex >= GUIDED_TOUR_STEPS.length - 1) {
+    const sameScreenSteps = GUIDED_TOUR_STEPS
+      .map((step, index) => ({ step, index }))
+      .filter(item => item.step.screen === screen);
+    const currentPos = sameScreenSteps.findIndex(item => item.index === guidedTourIndex);
+    const nextItem = sameScreenSteps[currentPos + 1];
+
+    if (!nextItem) {
       finishGuidedTour("done");
       return;
     }
 
-    const nextIndex = guidedTourIndex + 1;
-    const nextStep = GUIDED_TOUR_STEPS[nextIndex];
     const currentStep = GUIDED_TOUR_STEPS[guidedTourIndex];
-
-    // O tutorial é contextual e não força a navegação.
-    // Quando o próximo passo pertence a outra tela, o usuário deve tocar no botão real do app
-    // para avançar naturalmente. Ex.: na Home, tocar em Compras.
-    if (nextStep?.screen && nextStep.screen !== screen) {
-      const msg = currentStep?.screen === "home"
-        ? "Toque no módulo Compras para continuar o tutorial."
-        : "Avance pelo botão da tela para continuar o tutorial.";
-      showToast(msg, 1800);
-      registrarEvento("guided_tour_waiting_user_action", { from_step: currentStep?.id || "", next_screen: nextStep?.screen || "", current_screen: screen });
-      return;
-    }
-
-    setGuidedTourIndex(nextIndex);
-    registrarEvento("guided_tour_next", { from_step: currentStep?.id || "", to_step: nextStep?.id || "", from_screen: currentStep?.screen || "", to_screen: nextStep?.screen || "" });
-  }, [guidedTourIndex, screen, finishGuidedTour, showToast]);
+    setGuidedTourIndex(nextItem.index);
+    registrarEvento("guided_tour_next", { from_step: currentStep?.id || "", to_step: nextItem.step?.id || "", screen });
+  }, [guidedTourIndex, screen, finishGuidedTour]);
 
   const prevGuidedTourStep = useCallback(() => {
-    const prevIndex = Math.max(0, guidedTourIndex - 1);
-    const prevStep = GUIDED_TOUR_STEPS[prevIndex];
-    setGuidedTourIndex(prevIndex);
-    if (prevStep?.screen && prevStep.screen !== screen) setScreen(prevStep.screen);
+    const sameScreenSteps = GUIDED_TOUR_STEPS
+      .map((step, index) => ({ step, index }))
+      .filter(item => item.step.screen === screen);
+    const currentPos = sameScreenSteps.findIndex(item => item.index === guidedTourIndex);
+    const prevItem = sameScreenSteps[Math.max(0, currentPos - 1)];
+    if (prevItem) setGuidedTourIndex(prevItem.index);
   }, [guidedTourIndex, screen]);
 
   const addNotification = useCallback((type, message, meta = {}) => {
@@ -8635,11 +8619,12 @@ const [lists,setLists]=useState(()=>{
       {showGuidedTour && guidedTourStep && !userNameModal && (
         <GuidedTourOverlay
           step={guidedTourStep}
-          index={guidedTourIndex}
-          total={GUIDED_TOUR_STEPS.length}
+          index={guidedTourLocalIndex}
+          total={guidedTourLocalTotal}
           onNext={nextGuidedTourStep}
           onPrev={prevGuidedTourStep}
-          onSkip={()=>finishGuidedTour("skip")}
+          onClose={()=>finishGuidedTour("done")}
+          showPrev={screen !== "home"}
         />
       )}
 
@@ -8728,7 +8713,7 @@ const [lists,setLists]=useState(()=>{
                 <BrandWordmark />
                 <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
                 <button
-                  onClick={startGuidedTour}
+                  onClick={()=>startGuidedTour("home")}
                   style={{marginTop:14,border:"none",borderRadius:999,padding:"11px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)"}}
                 >
                   ✨ Como usar o app
@@ -8754,7 +8739,7 @@ const [lists,setLists]=useState(()=>{
                 return (
                   <div
                     key={m.name}
-                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create"); if(showGuidedTour) setGuidedTourIndex(GUIDED_TOUR_FIRST_STEP_BY_SCREEN.create || 1);}}}
+                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
                     aria-disabled={inactive}
                     title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
                     style={{
@@ -8952,6 +8937,7 @@ const [lists,setLists]=useState(()=>{
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
             </div>
+            <button onClick={()=>startGuidedTour("create")} style={{border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"8px 10px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>✨ Como usar</button>
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ITENS EM CASA */}
@@ -9324,6 +9310,7 @@ const [lists,setLists]=useState(()=>{
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
                     style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,...tourHighlightStyle(isTourStep("list_share"))}}><WhatsAppIcon size={17} /> Enviar lista</button>
                 </div>
+                <button onClick={()=>startGuidedTour("list")} style={{width:"100%",margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,0.32)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",borderRadius:999,padding:"9px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)"}}>✨ Como usar esta tela</button>
                 <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...tourHighlightStyle(isTourStep("list_progress"))}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
