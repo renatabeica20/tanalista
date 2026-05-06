@@ -7788,27 +7788,43 @@ const [lists,setLists]=useState(()=>{
   const archiveFinishedListsBeforeHome=()=>{
     try{
       if(currentList && isListFinished(currentList)){
+        const now=new Date().toISOString();
         const archivedList={
           ...currentList,
           archivedFinished:true,
-          finishedAt:currentList.finishedAt||new Date().toISOString(),
-          finalizedAt:currentList.finalizedAt||new Date().toISOString(),
+          finishedAt:currentList.finishedAt||now,
+          finalizedAt:currentList.finalizedAt||now,
+          lastSyncedAt:now,
+          updatedAt:now,
           status:"archived_completed"
         };
 
-        setCurrentList(archivedList);
+        const exists=(lists||[]).some(item=>item?.id===archivedList.id);
+        const nextLists=exists
+          ? (lists||[]).map(item=>item?.id===archivedList.id ? archivedList : item)
+          : [archivedList,...(lists||[])];
 
-        setLists(prev=>(prev||[]).map(item=>
-          item?.id===archivedList.id ? archivedList : item
-        ));
+        saveLists(nextLists);
+        setCurrentList(null);
 
-        showToast("✅ Lista arquivada no histórico.");
+        // Sincroniza em segundo plano quando houver registro na nuvem.
+        // A navegação não fica bloqueada caso a conexão demore ou falhe.
+        persistListRecordToCloud(archivedList,{silent:true}).catch(err=>
+          console.warn("Nao foi possivel sincronizar lista arquivada:",err)
+        );
+
+        showToast("✅ Lista salva no histórico.");
+      }else{
+        setCurrentList(null);
       }
     }catch(err){
-      console.warn("Erro ao arquivar lista finalizada:",err);
+      console.warn("Erro ao salvar lista antes de voltar:",err);
+      setCurrentList(null);
     }
 
-    archiveFinishedListsBeforeHome();
+    setSearch("");
+    setCollapsedCats({});
+    setScreen("home");
   };
 
 
