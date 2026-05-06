@@ -242,9 +242,41 @@ const GUIDED_TOUR_STEPS = [
   {
     id: "list_items",
     screen: "list",
+    icon: "🧺",
+    title: "Veja os itens por seção",
+    text: "A lista fica organizada por categorias para facilitar o percurso dentro do mercado.",
+    position: "top",
+  },
+  {
+    id: "list_item_check",
+    screen: "list",
     icon: "✔️",
-    title: "Marque os itens durante a compra",
-    text: "Toque nos produtos conforme forem colocados no carrinho. Você também pode ajustar preço e quantidade.",
+    title: "Marque o item comprado",
+    text: "Toque no círculo à esquerda do produto para indicar que ele já foi colocado no carrinho.",
+    position: "top",
+  },
+  {
+    id: "list_item_price",
+    screen: "list",
+    icon: "💲",
+    title: "Toque no produto para informar preço",
+    text: "Ao tocar no nome do produto, abre-se a janela para inserir preço, quantidade e detalhes da compra.",
+    position: "top",
+  },
+  {
+    id: "list_item_missing",
+    screen: "list",
+    icon: "∅",
+    title: "Marque item em falta",
+    text: "Use o botão à direita quando o produto não for encontrado no mercado.",
+    position: "top",
+  },
+  {
+    id: "list_extra_item",
+    screen: "list",
+    icon: "➕",
+    title: "Adicione itens extras",
+    text: "Se lembrar de algo durante a compra, use este botão para incluir o item antes de sair da lista.",
     position: "top",
   },
   {
@@ -289,10 +321,14 @@ function tourHighlightStyle(active) {
   if (!active) return {};
   return {
     position: "relative",
-    zIndex: 635,
-    boxShadow: "0 0 0 5px rgba(255,255,255,0.98), 0 0 0 11px rgba(124,58,237,0.42), 0 26px 64px rgba(76,29,149,0.40)",
-    transform: "translateY(-2px) scale(1.015)",
-    transition: "box-shadow .25s ease, transform .25s ease",
+    zIndex: 735,
+    opacity: 1,
+    filter: "brightness(1.18) saturate(1.12)",
+    outline: "3px solid rgba(255,255,255,0.98)",
+    outlineOffset: 3,
+    boxShadow: "0 0 0 6px rgba(255,255,255,0.98), 0 0 0 14px rgba(124,58,237,0.58), 0 30px 72px rgba(76,29,149,0.52)",
+    transform: "translateY(-2px) scale(1.018)",
+    transition: "box-shadow .25s ease, transform .25s ease, filter .25s ease",
   };
 }
 
@@ -9308,10 +9344,10 @@ const [lists,setLists]=useState(()=>{
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.76)",fontWeight:800,marginTop:3}}>{checkedItems}/{totalItems} itens concluídos</div>
                   </div>
                   <button onClick={()=>{setShareTargetList(currentList);setShareModal(true);}}
-                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,...tourHighlightStyle(isTourStep("list_share"))}}><WhatsAppIcon size={17} /> Enviar lista</button>
+                    style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.30)",borderRadius:180,padding:"8px 12px",color:"white",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",backdropFilter:"blur(8px)",boxShadow:"0 10px 22px rgba(0,0,0,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,...(isTourStep("list_share") ? {background:"#FFFFFF",color:"#4C1D95",border:"3px solid #FFFFFF"} : {}),...tourHighlightStyle(isTourStep("list_share"))}}><WhatsAppIcon size={17} /> Enviar lista</button>
                 </div>
                 <button onClick={()=>startGuidedTour("list")} style={{width:"100%",margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,0.32)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",borderRadius:999,padding:"9px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)"}}>✨ Como usar esta tela</button>
-                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...tourHighlightStyle(isTourStep("list_progress"))}}>
+                <div style={{background:"rgba(255,255,255,0.16)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:22,padding:"13px 14px",backdropFilter:"blur(10px)",boxShadow:"inset 0 1px 0 rgba(255,255,255,0.18)",...(isTourStep("list_progress") ? {background:"#FFFFFF",border:"3px solid #FFFFFF",color:"#111827"} : {}),...tourHighlightStyle(isTourStep("list_progress"))}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <span style={{fontWeight:800,fontSize:15,color:"white"}}>{fmtR(fullTotal)}</span>
                 {budget>0&&<span style={{fontWeight:800,fontSize:15,color:"rgba(255,255,255,0.8)"}}>{fmtR(budget)}</span>}
@@ -9514,10 +9550,11 @@ const [lists,setLists]=useState(()=>{
                               background:hl?"#FFFDE7":item.notFound?"#FFFBEB":item.checked?hexToRgba(theme.border,0.055):"rgba(255,255,255,0.98)",
                               opacity:item.notFound?0.46:(item.checked?0.62:1),filter:item.notFound?"grayscale(0.15)":"none",cursor:item.notFound?"not-allowed":"pointer",
                               transition:"background 0.15s",
+                              ...(isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}),
                             }}>
                             {/* Checkbox com cor da categoria */}
                             <div onClick={e=>{e.stopPropagation();if(item.notFound){showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");return;}toggleCheck(ci,realII);if(search)setSearch("");}}
-                              style={{width:34,height:34,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:(item.notFound?"#F59E0B":"#E5E7EB")}`,background:item.checked?theme.border:(item.notFound?"#FEF3C7":"white"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:15,color:"white",cursor:item.notFound?"not-allowed":"pointer",transition:"all 0.2s",boxShadow:item.checked?`0 8px 18px ${hexToRgba(theme.border,0.22)}`:"0 3px 10px rgba(15,23,42,0.04)"}}>
+                              style={{width:34,height:34,borderRadius:"50%",border:`2.5px solid ${item.checked?theme.border:(item.notFound?"#F59E0B":"#E5E7EB")}`,background:item.checked?theme.border:(item.notFound?"#FEF3C7":"white"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:15,color:"white",cursor:item.notFound?"not-allowed":"pointer",transition:"all 0.2s",boxShadow:item.checked?`0 8px 18px ${hexToRgba(theme.border,0.22)}`:"0 3px 10px rgba(15,23,42,0.04)",...(isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {})}}>
                               {item.checked?"✓":""}
                             </div>
                             {/* Conteúdo */}
@@ -9545,7 +9582,7 @@ const [lists,setLists]=useState(()=>{
                               {hasPrice && <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || item.checkedAt || null} listId={currentList?.id} itemId={item.id || item.name} compact />}
                               {!hasPrice && <PriceMemoryLine itemName={item.name} />}
                             </div>
-                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:38,height:38,borderRadius:"50%",border:"2px solid "+(item.notFound?"#DC2626":"#E5E7EB"),background:item.notFound?"#FEE2E2":"#FFFFFF",color:item.notFound?"#991B1B":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:17,fontWeight:900,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 12px rgba(15,23,42,0.06)"}}>{item.notFound?"!":"∅"}</button>
+                            <button onClick={e=>{e.stopPropagation();toggleNotFound(ci,realII);}} title={item.notFound?"Voltar para pendente":"Marcar item em falta"} style={{width:38,height:38,borderRadius:"50%",border:"2px solid "+(item.notFound?"#DC2626":"#E5E7EB"),background:item.notFound?"#FEE2E2":"#FFFFFF",color:item.notFound?"#991B1B":"#9CA3AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:17,fontWeight:900,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 12px rgba(15,23,42,0.06)",...(isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {})}}>{item.notFound?"!":"∅"}</button>
                           </div>
                         );
                       })}
@@ -9557,7 +9594,7 @@ const [lists,setLists]=useState(()=>{
           </div>
 
           <button onClick={()=>setExtraModal(true)}
-            style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",borderRadius:180,padding:"14px 24px",fontWeight:800,fontSize:14,cursor:"pointer",boxShadow:"0 6px 24px rgba(124,58,237,0.4)",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",zIndex:200,fontFamily:"inherit"}}>
+            style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",borderRadius:180,padding:"14px 24px",fontWeight:800,fontSize:14,cursor:"pointer",boxShadow:"0 6px 24px rgba(124,58,237,0.4)",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",zIndex:isTourStep("list_extra_item")?735:200,fontFamily:"inherit",...(isTourStep("list_extra_item")?{filter:"brightness(1.18) saturate(1.12)",outline:"3px solid rgba(255,255,255,0.98)",outlineOffset:3,boxShadow:"0 0 0 6px rgba(255,255,255,0.98), 0 0 0 14px rgba(124,58,237,0.58), 0 30px 72px rgba(76,29,149,0.52)"}:{})}}>
             ＋ Adicionar item extra
           </button>
         </div>
