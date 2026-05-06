@@ -163,6 +163,131 @@ const APP_PIN_SESSION_AT_KEY = "tnl_pin_verified_at";
 const APP_INSTALL_PROMPT_DISMISSED_KEY = "tnl_install_prompt_dismissed";
 const APP_INSTALL_PROMPT_LAST_SHOWN_KEY = "tnl_install_prompt_last_shown";
 
+const APP_GUIDED_TOUR_DONE_KEY = "tnl_guided_tour_done_v2";
+const APP_GUIDED_TOUR_DISMISSED_KEY = "tnl_guided_tour_dismissed_v2";
+
+const GUIDED_TOUR_STEPS = [
+  {
+    id: "create_pantry",
+    screen: "create",
+    icon: "🏠",
+    title: "Comece pelos Itens em Casa",
+    text: "Registre o que você já tem antes de montar a lista. Isso ajuda a evitar compras repetidas.",
+    position: "bottom",
+  },
+  {
+    id: "create_pantry_action",
+    screen: "create",
+    icon: "✅",
+    title: "Crie ou edite seus itens em casa",
+    text: "Use este botão para cadastrar, revisar ou atualizar os produtos que já existem em casa.",
+    position: "bottom",
+  },
+  {
+    id: "create_budget",
+    screen: "create",
+    icon: "💰",
+    title: "Defina o orçamento",
+    text: "Informe o valor máximo da compra para acompanhar seus gastos em tempo real.",
+    position: "bottom",
+  },
+  {
+    id: "create_name",
+    screen: "create",
+    icon: "📝",
+    title: "Dê um nome para a lista",
+    text: "Use um nome fácil de identificar, como Compras da semana ou Mercado do mês.",
+    position: "bottom",
+  },
+  {
+    id: "create_items",
+    screen: "create",
+    icon: "✍️",
+    title: "Insira os itens da lista",
+    text: "Digite item por item, cole uma lista pronta ou use a opção de falar a lista.",
+    position: "top",
+  },
+  {
+    id: "create_ai",
+    screen: "create",
+    icon: "🤖",
+    title: "Compare ou organize a lista",
+    text: "Se houver Itens em Casa ativos, compare antes. Caso contrário, organize a lista automaticamente.",
+    position: "top",
+  },
+];
+
+function hasCompletedGuidedTour() {
+  try {
+    return localStorage.getItem(APP_GUIDED_TOUR_DONE_KEY) === "1" || localStorage.getItem(APP_GUIDED_TOUR_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setGuidedTourCompleted(value = "done") {
+  try {
+    if (value === "dismissed") localStorage.setItem(APP_GUIDED_TOUR_DISMISSED_KEY, "1");
+    localStorage.setItem(APP_GUIDED_TOUR_DONE_KEY, "1");
+  } catch {}
+}
+
+function tourHighlightStyle(active) {
+  if (!active) return {};
+  return {
+    position: "relative",
+    zIndex: 635,
+    boxShadow: "0 0 0 5px rgba(255,255,255,0.98), 0 0 0 11px rgba(124,58,237,0.42), 0 26px 64px rgba(76,29,149,0.40)",
+    transform: "translateY(-2px) scale(1.015)",
+    transition: "box-shadow .25s ease, transform .25s ease",
+  };
+}
+
+function GuidedTourOverlay({ step, index, total, onNext, onPrev, onSkip }) {
+  if (!step) return null;
+  const isLast = index >= total - 1;
+  const topPosition = step.position === "top";
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:620,pointerEvents:"none"}}>
+      <div style={{position:"absolute",inset:0,background:"rgba(17,24,39,0.68)",backdropFilter:"blur(2px)"}} />
+      <div style={{
+        position:"absolute",
+        left:16,
+        right:16,
+        [topPosition ? "top" : "bottom"]: topPosition ? 92 : 96,
+        margin:"0 auto",
+        maxWidth:390,
+        background:"#FFFFFF",
+        borderRadius:26,
+        padding:20,
+        boxShadow:"0 28px 80px rgba(17,24,39,0.30)",
+        border:"1px solid #DDD6FE",
+        pointerEvents:"auto",
+      }}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:12}}>
+          <div style={{width:46,height:46,borderRadius:17,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#F5F3FF,#ECFDF5)",border:"1px solid #DDD6FE",fontSize:24,flexShrink:0}}>{step.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:950,color:"#6D28D9",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:4}}>Passo {index + 1} de {total}</div>
+            <div style={{fontSize:19,fontWeight:950,color:"#111827",lineHeight:1.12}}>{step.title}</div>
+            <div style={{fontSize:13,color:"#6B7280",fontWeight:700,lineHeight:1.45,marginTop:7}}>{step.text}</div>
+          </div>
+        </div>
+        <div style={{height:7,background:"#F3F4F6",borderRadius:999,overflow:"hidden",margin:"12px 0 16px"}}>
+          <div style={{height:"100%",width:`${((index + 1) / total) * 100}%`,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:999}} />
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:index>0?"1fr 1.4fr":"1.4fr",gap:10}}>
+          {index>0&&(
+            <button onClick={onPrev} style={{border:"2px solid #E5E7EB",background:"#FFFFFF",borderRadius:16,padding:"12px 14px",fontWeight:900,color:"#374151",fontFamily:"inherit",cursor:"pointer"}}>Voltar</button>
+          )}
+          <button onClick={onNext} style={{border:"none",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",borderRadius:16,padding:"12px 14px",fontWeight:950,color:"#FFFFFF",fontFamily:"inherit",cursor:"pointer",boxShadow:"0 12px 26px rgba(109,40,217,0.24)"}}>{isLast ? "Finalizar" : "Próximo"}</button>
+        </div>
+        <button onClick={onSkip} style={{width:"100%",marginTop:10,border:"none",background:"transparent",color:"#6B7280",fontSize:13,fontWeight:850,fontFamily:"inherit",cursor:"pointer"}}>Pular tutorial</button>
+      </div>
+    </div>
+  );
+}
+
+
 function isAppRunningStandalone() {
   try {
     return Boolean(
@@ -5843,6 +5968,10 @@ const [lists,setLists]=useState(()=>{
   const [showInstallNotice,setShowInstallNotice]=useState(false);
   const [notifications,setNotifications]=useState(()=>loadStoredNotifications());
   const [showNotificationsScreen,setShowNotificationsScreen]=useState(false);
+  const [showGuidedTour,setShowGuidedTour]=useState(false);
+  const [guidedTourIndex,setGuidedTourIndex]=useState(0);
+  const guidedTourStep = GUIDED_TOUR_STEPS[guidedTourIndex] || null;
+  const isTourStep = useCallback((id)=>Boolean(showGuidedTour && guidedTourStep?.id === id),[showGuidedTour,guidedTourStep]);
 
   const showToast=useCallback((msg,duration=1000)=>{
     clearTimeout(toastTimer.current);
@@ -5850,6 +5979,49 @@ const [lists,setLists]=useState(()=>{
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
+
+
+
+  useEffect(() => {
+    if (hasCompletedGuidedTour()) return;
+    if (userNameModal || loading || sharedLandingRecord || showInstallNotice || showNotificationsScreen || showGuidedTour) return;
+    const timer = setTimeout(() => {
+      setGuidedTourIndex(0);
+      setShowGuidedTour(true);
+      registrarEvento("guided_tour_started", { screen });
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [userNameModal, loading, sharedLandingRecord, showInstallNotice, showNotificationsScreen, showGuidedTour, screen]);
+
+  useEffect(() => {
+    if (!showGuidedTour || !guidedTourStep?.screen) return;
+    if (screen !== guidedTourStep.screen) setScreen(guidedTourStep.screen);
+  }, [showGuidedTour, guidedTourStep, screen]);
+
+  const finishGuidedTour = useCallback((mode = "done") => {
+    setGuidedTourCompleted(mode === "skip" ? "dismissed" : "done");
+    setShowGuidedTour(false);
+    registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_completed", { step: guidedTourStep?.id || "" });
+  }, [guidedTourStep]);
+
+  const nextGuidedTourStep = useCallback(() => {
+    if (guidedTourIndex >= GUIDED_TOUR_STEPS.length - 1) {
+      finishGuidedTour("done");
+      return;
+    }
+    const nextIndex = guidedTourIndex + 1;
+    setGuidedTourIndex(nextIndex);
+    const nextStep = GUIDED_TOUR_STEPS[nextIndex];
+    if (nextStep?.screen && nextStep.screen !== screen) setScreen(nextStep.screen);
+    registrarEvento("guided_tour_next", { from_step: guidedTourStep?.id || "", to_step: nextStep?.id || "" });
+  }, [guidedTourIndex, guidedTourStep, screen, finishGuidedTour]);
+
+  const prevGuidedTourStep = useCallback(() => {
+    const prevIndex = Math.max(0, guidedTourIndex - 1);
+    setGuidedTourIndex(prevIndex);
+    const prevStep = GUIDED_TOUR_STEPS[prevIndex];
+    if (prevStep?.screen && prevStep.screen !== screen) setScreen(prevStep.screen);
+  }, [guidedTourIndex, screen]);
 
   const addNotification = useCallback((type, message, meta = {}) => {
     const id = meta.id || `${type}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -5925,7 +6097,7 @@ const [lists,setLists]=useState(()=>{
     setUserPinConfirmInput("");
     clearPinSession();
     setUserNameModal(true);
-    setScreen("home");
+    archiveFinishedListsBeforeHome();
     setShowPriceStatsScreen(false);
     setShowHistory(false);
     setShowNotificationsScreen(false);
@@ -6435,7 +6607,7 @@ const [lists,setLists]=useState(()=>{
   },[]);
 
   useEffect(()=>{
-    if (userNameModal || loading || sharedLandingRecord || isAppRunningStandalone()) return;
+    if (userNameModal || loading || sharedLandingRecord || showGuidedTour || isAppRunningStandalone()) return;
     if (!shouldShowInstallPromptNotice()) return;
     const timer = setTimeout(()=>{
       try { localStorage.setItem(APP_INSTALL_PROMPT_LAST_SHOWN_KEY, String(Date.now())); } catch {}
@@ -6443,7 +6615,7 @@ const [lists,setLists]=useState(()=>{
       registrarEvento("install_notice_shown", { platform: getInstallPlatform(), screen });
     }, 1800);
     return()=>clearTimeout(timer);
-  },[userNameModal, loading, sharedLandingRecord, screen]);
+  },[userNameModal, loading, sharedLandingRecord, showGuidedTour, screen]);
 
   const closeInstallNotice=(neverShow=false)=>{
     if (neverShow) {
@@ -7006,7 +7178,7 @@ const [lists,setLists]=useState(()=>{
       setSearch("");setCollapsedCats({});
       if(editingOriginal){
         setCurrentList(null);
-        setScreen("home");
+        archiveFinishedListsBeforeHome();
       }else{
         setCurrentList(newList);
         setScreen("list");
@@ -7605,13 +7777,40 @@ const [lists,setLists]=useState(()=>{
 
   const isRealSharedList=(list)=>Boolean(list?.sharedId && (list?.isShared === true || list?.imported === true));
 
-  const isReadOnlyFinishedList=(list)=>Boolean(isListFinished(list) || list?.finishedAt);
+  const isReadOnlyFinishedList=(list)=>Boolean(list?.archivedFinished===true);
 
   const blockFinishedListEdit=()=>{
     showToast("🔒 Lista finalizada. Faça uma cópia para usar ou editar.");
     returnToSearch();
     return true;
   };
+
+  const archiveFinishedListsBeforeHome=()=>{
+    try{
+      if(currentList && isListFinished(currentList)){
+        const archivedList={
+          ...currentList,
+          archivedFinished:true,
+          finishedAt:currentList.finishedAt||new Date().toISOString(),
+          finalizedAt:currentList.finalizedAt||new Date().toISOString(),
+          status:"archived_completed"
+        };
+
+        setCurrentList(archivedList);
+
+        setLists(prev=>(prev||[]).map(item=>
+          item?.id===archivedList.id ? archivedList : item
+        ));
+
+        showToast("✅ Lista arquivada no histórico.");
+      }
+    }catch(err){
+      console.warn("Erro ao arquivar lista finalizada:",err);
+    }
+
+    archiveFinishedListsBeforeHome();
+  };
+
 
   const openListForEdit=(list)=>{
     if(!list)return;
@@ -8099,7 +8298,7 @@ const [lists,setLists]=useState(()=>{
 
     if(currentList && sameList(currentList)){
       setCurrentList(null);
-      setScreen("home");
+      archiveFinishedListsBeforeHome();
     }
 
     showToast("🗑 Lista excluída");
@@ -8344,6 +8543,18 @@ const [lists,setLists]=useState(()=>{
         );
       })()}
 
+
+      {showGuidedTour && guidedTourStep && !userNameModal && (
+        <GuidedTourOverlay
+          step={guidedTourStep}
+          index={guidedTourIndex}
+          total={GUIDED_TOUR_STEPS.length}
+          onNext={nextGuidedTourStep}
+          onPrev={prevGuidedTourStep}
+          onSkip={()=>finishGuidedTour("skip")}
+        />
+      )}
+
       {/* LISTA COMPARTILHADA RECEBIDA */}
       {sharedLandingRecord&&(()=>{
         const sharedData=sharedLandingRecord.data||{};
@@ -8473,6 +8684,7 @@ const [lists,setLists]=useState(()=>{
                       minHeight:m.active?164:154,
                       transform:m.active?"translateY(-2px)":"none",
                       transition:"transform .2s ease, box-shadow .2s ease, border-color .2s ease",
+                      ...(m.active ? tourHighlightStyle(isTourStep("home_compras")) : {}),
                     }}
                   >
                     {m.active&&(
@@ -8641,7 +8853,7 @@ const [lists,setLists]=useState(()=>{
       {screen==="create"&&(
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
           <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
-            <button onClick={()=>{setScreen("home");setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
+            <button onClick={()=>{archiveFinishedListsBeforeHome();setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
               style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
@@ -8649,7 +8861,7 @@ const [lists,setLists]=useState(()=>{
           </div>
           <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
             {/* ITENS EM CASA */}
-            <div style={{...createCard,borderColor:activePantry?"#86EFAC":"#DDD6FE",background:activePantry?"#F0FDF4":"#FAF9FF"}}>
+            <div style={{...createCard,borderColor:activePantry?"#86EFAC":"#DDD6FE",background:activePantry?"#F0FDF4":"#FAF9FF",...tourHighlightStyle(isTourStep("create_pantry"))}}>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:48,height:48,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 12px 24px rgba(109,40,217,0.18)"}}>🏠</div>
                 <div style={{flex:1,minWidth:0}}>
@@ -8666,11 +8878,11 @@ const [lists,setLists]=useState(()=>{
               </div>
               <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:12}}>
                 {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-                <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6"}}>{activePantry?"Editar lista":"Criar lista"}</button>
+                <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
               </div>
             </div>
             {/* ORÇAMENTO */}
-            <div style={createCard}>
+            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
               <label style={lbl}>Orçamento</label>
               <div>
                 <div style={{position:"relative"}}>
@@ -8686,7 +8898,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* NOME DA LISTA */}
-            <div style={createCard}>
+            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
               <label style={lbl}>Nome da lista</label>
               <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
                 placeholder="Ex: Compras da semana..."
@@ -8697,7 +8909,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             </div>
             {/* TIPO DE LISTA */}
-            <div style={createCard}>
+            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
               <label style={lbl}>Tipo de lista</label>
               <div style={{position:"relative"}}>
                 <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -8707,7 +8919,7 @@ const [lists,setLists]=useState(()=>{
                 <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
               </div>
             </div>
-            <div style={createCard}>
+            <div style={{...createCard,...tourHighlightStyle(isTourStep("create_items"))}}>
               <label style={lbl}>Adicionar itens</label>
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
@@ -8764,7 +8976,7 @@ const [lists,setLists]=useState(()=>{
               </div>
             )}
             <button onClick={(activePantry && pendingItems.length>0 && !pantryCompared)?compareWithActivePantry:organizeList} disabled={loading||pendingItems.length===0}
-              style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+              style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
               {(activePantry && pendingItems.length>0 && !pantryCompared)?"Comparar com Itens em Casa":(editingListId?"Salvar alterações":"Organizar lista")} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
             </button>
           </div>
@@ -9008,7 +9220,7 @@ const [lists,setLists]=useState(()=>{
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 18% 8%,rgba(255,255,255,0.22),transparent 32%),radial-gradient(circle at 90% 0%,rgba(255,255,255,0.14),transparent 34%)",pointerEvents:"none"}}/>
               <div style={{position:"relative",zIndex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-                  <button onClick={()=>setScreen("home")}
+                  <button onClick={()=>archiveFinishedListsBeforeHome()}
                     title="Voltar para a tela inicial"
                     style={{background:"rgba(255,255,255,0.96)",border:"2px solid rgba(255,255,255,0.92)",borderRadius:"50%",width:44,height:44,color:"#4C1D95",fontSize:24,fontWeight:900,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",boxShadow:"0 12px 28px rgba(17,24,39,0.24)",animation:showFinished?"tnlPulseBack 1.2s ease-in-out infinite":"none"}}>←</button>
                   <div style={{flex:1,minWidth:0,textAlign:"center"}}>
