@@ -19,6 +19,13 @@ import {
   APP_GUIDED_TOUR_DONE_KEY,
   APP_GUIDED_TOUR_DISMISSED_KEY,
 } from "./config/storageKeys";
+import {
+  getStoredValue,
+  setStoredValue,
+  removeStoredValue,
+  getStoredJSON,
+  setStoredJSON,
+} from "./utils/storageUtils";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -503,22 +510,6 @@ function shouldShowInstallPromptNotice() {
     return Date.now() - lastShown > sevenDays;
   } catch {
     return !isAppRunningStandalone();
-  }
-}
-
-function getStoredValue(key) {
-  try {
-    return localStorage.getItem(key) || "";
-  } catch {
-    return "";
-  }
-}
-
-function setStoredValue(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Ignora bloqueios pontuais de armazenamento local.
   }
 }
 
