@@ -1000,35 +1000,7 @@ async function softDeleteSharedListRecord(id, list = null) {
 
 
 
-async function createUserAuthProfile(name, pinHash) {
-  const clean = String(name || "").trim();
-  if (!clean || !pinHash || !hasSupabaseConfig()) return null;
-  const payload = {
-    title: `Perfil de acesso - ${clean}`,
-    list_type: "auth_profile",
-    budget: 0,
-    remetente: clean,
-    user_id: null,
-    data: {
-      authProfile: true,
-      name: clean,
-      pinHash,
-      pinVersion: "sha256-v1",
-      createdAt: new Date().toISOString(),
-    },
-  };
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
-    method: "POST",
-    headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Não foi possível criar PIN de acesso (${res.status}) ${detail}`.trim());
-  }
-  const data = await res.json().catch(() => []);
-  return Array.isArray(data) ? data[0] : data;
-}
+
 
 async function resetUserAuthPin(name, newPin, newPinConfirm = "") {
   const clean = String(name || "").trim();
