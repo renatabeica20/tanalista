@@ -15,12 +15,13 @@ export function supabaseHeaders(extra = {}) {
     Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     "Content-Type": "application/json",
     ...extra,
-    function getAppUserId() {
-  return getStoredValue(APP_USER_ID_KEY) || null;
+    
 }
   };
 }
-
+function getAppUserId() {
+  return getStoredValue(APP_USER_ID_KEY) || null;
+}
 export async function getSharedListRecord(id) {
   if (!hasSupabaseConfig()) {
     throw new Error("Supabase não configurado.");
