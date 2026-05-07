@@ -41,3 +41,10 @@ export function normalizeText(value) {
     .toLowerCase()
     .trim();
 }
+export function normalizeAuthName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
