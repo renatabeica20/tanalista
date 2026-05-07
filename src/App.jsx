@@ -4719,6 +4719,7 @@ function shouldOmitListFromLocalState(list) {
   // Regra única de bloqueio: qualquer lista já excluída por este usuário
   // não pode permanecer no estado, no localStorage nem voltar pela restauração da nuvem.
   return Boolean(
+    isOwnListTombstoneSnapshotMatch(list) ||
     isListDeletionLockedV2(list) ||
     wasOwnListDeletedForCurrentUser(list) ||
     isRemoteOwnListDeleted(list) ||
@@ -4994,6 +4995,133 @@ function shouldBlockSharedRecordForCurrentUser(record, userId = getAppUserId(), 
 // o app grava uma lápide local e, quando possível, marca o registro remoto como excluído.
 const OWN_DELETED_LISTS_STORAGE = "tnl_own_deleted_lists_v5";
 
+// Lápide robusta de lista própria excluída.
+// Motivo: algumas listas próprias antigas podem existir no Supabase sem o sharedId local,
+// ou duplicadas com outro id remoto. Nesses casos, o filtro por id não basta.
+// Esta estrutura grava uma assinatura da lista excluída e bloqueia a reimportação
+// por id, título/dono e assinatura dos itens, mesmo após múltiplos ciclos de abertura.
+const OWN_DELETED_LIST_SNAPSHOTS_STORAGE = "tnl_own_deleted_list_snapshots_v1";
+
+function readOwnDeletedSnapshotsStore() {
+  try {
+    const raw = localStorage.getItem(OWN_DELETED_LIST_SNAPSHOTS_STORAGE) || "[]";
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOwnDeletedSnapshotsStore(items) {
+  try {
+    localStorage.setItem(OWN_DELETED_LIST_SNAPSHOTS_STORAGE, JSON.stringify((Array.isArray(items) ? items : []).slice(-500)));
+  } catch {}
+}
+
+function getListComparableData(listOrRecord) {
+  if (!listOrRecord) return {};
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  return { ...data, ...listOrRecord, data };
+}
+
+function getListItemsSignature(listOrRecord) {
+  const base = getListComparableData(listOrRecord);
+  const categories = Array.isArray(base.categories) ? base.categories : [];
+  const names = [];
+  categories.forEach((cat) => {
+    const items = Array.isArray(cat?.items) ? cat.items : [];
+    items.forEach((item) => {
+      const name = normalizeDeletedKeyPart(item?.name || item?.title || "");
+      const qty = normalizeDeletedKeyPart(item?.qty || item?.quantity || item?.originalQty || "");
+      const unit = normalizeDeletedKeyPart(item?.unit || "");
+      if (name) names.push(`${name}:${qty}:${unit}`);
+    });
+  });
+  return names.sort().join("|");
+}
+
+function buildOwnDeletedSnapshot(listOrRecord, explicitUserName = "") {
+  const base = getListComparableData(listOrRecord);
+  const ownerName = base.ownerName || base.remetente || base.deletedByName || explicitUserName || getAppUserName() || "";
+  const userId = base.userId || base.user_id || getAppUserId() || "";
+  const ids = Array.from(new Set([
+    base.id,
+    base.sharedId,
+    base.cloudId,
+    base.remoteId,
+    base.originalSharedId,
+    base.sourceSharedId,
+    base?.data?.id,
+    base?.data?.sharedId,
+  ].filter(Boolean).map(String)));
+  const name = normalizeDeletedKeyPart(base.name || base.title || "");
+  const type = normalizeDeletedKeyPart(base.type || base.list_type || "");
+  const budget = Number(base.budget || 0) || 0;
+  const itemSig = getListItemsSignature(base);
+  const categoryNames = (Array.isArray(base.categories) ? base.categories : [])
+    .map((cat) => normalizeDeletedKeyPart(cat?.name || ""))
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  return {
+    ids,
+    name,
+    type,
+    budget,
+    ownerName: normalizeAuthName(ownerName),
+    userId: userId ? String(userId) : "",
+    itemSig,
+    categoryNames,
+    deletedAt: new Date().toISOString(),
+  };
+}
+
+function markOwnListTombstoneSnapshot(listOrRecord, explicitUserName = "") {
+  const snap = buildOwnDeletedSnapshot(listOrRecord, explicitUserName);
+  if (!snap.ids.length && !snap.name && !snap.itemSig) return;
+  const current = readOwnDeletedSnapshotsStore();
+  const same = (a, b) => {
+    const aIds = new Set(a.ids || []);
+    const bIds = new Set(b.ids || []);
+    if ([...aIds].some((id) => bIds.has(id))) return true;
+    if (a.ownerName && b.ownerName && a.ownerName === b.ownerName && a.name && a.name === b.name) return true;
+    if (a.userId && b.userId && a.userId === b.userId && a.name && a.name === b.name) return true;
+    if (a.itemSig && b.itemSig && a.itemSig === b.itemSig && a.name && a.name === b.name) return true;
+    return false;
+  };
+  const next = current.filter((item) => !same(item, snap));
+  next.push(snap);
+  writeOwnDeletedSnapshotsStore(next);
+}
+
+function isOwnListTombstoneSnapshotMatch(listOrRecord, explicitUserName = "") {
+  const probe = buildOwnDeletedSnapshot(listOrRecord, explicitUserName);
+  if (!probe.ids.length && !probe.name && !probe.itemSig) return false;
+  const tombstones = readOwnDeletedSnapshotsStore();
+  const probeIds = new Set(probe.ids || []);
+  return tombstones.some((snap) => {
+    const snapIds = new Set(snap.ids || []);
+    if ([...probeIds].some((id) => snapIds.has(id))) return true;
+
+    const sameUserId = Boolean(probe.userId && snap.userId && probe.userId === snap.userId);
+    const sameOwnerName = Boolean(probe.ownerName && snap.ownerName && probe.ownerName === snap.ownerName);
+    const sameCurrentName = Boolean((explicitUserName || getAppUserName()) && snap.ownerName && normalizeAuthName(explicitUserName || getAppUserName()) === snap.ownerName);
+    const sameOwner = sameUserId || sameOwnerName || sameCurrentName;
+
+    // Para lista própria, nome + dono já é suficiente para impedir que duplicatas remotas antigas voltem.
+    if (sameOwner && probe.name && snap.name && probe.name === snap.name) return true;
+
+    // Assinatura de itens cobre registros remotos cujo título foi salvo de forma diferente.
+    if (sameOwner && probe.itemSig && snap.itemSig && probe.itemSig === snap.itemSig) return true;
+
+    // Fallback restrito: mesmo nome e mesmos itens, mesmo se o user_id remoto estiver ausente.
+    if (probe.name && snap.name && probe.name === snap.name && probe.itemSig && snap.itemSig && probe.itemSig === snap.itemSig) return true;
+
+    return false;
+  });
+}
+
+
 function getOwnDeletionScopes(explicitUserName = "") {
   const scopes = ["global"];
   const userId = getAppUserId();
@@ -5091,10 +5219,12 @@ function markOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
   });
   store.__updatedAt = now;
   writeOwnDeletedListsStore(store);
+  markOwnListTombstoneSnapshot(enriched, explicitUserName);
   markListDeletionLockV2(enriched, { received: false, userName: explicitUserName });
 }
 
 function wasOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
+  if (isOwnListTombstoneSnapshotMatch(listOrRecord, explicitUserName)) return true;
   const fingerprints = getOwnListDeletionFingerprints(listOrRecord);
   if (!fingerprints.length) return false;
   const wanted = new Set(fingerprints);
@@ -7545,10 +7675,10 @@ const [lists,setLists]=useState(()=>{
             name: record?.data?.name || record?.title,
             data: record?.data || {},
           };
-          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
+          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
           const local=sharedRecordToLocalList(record, userId, effectiveName);
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
-          if(shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
+          if(isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -7586,11 +7716,11 @@ const [lists,setLists]=useState(()=>{
 
   const persistListRecordToCloud=useCallback(async(list,{silent=true}={})=>{
     if(!list || !hasSupabaseConfig())return list;
-    if(shouldOmitListFromLocalState(list) || wasOwnListDeletedForCurrentUser(list, getAppUserName()))return list;
+    if(isOwnListTombstoneSnapshotMatch(list, getAppUserName()) || shouldOmitListFromLocalState(list) || wasOwnListDeletedForCurrentUser(list, getAppUserName()))return list;
     try{
       const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
       const ownDeleteProbe={...list,ownerName,remetente:ownerName,userId:list.userId || getAppUserId()};
-      if(shouldOmitListFromLocalState(ownDeleteProbe) || wasOwnListDeletedForCurrentUser(ownDeleteProbe, ownerName))return list;
+      if(isOwnListTombstoneSnapshotMatch(ownDeleteProbe, ownerName) || shouldOmitListFromLocalState(ownDeleteProbe) || wasOwnListDeletedForCurrentUser(ownDeleteProbe, ownerName))return list;
       const userId=await registerAppUser(ownerName,{force:true});
       const base=preserveReceivedShareMeta({
         ...list,
@@ -9781,6 +9911,7 @@ const [lists,setLists]=useState(()=>{
         remetente:target.remetente || target.ownerName || getAppUserName(),
         userId:target.userId || getAppUserId(),
       };
+      markOwnListTombstoneSnapshot(ownTarget, getAppUserName());
       markListAsDeletedLocally(ownTarget);
       markOwnListDeletedForCurrentUser(ownTarget, getAppUserName());
     }
@@ -9831,6 +9962,7 @@ const [lists,setLists]=useState(()=>{
           remetente:deletionCandidate.remetente || deletionCandidate.ownerName || getAppUserName(),
           userId:deletionCandidate.userId || getAppUserId(),
         };
+        markOwnListTombstoneSnapshot(ownDeletionCandidate, getAppUserName());
         markListAsDeletedLocally(ownDeletionCandidate);
         markOwnListDeletedForCurrentUser(ownDeletionCandidate, getAppUserName());
       }
@@ -9853,6 +9985,7 @@ const [lists,setLists]=useState(()=>{
       const recordsToDelete=ownedRecords.length ? ownedRecords : [{ id: remoteSharedId, data: target }];
       for(const record of recordsToDelete){
         const enriched={...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId, data:{...(record.data||{}),...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId}};
+        markOwnListTombstoneSnapshot(enriched, getAppUserName());
         markOwnListDeletedForCurrentUser(enriched, getAppUserName());
         markListAsDeletedLocally(enriched);
         const softOk=await markOwnedSharedListRecordDeleted(record, enriched).catch(()=>false);
