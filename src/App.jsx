@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69.5 - Deep link, sincronização entre abas/PWA e listas compartilhadas aceitas
+// Etapa 7.69.6 - Proteção do dono da lista compartilhada e exclusão local de listas recebidas
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -903,18 +903,47 @@ async function getSharedListRecord(id) {
 async function updateSharedListRecord(id, list) {
   if (!id || !hasSupabaseConfig()) return null;
 
-  const userId = list?.userId || getAppUserId() || null;
+  const receivedSimultaneous = isReceivedSharedList(list) && Boolean(list?.originalSharedId || list?.sourceSharedId || list?.importedOriginalSharedId || list?.sharedId);
+  const existingRecord = receivedSimultaneous ? await getSharedListRecord(id).catch(() => null) : null;
+  const existingData = existingRecord?.data && typeof existingRecord.data === "object" ? existingRecord.data : {};
+
+  // Em lista recebida, o usuário que aceitou NÃO pode substituir o dono do registro central.
+  // Mantém user_id/remetente/ownerName do criador original e sincroniza apenas o estado operacional da lista.
+  const ownerUserId = receivedSimultaneous
+    ? (existingRecord?.user_id || existingData?.userId || list?.originalUserId || list?.ownerUserId || list?.userId || getAppUserId() || null)
+    : (list?.userId || getAppUserId() || null);
+
+  const ownerName = receivedSimultaneous
+    ? (existingRecord?.remetente || existingData?.ownerName || existingData?.remetente || list?.originalOwnerName || list?.originalRemetente || list?.receivedFromName || list?.importedFrom || list?.sharedOwner || getAppUserName() || "Usuário do Tá na Lista")
+    : (list?.ownerName || list?.remetente || getAppUserName() || "Usuário do Tá na Lista");
+
+  const safeData = receivedSimultaneous
+    ? {
+        ...existingData,
+        ...list,
+        userId: ownerUserId,
+        ownerName,
+        remetente: ownerName,
+        sharedId: id,
+        isShared: true,
+        lastSyncedAt: new Date().toISOString(),
+      }
+    : {
+        ...list,
+        userId: ownerUserId,
+        ownerName,
+        remetente: ownerName,
+        sharedId: id,
+        lastSyncedAt: new Date().toISOString(),
+      };
+
   const payload = {
-    title: list?.name || "Lista de compras",
-    list_type: list?.type || "geral",
-    budget: Number(list?.budget || 0),
-    data: {
-      ...list,
-      userId,
-      sharedId: id,
-      lastSyncedAt: new Date().toISOString(),
-    },
-    user_id: userId,
+    title: list?.name || existingRecord?.title || "Lista de compras",
+    list_type: list?.type || existingRecord?.list_type || "geral",
+    budget: Number(list?.budget ?? existingRecord?.budget ?? 0),
+    data: safeData,
+    remetente: ownerName,
+    user_id: ownerUserId,
   };
 
   const patchSharedList = async (bodyPayload) => fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
@@ -8995,9 +9024,14 @@ const [lists,setLists]=useState(()=>{
     const target=lists.find(l=>l.id===id || l.sharedId===id);
     if(!target){setConfirmDelete(null);return;}
 
-    // Marca a lista como excluída neste aparelho antes de recarregar do Supabase.
-    // Isso impede que listas apagadas reapareçam em "Listas Recentes" após fechar o app ou reiniciar o celular.
-    markListAsDeletedLocally(target);
+    const receivedShared=isReceivedSharedList(target) || target.imported===true || target.isReceivedList===true;
+
+    // Para lista recebida, a exclusão é apenas local/individual.
+    // Não grava chave de exclusão global por sharedId, para não ocultar a lista do dono original
+    // quando usuários diferentes acessarem o app no mesmo aparelho/navegador.
+    if(!receivedShared){
+      markListAsDeletedLocally(target);
+    }
 
     const targetKeys=new Set(getListPersistenceKeys(target));
     const sameList=(l)=>(
@@ -9015,24 +9049,22 @@ const [lists,setLists]=useState(()=>{
       archiveFinishedListsBeforeHome();
     }
 
-    showToast("🗑 Lista excluída");
+    showToast(receivedShared ? "🗑 Lista recebida removida" : "🗑 Lista excluída");
 
-    // Se a lista foi criada pelo próprio usuário e possui registro no Supabase, tenta excluir também no servidor.
-    // Se for lista recebida, ou se o DELETE for bloqueado por RLS, oculta a lista para este usuário/dispositivo.
     if(target.sharedId){
+      if(receivedShared){
+        await hideSharedListRecordForCurrentUser(target.sharedId);
+        await patchOriginalSharedRecipientStatus(target.originalSharedId || target.sourceSharedId || target.importedOriginalSharedId || target.sharedId, "removed", target).catch(()=>false);
+        showToast("🗑 Lista recebida removida apenas da sua conta",2200);
+        return;
+      }
+
       let removedFromCloud=false;
       let persistedDeletion=false;
 
-      // Primeiro grava uma marca de exclusão no próprio registro remoto.
-      // Assim, mesmo que o usuário limpe o histórico/cache ou troque de aba/dispositivo,
-      // a lista não volta a ser restaurada no login seguinte.
+      // Apenas listas próprias podem ser apagadas/soft-deletadas no servidor.
       persistedDeletion=await softDeleteSharedListRecord(target.sharedId,target);
-
-      // Depois tenta o DELETE físico. Se o Supabase/RLS bloquear, a marca remota acima
-      // continua sendo a fonte de verdade para não recarregar a lista excluída.
-      if(!target.imported){
-        removedFromCloud=await deleteSharedListRecord(target.sharedId);
-      }
+      removedFromCloud=await deleteSharedListRecord(target.sharedId);
 
       if(!removedFromCloud && !persistedDeletion){
         await hideSharedListRecordForCurrentUser(target.sharedId);
