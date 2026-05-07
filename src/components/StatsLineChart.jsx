@@ -1,4 +1,10 @@
 import { useState } from "react";
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
 
 export default function StatsLineChart({
   series = [],
