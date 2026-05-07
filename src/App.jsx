@@ -7973,10 +7973,12 @@ const [lists,setLists]=useState(()=>{
             </div>
 
       <PriceStatsEntryCard
-  onClick={() => {
-    rebuildLocalPriceHistoryFromLists(lists);
-    setShowPriceStatsScreen(true);
-  }}
+ onClick={() => {
+  const rebuilt = rebuildLocalPriceHistoryFromLists(lists);
+  console.log("listas:", lists);
+  console.log("histórico reconstruído:", rebuilt);
+  setShowPriceStatsScreen(true);
+}}
 />     
 {showPriceStatsScreen && (
   <PriceStatsScreen
