@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
+// Etapa 7.69.3 - Compartilhamento preservado, notificações de execução e origem protegida
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1220,6 +1220,86 @@ async function appendSharedListEvent(id, event = {}) {
   }
 }
 
+
+async function patchOriginalSharedRecipientStatus(originalSharedId, status = "accepted", list = {}) {
+  if (!originalSharedId || !hasSupabaseConfig()) return false;
+  try {
+    const record = await getSharedListRecord(originalSharedId);
+    if (!record) return false;
+    const data = record?.data && typeof record.data === "object" ? record.data : {};
+    const now = new Date().toISOString();
+    const userId = getAppUserId() || list.userId || null;
+    const userName = getAppUserName() || list.ownerName || list.remetente || "Usuário";
+    const normalizedUser = normalizeAuthName(userName);
+    const existing = Array.isArray(data.sharedWith) ? data.sharedWith : [];
+    const idx = existing.findIndex((entry) => {
+      if (!entry) return false;
+      if (userId && entry.userId && entry.userId === userId) return true;
+      return normalizeAuthName(entry.userName || entry.name || "") === normalizedUser;
+    });
+    const prev = idx >= 0 ? existing[idx] : {};
+    const nextEntry = {
+      ...prev,
+      userId: userId || prev.userId || null,
+      userName: userName || prev.userName || "Usuário",
+      importedListId: list.id || prev.importedListId || null,
+      importedSharedId: list.sharedId || prev.importedSharedId || null,
+      status,
+      acceptedAt: prev.acceptedAt || list.receivedAt || list.importedAt || now,
+      updatedAt: now,
+    };
+    if (status === "started") nextEntry.startedAt = prev.startedAt || list.startedAt || list.sharedStartedAt || now;
+    if (status === "completed" || status === "finished") nextEntry.completedAt = prev.completedAt || list.finishedAt || list.completedAt || now;
+    const next = idx >= 0 ? existing.map((entry, i) => (i === idx ? nextEntry : entry)) : [nextEntry, ...existing];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(originalSharedId)}`, {
+      method: "PATCH",
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({ data: { ...data, sharedWith: next, lastSharedWithAt: now } }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Erro ao atualizar status do compartilhamento original:", err);
+    return false;
+  }
+}
+
+function getReceivedOriginName(list) {
+  return list?.receivedFromName || list?.importedFrom || list?.sharedOwner || list?.originalOwnerName || list?.originalRemetente || list?.sourceOwnerName || "";
+}
+
+function isReceivedSharedList(list) {
+  const originName = getReceivedOriginName(list);
+  const currentName = getAppUserName();
+  const hasOrigin = Boolean(list?.imported === true || list?.receivedAt || list?.importedAt || list?.originalSharedId || list?.sourceSharedId || list?.importedOriginalSharedId || list?.sharedMode === "imported-copy");
+  return Boolean(hasOrigin && originName && normalizeAuthName(originName) !== normalizeAuthName(currentName));
+}
+
+function preserveReceivedShareMeta(nextList, previousList = {}) {
+  if (!nextList) return nextList;
+  const originName = getReceivedOriginName(nextList) || getReceivedOriginName(previousList);
+  const originalSharedId = nextList.originalSharedId || nextList.sourceSharedId || nextList.importedOriginalSharedId || previousList.originalSharedId || previousList.sourceSharedId || previousList.importedOriginalSharedId || null;
+  const receivedAt = nextList.receivedAt || previousList.receivedAt || previousList.importedAt || nextList.importedAt || null;
+  const shouldPreserve = Boolean(originName && originalSharedId) || isReceivedSharedList(nextList) || isReceivedSharedList(previousList);
+  if (!shouldPreserve) return nextList;
+  return {
+    ...nextList,
+    imported: true,
+    isReceivedList: true,
+    importedFrom: originName,
+    receivedFromName: originName,
+    sharedOwner: originName,
+    originalOwnerName: originName,
+    originalRemetente: originName,
+    originalSharedId,
+    sourceSharedId: originalSharedId,
+    importedOriginalSharedId: originalSharedId,
+    sharedMode: "imported-copy",
+    isShared: false,
+    receivedAt: receivedAt || new Date().toISOString(),
+    importedAt: nextList.importedAt || previousList.importedAt || receivedAt || new Date().toISOString(),
+  };
+}
+
 function getNotificationStorageKey() {
   const name = normalizeCacheKey(getAppUserName() || "anon");
   return `tnl_internal_notifications:${name || "anon"}`;
@@ -1805,13 +1885,11 @@ function getListOriginMeta(list) {
   const normalizedCurrent = normalizeAuthName(currentName || "");
   const owner = list.ownerName || list.remetente || currentName;
   const normalizedOwner = normalizeAuthName(owner || "");
-  const from = list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "não informado";
+  const from = getReceivedOriginName(list) || list.remetente || list.ownerName || "não informado";
   const normalizedFrom = normalizeAuthName(from || "");
 
-  // Lista recebida só deve aparecer como recebida quando veio de outra pessoa.
-  // Listas próprias sincronizadas na nuvem também têm sharedId, mas isso não significa
-  // que foram compartilhadas nem recebidas.
-  const receivedFromAnotherUser = Boolean(list.imported === true || list.receivedAt || list.importedAt)
+  // Lista recebida deve manter permanentemente a origem, mesmo após execução, edição ou sincronização.
+  const receivedFromAnotherUser = isReceivedSharedList(list)
     && Boolean(normalizedFrom)
     && (!normalizedCurrent || normalizedFrom !== normalizedCurrent);
 
@@ -6600,37 +6678,40 @@ const [lists,setLists]=useState(()=>{
     if(!list)return list;
     const currentName=getAppUserName();
     const owner=list.ownerName || list.remetente || currentName;
-    const from=list.importedFrom || list.sharedOwner || "";
+    const from=getReceivedOriginName(list);
     const normalizedCurrent=normalizeAuthName(currentName);
     const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizedCurrent;
     const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizedCurrent;
-    const hasImportedOrigin=Boolean(list.imported===true || list.receivedAt || list.importedAt || list.originalSharedId || list.sourceSharedId || list.importedOriginalSharedId);
+    const hasImportedOrigin=Boolean(list.imported===true || list.isReceivedList===true || list.receivedAt || list.importedAt || list.originalSharedId || list.sourceSharedId || list.importedOriginalSharedId || list.sharedMode==="imported-copy");
     const importedFromAnotherUser=Boolean(hasImportedOrigin && from && !fromIsCurrent);
 
     // Listas recebidas de outra pessoa pertencem localmente ao usuário atual,
-    // mas devem manter o selo "Recebida de ...". Antes, qualquer saveLists()
-    // limpava esses metadados porque ownerName/remetente eram do usuário atual.
+    // mas devem manter permanentemente o selo "Recebida de ...".
     if(importedFromAnotherUser){
-      return {
+      return preserveReceivedShareMeta({
         ...list,
         imported:true,
+        isReceivedList:true,
         importedFrom:from,
+        receivedFromName:from,
         sharedOwner:from,
-        sharedMode:list.sharedMode || "imported-copy",
+        originalOwnerName:list.originalOwnerName || from,
+        originalRemetente:list.originalRemetente || from,
+        sharedMode:"imported-copy",
         isShared:false,
-      };
+      }, list);
     }
 
     // Apenas limpa falsos positivos em listas próprias ou cópias independentes.
-    if(ownerIsCurrent || fromIsCurrent){
+    if((ownerIsCurrent || fromIsCurrent) && !hasImportedOrigin){
       return {
         ...list,
         imported:false,
+        isReceivedList:false,
         importedFrom:null,
+        receivedFromName:null,
         sharedOwner:null,
         sharedMode:null,
-        // sharedId pode existir apenas para sincronização na nuvem.
-        // O selo Compartilhada fica reservado ao envio explícito da lista.
         isShared:list.sharedAt ? list.isShared === true : false,
       };
     }
@@ -6680,14 +6761,14 @@ const [lists,setLists]=useState(()=>{
     try{
       const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
       const userId=await registerAppUser(ownerName,{force:true});
-      const base={
+      const base=preserveReceivedShareMeta({
         ...list,
         userId:userId || list.userId || getAppUserId() || null,
         ownerName,
         remetente:ownerName,
         lastSyncedAt:new Date().toISOString(),
         cloudPersisted:true,
-      };
+      }, list);
 
       if(base.sharedId){
         const record=await updateSharedListRecord(base.sharedId,base);
@@ -7165,7 +7246,7 @@ const [lists,setLists]=useState(()=>{
     }
 
     const persisted=await persistListRecordToCloud(received,{silent:true});
-    const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
+    const finalReceived=preserveReceivedShareMeta({...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,isReceivedList:true,importedFrom:sender,receivedFromName:sender,sharedOwner:sender,originalOwnerName:sender,originalRemetente:sender,isShared:false,sharedMode:"imported-copy"}, received);
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
     localStorage.setItem("tnl_lists",JSON.stringify(nl));
@@ -7186,6 +7267,7 @@ const [lists,setLists]=useState(()=>{
         listId: finalReceived.id,
         message: `${actorName} importou a lista "${finalReceived.name || "compartilhada"}".`,
       });
+      patchOriginalSharedRecipientStatus(sourceSharedId, "accepted", finalReceived);
     }
     await registrarEvento("shared_list_imported", {
       list_id: finalReceived.id || null,
@@ -8341,12 +8423,13 @@ const [lists,setLists]=useState(()=>{
 
       const remoteBeforeSave=await getSharedListRecord(sharedId).catch(()=>null);
       const remoteDataBeforeSave=remoteBeforeSave?.data && typeof remoteBeforeSave.data === "object" ? remoteBeforeSave.data : {};
+      const protectedList=preserveReceivedShareMeta(list, remoteDataBeforeSave);
       const remoteEvents=Array.isArray(remoteDataBeforeSave.sharedEvents) ? remoteDataBeforeSave.sharedEvents : [];
-      const localEvents=Array.isArray(list?.sharedEvents) ? list.sharedEvents : [];
+      const localEvents=Array.isArray(protectedList?.sharedEvents) ? protectedList.sharedEvents : [];
       const eventMap=new Map();
       [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
       const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
-      const payload={...remoteDataBeforeSave,...list,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      const payload=preserveReceivedShareMeta({...remoteDataBeforeSave,...protectedList,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()}, protectedList);
       const record=await updateSharedListRecord(sharedId,payload);
       const synced=markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
@@ -8378,19 +8461,21 @@ const [lists,setLists]=useState(()=>{
       const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
       const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
       const isReceivedFromAnotherUser = Boolean(currentList.imported === true || currentList.receivedAt || currentList.importedAt) && !remoteOwnerIsCurrentUser;
-      const refreshed=markListCloudSynced({
+      const refreshed=markListCloudSynced(preserveReceivedShareMeta({
         ...record.data,
         id:currentList.id,
         sharedId,
-        // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
-        isShared: currentList.isShared === true || record?.data?.isShared === true,
+        isShared: isReceivedFromAnotherUser ? false : (currentList.isShared === true || record?.data?.isShared === true),
         imported: isReceivedFromAnotherUser,
-        importedFrom: isReceivedFromAnotherUser ? remoteOwner : null,
-        remetente: remoteOwner,
-        ownerName: record?.data?.ownerName || remoteOwner,
-        sharedOwner: isReceivedFromAnotherUser ? remoteOwner : null,
+        importedFrom: isReceivedFromAnotherUser ? (getReceivedOriginName(currentList) || remoteOwner) : null,
+        receivedFromName: isReceivedFromAnotherUser ? (getReceivedOriginName(currentList) || remoteOwner) : null,
+        remetente: isReceivedFromAnotherUser ? (currentList.remetente || getAppUserName()) : remoteOwner,
+        ownerName: isReceivedFromAnotherUser ? (currentList.ownerName || getAppUserName()) : (record?.data?.ownerName || remoteOwner),
+        sharedOwner: isReceivedFromAnotherUser ? (getReceivedOriginName(currentList) || remoteOwner) : null,
+        originalSharedId: currentList.originalSharedId || currentList.sourceSharedId || record?.data?.originalSharedId || record?.data?.sourceSharedId || null,
+        sourceSharedId: currentList.originalSharedId || currentList.sourceSharedId || record?.data?.originalSharedId || record?.data?.sourceSharedId || null,
         pulledAt:new Date().toISOString(),
-      },record.data);
+      }, currentList),record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
       const hasLocal=existing.some(l=>l.id===currentList.id || (sharedId&&l.sharedId===sharedId));
@@ -8432,11 +8517,36 @@ const [lists,setLists]=useState(()=>{
 
   const updateList=(ul)=>{
     const{fullTotal}=getProgress(ul);ul.total=fullTotal;
-    const updated={...ul,total:fullTotal,lastLocalUpdateAt:new Date().toISOString(),dirtySinceLastSync:Boolean(ul.sharedId)};
+    let updated=preserveReceivedShareMeta({...ul,total:fullTotal,lastLocalUpdateAt:new Date().toISOString(),dirtySinceLastSync:Boolean(ul.sharedId)}, currentList);
+
+    const receivedOriginalId=updated.originalSharedId || updated.sourceSharedId || updated.importedOriginalSharedId || null;
+    const receivedList=isReceivedSharedList(updated) && Boolean(receivedOriginalId);
+    const hasExecutionStarted=Boolean((updated.categories||[]).some(c=>(c.items||[]).some(i=>i.checked || i.notFound || Number(i.price||0)>0)));
+    if(receivedList && hasExecutionStarted && !updated.sharedStartedAt){
+      const now=new Date().toISOString();
+      const actorName=getAppUserName() || updated.ownerName || updated.remetente || "Usuário";
+      const sender=getReceivedOriginName(updated);
+      updated={...updated,sharedStartedAt:now,startedAt:updated.startedAt||now};
+      const evt=buildSharedListEvent(receivedOriginalId, updated, {
+        type:"shared-started",
+        actorName,
+        targetName:sender,
+        message:`${actorName} iniciou a lista compartilhada "${updated.name || "Lista"}".`,
+      });
+      Object.assign(updated, addLocalSharedEventToList(updated, evt));
+      appendSharedListEvent(receivedOriginalId, evt);
+      patchOriginalSharedRecipientStatus(receivedOriginalId, "started", updated);
+      registrarEvento("shared_list_started", {
+        list_id: updated.id || null,
+        shared_id: updated.sharedId || null,
+        original_shared_id: receivedOriginalId,
+        list_name: updated.name || "",
+        imported_from: sender || "",
+      });
+    }
+
     setCurrentList(updated);
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
-    // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
-    // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
     if(updated.sharedId){
       syncSharedListToCloud(updated,{silent:true,force:!isRealSharedList(updated)});
     }
@@ -8552,7 +8662,11 @@ const [lists,setLists]=useState(()=>{
     const listHasItems = l.categories.reduce((s,c)=>s+c.items.length,0)>0;
     const allDone = listHasItems && l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
     const actorName = getAppUserName() || "Usuário";
-    const isReallyShared = l.isShared === true && Boolean(l.sharedId);
+    const receivedOriginalId = l.originalSharedId || l.sourceSharedId || l.importedOriginalSharedId || null;
+    const isReceivedShared = isReceivedSharedList(l) && Boolean(receivedOriginalId);
+    const isReallyShared = (l.isShared === true && Boolean(l.sharedId)) || isReceivedShared;
+    const eventSharedId = isReceivedShared ? receivedOriginalId : l.sharedId;
+    const eventTargetName = isReceivedShared ? getReceivedOriginName(l) : (l.ownerName || l.remetente || l.sharedOwner || "");
 
     if (!mNotFound && !l.startedAt) {
       l.startedAt = new Date().toISOString();
@@ -8563,14 +8677,15 @@ const [lists,setLists]=useState(()=>{
         list_type: l.type || "",
       });
       if (isReallyShared) {
-        const startedEvent = buildSharedListEvent(l.sharedId, l, {
-          type:"started",
+        const startedEvent = buildSharedListEvent(eventSharedId, l, {
+          type:isReceivedShared ? "shared-started" : "started",
           actorName,
-          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          targetName:eventTargetName,
           message:`${actorName} iniciou as aquisições da lista "${l.name || "compartilhada"}".`,
         });
         Object.assign(l, addLocalSharedEventToList(l, startedEvent));
-        appendSharedListEvent(l.sharedId, startedEvent);
+        appendSharedListEvent(eventSharedId, startedEvent);
+        if(isReceivedShared) patchOriginalSharedRecipientStatus(eventSharedId, "started", l);
       }
     }
 
@@ -8589,14 +8704,15 @@ const [lists,setLists]=useState(()=>{
         item_count: countCategoryItems(l.categories || []),
       });
       if (isReallyShared) {
-        const finishedEvent = buildSharedListEvent(l.sharedId, l, {
-          type:"finished",
+        const finishedEvent = buildSharedListEvent(eventSharedId, l, {
+          type:isReceivedShared ? "shared-finished" : "finished",
           actorName,
-          targetName:l.ownerName || l.remetente || l.sharedOwner || "",
+          targetName:eventTargetName,
           message:`${actorName} finalizou a lista "${l.name || "compartilhada"}".`,
         });
         Object.assign(l, addLocalSharedEventToList(l, finishedEvent));
-        appendSharedListEvent(l.sharedId, finishedEvent);
+        appendSharedListEvent(eventSharedId, finishedEvent);
+        if(isReceivedShared) patchOriginalSharedRecipientStatus(eventSharedId, "completed", l);
       }
     }
 
@@ -9207,6 +9323,7 @@ const [lists,setLists]=useState(()=>{
                             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
                               <span style={{fontSize:11,fontWeight:900,color:finished?"#B91C1C":"#047857",background:finished?"#FEE2E2":"#ECFDF5",border:"1px solid "+(finished?"#FCA5A5":"#A7F3D0"),borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>{finished?"Finalizada":"Em aberto"}</span>
                               {shared&&<span style={{fontSize:10,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Compartilhada</span>}
+                              {shared&&Array.isArray(list.sharedWith)&&list.sharedWith.length>0&&<span style={{fontSize:10,fontWeight:900,color:"#1D4ED8",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Com {list.sharedWith.map(u=>u.userName||u.name).filter(Boolean).slice(0,2).join(", ")}</span>}
                             </div>
                           </div>
                           <div style={{fontSize:11,color:"#6B7280",marginTop:5,fontWeight:700,textAlign:"center"}}>{formatListDate(list.createdAt)}</div>
