@@ -6820,13 +6820,14 @@ const [lists,setLists]=useState(()=>{
     const rebuiltHistory = Array.from(byKey.values()).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
 savePriceHistory(rebuiltHistory);
 return rebuiltHistory;
+      }catch(err){
       console.warn("Nao foi possivel reconstruir historico de precos",err);
     }
   },[lists,getItemLineTotal]);
 
   useEffect(()=>{
     rebuildLocalPriceHistoryFromLists(lists);
-  },[lists,rebuildLocalPriceHistoryFromLists]);
+  },[lists,rebuildLocalPriceHistoryFromLists])};
 
   const getPriceDescription=(item)=>{
     if(!item || item.price==null)return "";
