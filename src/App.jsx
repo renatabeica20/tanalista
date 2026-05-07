@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69.6 - Proteção do dono da lista compartilhada e exclusão local de listas recebidas
+// Etapa 7.69.7 - Exclusão persistente de listas próprias e recebidas, sem afetar o dono original
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -4449,6 +4449,8 @@ async function readShoppingListFromImage(file) {
 }
 
 const DELETED_LIST_KEYS_STORAGE = "tnl_deleted_list_keys";
+const RECEIVED_DELETED_LIST_KEYS_STORAGE = "tnl_deleted_received_list_keys";
+
 
 function normalizeDeletedKeyPart(value) {
   return String(value || "")
@@ -4524,6 +4526,88 @@ function getListPersistenceKeys(listOrId) {
   return Array.from(new Set(keys.filter(Boolean)));
 }
 
+
+function getReceivedDeletedListStorageKeys() {
+  const keys = [];
+  const userId = getAppUserId();
+  const userName = getAppUserName();
+  const deviceId = getAppDeviceId();
+
+  // Lista recebida deve ser ocultada apenas para o usuário atual.
+  // O device_id entra somente como fallback quando ainda não há nome/id.
+  if (userId) keys.push(`${RECEIVED_DELETED_LIST_KEYS_STORAGE}:user:${normalizeDeletedKeyPart(userId)}`);
+  if (userName) keys.push(`${RECEIVED_DELETED_LIST_KEYS_STORAGE}:name:${normalizeDeletedKeyPart(userName)}`);
+  if (!keys.length && deviceId) keys.push(`${RECEIVED_DELETED_LIST_KEYS_STORAGE}:device:${normalizeDeletedKeyPart(deviceId)}`);
+
+  return Array.from(new Set(keys));
+}
+
+function getReceivedListPersistenceKeys(listOrRecord) {
+  if (!listOrRecord) return [];
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const keys = [
+    ...getListPersistenceKeys(listOrRecord),
+    ...getListPersistenceKeys(data),
+  ];
+
+  const sharedCandidates = [
+    listOrRecord.sharedId,
+    listOrRecord.originalSharedId,
+    listOrRecord.sourceSharedId,
+    listOrRecord.importedOriginalSharedId,
+    listOrRecord.id,
+    data.sharedId,
+    data.originalSharedId,
+    data.sourceSharedId,
+    data.importedOriginalSharedId,
+    data.id,
+  ];
+
+  sharedCandidates.filter(Boolean).forEach(value => {
+    keys.push(`received:${String(value)}`);
+    keys.push(`shared:${String(value)}`);
+    keys.push(`id:${String(value)}`);
+  });
+
+  const originName = getReceivedOriginName(listOrRecord) || getReceivedOriginName(data) || data.ownerName || data.remetente || listOrRecord.remetente || "";
+  const listName = listOrRecord.name || listOrRecord.title || data.name || data.title || "";
+  const created = listOrRecord.createdAt || listOrRecord.created_at || data.createdAt || data.created_at || listOrRecord.receivedAt || data.receivedAt || "";
+  const createdPart = normalizeDeletedKeyPart(created);
+  if (originName && listName && createdPart) keys.push(`received-owner:${normalizeDeletedKeyPart(originName)}:${normalizeDeletedKeyPart(listName)}:${createdPart}`);
+
+  return Array.from(new Set(keys.filter(Boolean)));
+}
+
+function getReceivedDeletedListKeys() {
+  const merged = new Set();
+  getReceivedDeletedListStorageKeys().forEach(storageKey => {
+    readDeletedListKeysFrom(storageKey).forEach(key => merged.add(key));
+  });
+  return merged;
+}
+
+function saveReceivedDeletedListKeys(keys) {
+  const arr = Array.from(keys).filter(Boolean);
+  for (const storageKey of getReceivedDeletedListStorageKeys()) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(arr));
+    } catch {
+      // Ignora bloqueios pontuais de armazenamento local.
+    }
+  }
+}
+
+function markReceivedListAsDeletedLocally(list) {
+  const keys = getReceivedDeletedListKeys();
+  getReceivedListPersistenceKeys(list).forEach(key => keys.add(key));
+  saveReceivedDeletedListKeys(keys);
+}
+
+function wasReceivedListDeletedLocally(list) {
+  const deleted = getReceivedDeletedListKeys();
+  return getReceivedListPersistenceKeys(list).some(key => deleted.has(key));
+}
+
 function markListAsDeletedLocally(list) {
   const keys = getDeletedListKeys();
   getListPersistenceKeys(list).forEach(key => keys.add(key));
@@ -4551,7 +4635,8 @@ function isSharedRecordHiddenForCurrentUser(record) {
     (deviceId && hiddenDevices.includes(deviceId)) ||
     (userId && hiddenUsers.includes(userId)) ||
     (userName && hiddenNames.includes(userName)) ||
-    wasListDeletedLocally(record)
+    wasListDeletedLocally(record) ||
+    wasReceivedListDeletedLocally(record)
   );
 }
 
@@ -6836,7 +6921,7 @@ const [lists,setLists]=useState(()=>{
         for(const record of records){
           if(isSharedRecordHiddenForCurrentUser(record))continue;
           const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
-          if(wasListDeletedLocally(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
+          if(wasListDeletedLocally(local) || wasReceivedListDeletedLocally(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -9029,7 +9114,9 @@ const [lists,setLists]=useState(()=>{
     // Para lista recebida, a exclusão é apenas local/individual.
     // Não grava chave de exclusão global por sharedId, para não ocultar a lista do dono original
     // quando usuários diferentes acessarem o app no mesmo aparelho/navegador.
-    if(!receivedShared){
+    if(receivedShared){
+      markReceivedListAsDeletedLocally(target);
+    }else{
       markListAsDeletedLocally(target);
     }
 
