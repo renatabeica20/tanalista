@@ -7974,9 +7974,7 @@ const [lists,setLists]=useState(()=>{
 
       <PriceStatsEntryCard
  onClick={() => {
-  const rebuilt = rebuildLocalPriceHistoryFromLists(lists);
-  console.log("listas:", lists);
-  console.log("histórico reconstruído:", rebuilt);
+  rebuildLocalPriceHistoryFromLists(lists);
   setShowPriceStatsScreen(true);
 }}
 />     
