@@ -16,8 +16,7 @@ export function supabaseHeaders(extra = {}) {
     "Content-Type": "application/json",
     ...extra,
     
-}
-  };
+};
 }
 function getAppUserId() {
   return getStoredValue(APP_USER_ID_KEY) || null;
