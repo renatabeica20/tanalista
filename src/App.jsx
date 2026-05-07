@@ -65,6 +65,7 @@ import AppHeader from "./components/AppHeader";
 import NotificationsScreen from "./pages/NotificationsScreen";
 import ExpandableSection from "./components/ExpandableSection";
 import StatsLineChart from "./components/StatsLineChart";
+import StatsDetailList from "./components/StatsDetailList";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -4720,19 +4721,6 @@ function formatBRL(value) {
 
 
 
-function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) {
-  if (!rows.length) return null;
-  return (
-    <div style={{display:"grid",gap:7,marginTop:12}}>
-      {rows.slice(-8).map((row, idx) => (
-        <div key={idx} style={{display:"flex",justifyContent:"space-between",gap:10,background:"#FAFAFA",border:"1px solid #F3F4F6",borderRadius:14,padding:"9px 10px",fontSize:12}}>
-          <span style={{fontWeight:900,color:"#374151",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row[labelKey] || row.date || row.month || "Registro"}</span>
-          <span style={{fontWeight:900,color:"#111827",whiteSpace:"nowrap"}}>{formatBRL(row[valueKey] || row.total || 0)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 
 
