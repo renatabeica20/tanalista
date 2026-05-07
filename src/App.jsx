@@ -806,24 +806,7 @@ async function createSharedListRecord(list) {
   return Array.isArray(data) ? data[0] : data;
 }
 
-async function getSharedListRecord(id) {
-  if (!hasSupabaseConfig()) {
-    throw new Error("Supabase não configurado.");
-  }
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}&select=*`, {
-    method: "GET",
-    headers: supabaseHeaders(),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Erro ao abrir lista compartilhada (${res.status}) ${text}`.trim());
-  }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data[0] : null;
-}
 
 async function updateSharedListRecord(id, list) {
   if (!id || !hasSupabaseConfig()) return null;
