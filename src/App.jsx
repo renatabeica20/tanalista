@@ -42,6 +42,7 @@ import {
   hashUserPin,
   verifyOrCreateUserPin,
   resetUserAuthPin,
+  normalizeAuthName,
 } from "./services/authService";
 import {
   hasSupabaseConfig,
