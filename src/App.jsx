@@ -26,6 +26,13 @@ import {
   getStoredJSON,
   setStoredJSON,
 } from "./utils/storageUtils";
+import {
+  formatCurrency,
+  formatNumber,
+  formatDate,
+  formatDateTime,
+  normalizeText,
+} from "./utils/formatters";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
