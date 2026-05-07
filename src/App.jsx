@@ -61,6 +61,7 @@ import ModalSheet from "./components/ModalSheet";
 import PriceStatsEntryCard from "./components/PriceStatsEntryCard";
 import AppHeader from "./components/AppHeader";
 import NotificationsScreen from "./pages/NotificationsScreen";
+import ExpandableSection from "./components/ExpandableSection";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -4712,7 +4713,7 @@ function formatBRL(value) {
 }
 
 
-function StatsExpandableSection({ id, title, subtitle, openSection, setOpenSection, children }) {
+function OLD_StatsExpandableSection({ id, title, subtitle, openSection, setOpenSection, children }) {
   const isOpen = openSection === id;
   return (
     <div style={{
@@ -5138,11 +5139,11 @@ function PriceStatsScreen({ onBack, lists = [] }) {
           </div>
         ) : (
           <>
-            <StatsExpandableSection id="budget" title="Orçamento x Gasto" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
+           <ExpandableSection id="budget" title="Orçamento x Gasto" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="category" title="Gasto por Seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
+            <ExpandableSection id="category" title="Gasto por Seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
               {categorySeriesAll.length ? (
                 <>
                   <select
@@ -5162,7 +5163,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="product" title="Evolução do Preço por Produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
+           <ExpandableSection id="product" title="Evolução do Preço por Produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
               <input
                 value={productQuery}
                 onChange={(e)=>{ setProductQuery(e.target.value); setSelectedProductName(""); setShowAllProducts(false); }}
@@ -5205,7 +5206,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               )}
             </StatsExpandableSection>
 
-            <StatsExpandableSection id="year" title="Evolução Mensal Consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
+            <ExpandableSection id="year" title="Evolução Mensal Consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[consolidatedByListSeries]} valueLabel="Valor gasto" emptyText="Ainda não há evolução consolidada registrada." />
             </StatsExpandableSection>
           </>
