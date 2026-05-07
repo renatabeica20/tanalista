@@ -40,6 +40,8 @@ import {
   normalizePin,
   isValidPin,
   hashUserPin,
+  verifyOrCreateUserPin,
+  resetUserAuthPin,
 } from "./services/authService";
 import {
   hasSupabaseConfig,
