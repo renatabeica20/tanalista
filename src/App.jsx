@@ -7982,9 +7982,9 @@ const [lists,setLists]=useState(()=>{
   <PriceStatsScreen
     onBack={() => setShowPriceStatsScreen(false)}
     lists={lists}
-    getPriceStatsSummary={getPriceStatsSummary}
-    normalizeCacheKey={normalizeCacheKey}
-    formatBRL={formatBRL}
+    getPriceStatsSummary={() => getPriceStatsSummary(lists)}
+normalizeCacheKey={normalizeCacheKey}
+formatBRL={formatBRL}
   />
 )}
             <div style={{
