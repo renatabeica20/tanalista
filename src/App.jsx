@@ -33,6 +33,14 @@ import {
   formatDateTime,
   normalizeText,
 } from "./utils/formatters";
+import {
+  isPinSessionVerified,
+  markPinSessionVerified,
+  clearPinSession,
+  normalizePin,
+  isValidPin,
+  hashUserPin,
+} from "./services/authService";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
