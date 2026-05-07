@@ -50,7 +50,7 @@ async function registrarEvento(eventType, metadata = {}) {
         ...(metadata && typeof metadata === "object" ? metadata : {}),
         user_name: userName,
         device_id: deviceId,
-        app_version: "etapa-7.69.5-sync-links",
+        app_version: "etapa-7.69.8-delete-persistence",
       },
     };
 
@@ -4619,6 +4619,12 @@ function wasListDeletedLocally(list) {
   return getListPersistenceKeys(list).some(key => deleted.has(key));
 }
 
+function shouldOmitListFromLocalState(list) {
+  // Regra única de bloqueio: qualquer lista já excluída por este usuário
+  // não pode permanecer no estado, no localStorage nem voltar pela restauração da nuvem.
+  return Boolean(wasListDeletedLocally(list) || wasReceivedListDeletedLocally(list));
+}
+
 function isSharedRecordHiddenForCurrentUser(record) {
   const data = record?.data && typeof record.data === "object" ? record.data : {};
   const deviceId = getAppDeviceId();
@@ -4673,7 +4679,7 @@ function mergeUniqueLists(items) {
   const source = Array.isArray(items) ? items : [];
   const map = new Map();
   for (const list of source) {
-    if (!list || wasListDeletedLocally(list)) continue;
+    if (!list || shouldOmitListFromLocalState(list)) continue;
     const key = getListIdentityKey(list) || `random:${Math.random()}`;
     const prev = map.get(key);
     if (!prev || getListComparableStamp(list) >= getListComparableStamp(prev)) {
@@ -6903,7 +6909,9 @@ const [lists,setLists]=useState(()=>{
   };
 
   const saveLists=(nl)=>{
-    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
+    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[])
+      .map(normalizeListOwnershipFlags)
+      .filter(l=>!shouldOmitListFromLocalState(l)));
     setLists(safe);
     localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
@@ -6921,7 +6929,7 @@ const [lists,setLists]=useState(()=>{
         for(const record of records){
           if(isSharedRecordHiddenForCurrentUser(record))continue;
           const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
-          if(wasListDeletedLocally(local) || wasReceivedListDeletedLocally(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
+          if(shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -7001,13 +7009,13 @@ const [lists,setLists]=useState(()=>{
     const currentName=getAppUserName();
     if(!currentName || !hasSupabaseConfig())return;
     const localLists=Array.isArray(lists)?lists:[];
-    const toPersist=localLists.filter(l=>l && !l.sharedId && !wasListDeletedLocally(l));
+    const toPersist=localLists.filter(l=>l && !l.sharedId && !shouldOmitListFromLocalState(l));
     if(!toPersist.length)return;
 
     let changed=false;
     const updated=[];
     for(const list of localLists){
-      if(list && !list.sharedId && !wasListDeletedLocally(list)){
+      if(list && !list.sharedId && !shouldOmitListFromLocalState(list)){
         const persisted=await persistListRecordToCloud(list,{silent:true});
         updated.push(persisted);
         if(persisted?.sharedId)changed=true;
@@ -7483,9 +7491,9 @@ const [lists,setLists]=useState(()=>{
       history:false,
     };
 
-    if(wasListDeletedLocally(received)){
+    if(shouldOmitListFromLocalState(received)){
       setSharedLandingRecord(null);
-      showToast("🗑 Esta lista já foi excluída neste aparelho",2200);
+      showToast("🗑 Esta lista já foi excluída por este usuário",2200);
       return null;
     }
 
@@ -9120,11 +9128,17 @@ const [lists,setLists]=useState(()=>{
       markListAsDeletedLocally(target);
     }
 
-    const targetKeys=new Set(getListPersistenceKeys(target));
+    const targetKeys=new Set([
+      ...getListPersistenceKeys(target),
+      ...getReceivedListPersistenceKeys(target),
+    ]);
     const sameList=(l)=>(
       (target.id && l.id===target.id) ||
       (target.sharedId && l.sharedId===target.sharedId) ||
-      getListPersistenceKeys(l).some(key=>targetKeys.has(key))
+      (target.originalSharedId && (l.originalSharedId===target.originalSharedId || l.sourceSharedId===target.originalSharedId || l.importedOriginalSharedId===target.originalSharedId)) ||
+      (target.sourceSharedId && (l.originalSharedId===target.sourceSharedId || l.sourceSharedId===target.sourceSharedId || l.importedOriginalSharedId===target.sourceSharedId)) ||
+      getListPersistenceKeys(l).some(key=>targetKeys.has(key)) ||
+      getReceivedListPersistenceKeys(l).some(key=>targetKeys.has(key))
     );
     const nl=lists.filter(l=>!sameList(l));
     saveLists(nl);
