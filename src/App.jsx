@@ -1009,6 +1009,12 @@ async function hideSharedListRecordForCurrentUser(id) {
     const hiddenForDeviceIds = Array.from(new Set([...(Array.isArray(data.hiddenForDeviceIds) ? data.hiddenForDeviceIds : []), deviceId].filter(Boolean)));
     const hiddenForUserIds = Array.from(new Set([...(Array.isArray(data.hiddenForUserIds) ? data.hiddenForUserIds : []), userId].filter(Boolean)));
     const hiddenForNames = Array.from(new Set([...(Array.isArray(data.hiddenForNames) ? data.hiddenForNames : []), userName].filter(Boolean).map(v => String(v).trim().toLowerCase())));
+    const hiddenForNormalizedNames = Array.from(new Set([...(Array.isArray(data.hiddenForNormalizedNames) ? data.hiddenForNormalizedNames : []), normalizeAuthName(userName)].filter(Boolean)));
+    const hiddenForReceivedKeys = Array.from(new Set([
+      ...(Array.isArray(data.hiddenForReceivedKeys) ? data.hiddenForReceivedKeys : []),
+      ...getReceivedListPersistenceKeys(record),
+      ...getReceivedListPersistenceKeys({ ...record, data }),
+    ].filter(Boolean)));
 
     const payload = {
       data: {
@@ -1016,6 +1022,8 @@ async function hideSharedListRecordForCurrentUser(id) {
         hiddenForDeviceIds,
         hiddenForUserIds,
         hiddenForNames,
+        hiddenForNormalizedNames,
+        hiddenForReceivedKeys,
         lastHiddenAt: new Date().toISOString(),
       },
     };
@@ -4578,6 +4586,24 @@ function getReceivedListPersistenceKeys(listOrRecord) {
   return Array.from(new Set(keys.filter(Boolean)));
 }
 
+function getPrimarySharedRecordIdForDeletion(listOrRecord) {
+  if (!listOrRecord) return null;
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const candidates = [
+    listOrRecord.sharedId,
+    listOrRecord.originalSharedId,
+    listOrRecord.sourceSharedId,
+    listOrRecord.importedOriginalSharedId,
+    data.sharedId,
+    data.originalSharedId,
+    data.sourceSharedId,
+    data.importedOriginalSharedId,
+    listOrRecord.id,
+    data.id,
+  ];
+  return candidates.find(Boolean) || null;
+}
+
 function getReceivedDeletedListKeys() {
   const merged = new Set();
   getReceivedDeletedListStorageKeys().forEach(storageKey => {
@@ -4633,6 +4659,9 @@ function isSharedRecordHiddenForCurrentUser(record) {
   const hiddenDevices = Array.isArray(data.hiddenForDeviceIds) ? data.hiddenForDeviceIds : [];
   const hiddenUsers = Array.isArray(data.hiddenForUserIds) ? data.hiddenForUserIds : [];
   const hiddenNames = Array.isArray(data.hiddenForNames) ? data.hiddenForNames.map(v => String(v).trim().toLowerCase()) : [];
+  const hiddenNormalizedNames = Array.isArray(data.hiddenForNormalizedNames) ? data.hiddenForNormalizedNames.map(v => String(v).trim()) : [];
+  const hiddenReceivedKeys = Array.isArray(data.hiddenForReceivedKeys) ? data.hiddenForReceivedKeys : [];
+  const recordReceivedKeys = getReceivedListPersistenceKeys(record);
 
   return Boolean(
     data.isDeleted ||
@@ -4641,6 +4670,8 @@ function isSharedRecordHiddenForCurrentUser(record) {
     (deviceId && hiddenDevices.includes(deviceId)) ||
     (userId && hiddenUsers.includes(userId)) ||
     (userName && hiddenNames.includes(userName)) ||
+    (userName && hiddenNormalizedNames.includes(normalizeAuthName(userName))) ||
+    recordReceivedKeys.some(key => hiddenReceivedKeys.includes(key)) ||
     wasListDeletedLocally(record) ||
     wasReceivedListDeletedLocally(record)
   );
@@ -9187,10 +9218,14 @@ const [lists,setLists]=useState(()=>{
 
     showToast(receivedShared ? "🗑 Lista recebida removida" : "🗑 Lista excluída");
 
-    if(target.sharedId){
+    const remoteSharedId = getPrimarySharedRecordIdForDeletion(target);
+
+    if(remoteSharedId){
       if(receivedShared){
-        await hideSharedListRecordForCurrentUser(target.sharedId);
-        await patchOriginalSharedRecipientStatus(target.originalSharedId || target.sourceSharedId || target.importedOriginalSharedId || target.sharedId, "removed", target).catch(()=>false);
+        // Lista recebida pode ter sharedId local nulo ou diferente.
+        // A exclusão persistente deve ocultar o registro original do Supabase para este usuário.
+        await hideSharedListRecordForCurrentUser(remoteSharedId);
+        await patchOriginalSharedRecipientStatus(remoteSharedId, "removed", target).catch(()=>false);
         showToast("🗑 Lista recebida removida apenas da sua conta",2200);
         return;
       }
@@ -9199,11 +9234,11 @@ const [lists,setLists]=useState(()=>{
       let persistedDeletion=false;
 
       // Apenas listas próprias podem ser apagadas/soft-deletadas no servidor.
-      persistedDeletion=await softDeleteSharedListRecord(target.sharedId,target);
-      removedFromCloud=await deleteSharedListRecord(target.sharedId);
+      persistedDeletion=await softDeleteSharedListRecord(remoteSharedId,target);
+      removedFromCloud=await deleteSharedListRecord(remoteSharedId);
 
       if(!removedFromCloud && !persistedDeletion){
-        await hideSharedListRecordForCurrentUser(target.sharedId);
+        await hideSharedListRecordForCurrentUser(remoteSharedId);
         showToast("🗑 Lista removida da sua conta",1800);
       }
     }
@@ -9349,7 +9384,7 @@ const [lists,setLists]=useState(()=>{
     </div>
   );
 
-  const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
+  const visibleLists = mergeUniqueLists((Array.isArray(lists) ? lists : []).filter(l=>!shouldOmitListFromLocalState(l)));
 
   const recentLists = visibleLists.slice(0,1);
   const historyLists = visibleLists.slice(1);
