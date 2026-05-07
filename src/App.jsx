@@ -8589,59 +8589,15 @@ const [lists,setLists]=useState(()=>{
       )}
 
       {/* AVISO PARA ADICIONAR À TELA INICIAL */}
-      {showInstallNotice && !isAppRunningStandalone() && (()=>{
-        const platform = getInstallPlatform();
-        const isIOS = platform === "ios";
-        const isAndroid = platform === "android";
-        const steps = isIOS
-          ? ["Abra este app pelo navegador do iPhone.", "Toque nos três pontos (⋯) do navegador e depois em Compartilhar.", "Selecione ‘Adicionar à Tela de Início’ e confirme em ‘Adicionar’."]
-          : isAndroid
-            ? ["Abra este app pelo Google Chrome.", "Toque nos três pontinhos (⋮) no canto superior.", "Selecione ‘Adicionar à tela inicial’ e confirme em ‘Adicionar’."]
-            : ["Abra o menu do navegador.", "Escolha ‘Instalar app’ ou ‘Adicionar à tela inicial’.", "Confirme para criar o atalho do Tá na Lista."];
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.58)",zIndex:610,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{width:"100%",maxWidth:390,background:"#FFFFFF",borderRadius:28,padding:22,boxShadow:"0 28px 70px rgba(17,24,39,0.22)",border:"1px solid #E9D5FF"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-                <AppLogo size={52} radius={16} />
-                <div>
-                  <div style={{fontSize:20,fontWeight:950,color:"#111827",lineHeight:1.1}}>Adicionar à tela inicial</div>
-                  <div style={{fontSize:13,fontWeight:700,color:"#6B7280",marginTop:4}}>Use o Tá na Lista como um app no seu celular.</div>
-                </div>
-              </div>
-
-              <div style={{background:"linear-gradient(135deg,#F5F3FF,#ECFDF5)",border:"1px solid #DDD6FE",borderRadius:20,padding:15,marginBottom:16}}>
-                <div style={{fontSize:14,fontWeight:900,color:"#4C1D95",marginBottom:6}}>
-                  {isIOS ? "📱 No iPhone" : isAndroid ? "🤖 No Android" : "💻 No navegador"}
-                </div>
-                {isIOS && (
-                  <div style={{fontSize:12,fontWeight:800,color:"#7C3AED",marginBottom:10,lineHeight:1.35}}>
-                    Funciona melhor pelo Safari. No Chrome do iPhone, primeiro toque nos três pontos para abrir o menu.
-                  </div>
-                )}
-                <ol style={{margin:"0",paddingLeft:20,color:"#374151",fontSize:14,fontWeight:700,lineHeight:1.45}}>
-                  {steps.map((step,idx)=>(
-                    <li key={idx} style={{marginBottom:idx===steps.length-1?0:8}}>{step}</li>
-                  ))}
-                </ol>
-              </div>
-
-              <div style={{fontSize:13,color:"#6B7280",fontWeight:700,lineHeight:1.45,marginBottom:16}}>
-                ⚡ Leva menos de 10 segundos. Isso cria um ícone na tela do celular e facilita o acesso às suas listas sem precisar procurar o link novamente.
-              </div>
-
-              <button onClick={installApp} style={{width:"100%",border:"none",borderRadius:18,padding:"14px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"white",fontWeight:950,fontSize:15,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 14px 28px rgba(109,40,217,0.24)"}}>
-                {installAvailable ? "📲 Instalar agora" : "📲 Adicionar à tela inicial"}
-              </button>
-              <button onClick={()=>closeInstallNotice(false)} style={{width:"100%",marginTop:10,border:"2px solid #E5E7EB",borderRadius:18,padding:"12px 16px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>
-                Adicionar depois
-              </button>
-              <button onClick={()=>closeInstallNotice(true)} style={{width:"100%",marginTop:8,border:"none",background:"transparent",color:"#6B7280",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
-                Não mostrar novamente
-              </button>
-            </div>
-          </div>
-        );
-      })()}
+      <InstallPrompt
+  show={showInstallNotice}
+  isStandalone={isAppRunningStandalone()}
+  getInstallPlatform={getInstallPlatform}
+  installApp={installApp}
+  installAvailable={installAvailable}
+  closeInstallNotice={closeInstallNotice}
+  AppLogo={AppLogo}
+/>
 
 
       {showGuidedTour && guidedTourStep && !userNameModal && (
