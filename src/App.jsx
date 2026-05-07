@@ -50,7 +50,7 @@ async function registrarEvento(eventType, metadata = {}) {
         ...(metadata && typeof metadata === "object" ? metadata : {}),
         user_name: userName,
         device_id: deviceId,
-        app_version: "etapa-7.69.8-delete-persistence",
+        app_version: "etapa-7.70.1-deletion-lock-v2",
       },
     };
 
@@ -4627,6 +4627,7 @@ function markReceivedListAsDeletedLocally(list) {
   const keys = getReceivedDeletedListKeys();
   getReceivedListPersistenceKeys(list).forEach(key => keys.add(key));
   saveReceivedDeletedListKeys(keys);
+  markListDeletionLockV2(list, { received: true });
 }
 
 function wasReceivedListDeletedLocally(list) {
@@ -4638,6 +4639,7 @@ function markListAsDeletedLocally(list) {
   const keys = getDeletedListKeys();
   getListPersistenceKeys(list).forEach(key => keys.add(key));
   saveDeletedListKeys(keys);
+  markListDeletionLockV2(list, { received: false });
 }
 
 function wasListDeletedLocally(list) {
@@ -4648,7 +4650,7 @@ function wasListDeletedLocally(list) {
 function shouldOmitListFromLocalState(list) {
   // Regra única de bloqueio: qualquer lista já excluída por este usuário
   // não pode permanecer no estado, no localStorage nem voltar pela restauração da nuvem.
-  return Boolean(wasListDeletedLocally(list) || wasReceivedListDeletedLocally(list));
+  return Boolean(isListDeletionLockedV2(list) || wasListDeletedLocally(list) || wasReceivedListDeletedLocally(list));
 }
 
 function isSharedRecordHiddenForCurrentUser(record) {
@@ -4672,9 +4674,124 @@ function isSharedRecordHiddenForCurrentUser(record) {
     (userName && hiddenNames.includes(userName)) ||
     (userName && hiddenNormalizedNames.includes(normalizeAuthName(userName))) ||
     recordReceivedKeys.some(key => hiddenReceivedKeys.includes(key)) ||
+    isListDeletionLockedV2(record) ||
+    isListDeletionLockedV2({ ...data, id: data.id || record?.id, sharedId: record?.id || data.sharedId }) ||
     wasListDeletedLocally(record) ||
     wasReceivedListDeletedLocally(record)
   );
+}
+
+
+// ── TRAVA DEFINITIVA DE EXCLUSÃO POR USUÁRIO ─────────────────────────────
+// Impede que uma lista excluída localmente volte pela restauração do Supabase.
+const LIST_DELETION_LOCK_V2_STORAGE = "tnl_list_deletion_lock_v2";
+
+function getDeletionLockScopes(explicitUserName = "") {
+  const scopes = [];
+  const userId = getAppUserId();
+  const userName = normalizeAuthName(explicitUserName || getAppUserName());
+  const deviceId = getAppDeviceId();
+  if (userId) scopes.push(`user:${normalizeDeletedKeyPart(userId)}`);
+  if (userName) scopes.push(`name:${normalizeDeletedKeyPart(userName)}`);
+  // O device_id é apenas fallback. Não deve esconder lista de outro usuário no mesmo aparelho.
+  if (!scopes.length && deviceId) scopes.push(`device:${normalizeDeletedKeyPart(deviceId)}`);
+  return Array.from(new Set(scopes.filter(Boolean)));
+}
+
+function readDeletionLockV2() {
+  try {
+    const raw = localStorage.getItem(LIST_DELETION_LOCK_V2_STORAGE) || "{}";
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDeletionLockV2(lock) {
+  try {
+    localStorage.setItem(LIST_DELETION_LOCK_V2_STORAGE, JSON.stringify(lock && typeof lock === "object" ? lock : {}));
+  } catch {}
+}
+
+function addDeletionFingerprint(keys, prefix, value) {
+  const clean = normalizeDeletedKeyPart(value);
+  if (clean) keys.push(`${prefix}:${clean}`);
+}
+
+function getDeletionFingerprintsV2(listOrRecord) {
+  if (!listOrRecord) return [];
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const keys = [];
+
+  const ids = [
+    listOrRecord.id,
+    listOrRecord.sharedId,
+    listOrRecord.originalSharedId,
+    listOrRecord.sourceSharedId,
+    listOrRecord.importedOriginalSharedId,
+    listOrRecord.importedSharedId,
+    listOrRecord.originalSharedRecordId,
+    data.id,
+    data.sharedId,
+    data.originalSharedId,
+    data.sourceSharedId,
+    data.importedOriginalSharedId,
+    data.importedSharedId,
+    data.originalSharedRecordId,
+  ].filter(Boolean);
+
+  ids.forEach((id) => {
+    addDeletionFingerprint(keys, "id", id);
+    addDeletionFingerprint(keys, "shared", id);
+    addDeletionFingerprint(keys, "cloud", id);
+  });
+
+  const owner = getReceivedOriginName(listOrRecord) || getReceivedOriginName(data) || data.originalOwnerName || data.ownerName || data.remetente || listOrRecord.originalOwnerName || listOrRecord.ownerName || listOrRecord.remetente || "";
+  const localOwner = data.userName || data.userId || listOrRecord.userName || listOrRecord.userId || listOrRecord.user_id || "";
+  const name = data.name || data.title || listOrRecord.name || listOrRecord.title || "";
+  const created = data.createdAt || data.created_at || listOrRecord.createdAt || listOrRecord.created_at || data.receivedAt || listOrRecord.receivedAt || "";
+
+  if (owner && name) addDeletionFingerprint(keys, "owner-name", `${owner}:${name}`);
+  if (owner && name && created) addDeletionFingerprint(keys, "owner-name-created", `${owner}:${name}:${created}`);
+  if (localOwner && name) addDeletionFingerprint(keys, "local-owner-name", `${localOwner}:${name}`);
+
+  getListPersistenceKeys(listOrRecord).forEach((k) => addDeletionFingerprint(keys, "legacy", k));
+  getReceivedListPersistenceKeys(listOrRecord).forEach((k) => addDeletionFingerprint(keys, "received", k));
+
+  return Array.from(new Set(keys.filter(Boolean)));
+}
+
+function markListDeletionLockV2(listOrRecord, { received = false, userName = "" } = {}) {
+  const fingerprints = getDeletionFingerprintsV2(listOrRecord);
+  if (!fingerprints.length) return;
+  const lock = readDeletionLockV2();
+  const scopes = getDeletionLockScopes(userName);
+  const now = new Date().toISOString();
+  scopes.forEach((scope) => {
+    const current = Array.isArray(lock[scope]) ? lock[scope] : [];
+    const set = new Set(current);
+    fingerprints.forEach((key) => set.add(key));
+    if (received) set.add("kind:received");
+    lock[scope] = Array.from(set).slice(-500);
+  });
+  lock.__updatedAt = now;
+  writeDeletionLockV2(lock);
+}
+
+function isListDeletionLockedV2(listOrRecord, { userName = "" } = {}) {
+  const fingerprints = getDeletionFingerprintsV2(listOrRecord);
+  if (!fingerprints.length) return false;
+  const fingerprintSet = new Set(fingerprints);
+  const lock = readDeletionLockV2();
+  return getDeletionLockScopes(userName).some((scope) => {
+    const arr = Array.isArray(lock[scope]) ? lock[scope] : [];
+    return arr.some((key) => fingerprintSet.has(key));
+  });
+}
+
+function sanitizeListsForCurrentUser(items) {
+  return mergeUniqueLists((Array.isArray(items) ? items : []).filter((list) => !shouldOmitListFromLocalState(list)));
 }
 
 
@@ -6965,14 +7082,15 @@ const [lists,setLists]=useState(()=>{
       const records=await getSharedListsForUser(userId, userName || getAppUserName());
       if(!records.length)return;
       setLists(prev=>{
-        const current=Array.isArray(prev)?prev:[];
+        const current=sanitizeListsForCurrentUser(prev);
         const byKey=new Map(current.map(l=>[l.sharedId||l.id,l]));
         let changed=false;
         let restoredCount=0;
         for(const record of records){
           if(isSharedRecordHiddenForCurrentUser(record))continue;
           const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
-          if(shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
+          const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
+          if(shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -6996,7 +7114,7 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!changed)return current;
-        const merged=mergeUniqueLists(Array.from(byKey.values()).filter(l=>!shouldOmitListFromLocalState(l)));
+        const merged=sanitizeListsForCurrentUser(Array.from(byKey.values()));
         try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
         if(!silent && restoredCount>0)showToast(`${restoredCount} lista(s) recuperada(s)`);
         return merged;
@@ -7578,7 +7696,7 @@ const [lists,setLists]=useState(()=>{
       isShared:false,
       sharedMode:"simultaneous"
     }, received);
-    const nl=mergeUniqueLists([finalReceived,...existing]);
+    const nl=sanitizeListsForCurrentUser([finalReceived,...existing]);
     setLists(nl);
     localStorage.setItem("tnl_lists",JSON.stringify(nl));
     setCurrentList(finalReceived);
@@ -8801,7 +8919,7 @@ const [lists,setLists]=useState(()=>{
         : markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===localSynced.id?{...cur,...localSynced}:cur);
       setLists(prev=>{
-        const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===localSynced.id ? {...l,...localSynced} : ((sharedId&&l.sharedId===sharedId&&!isReceivedSharedList(l))?{...l,...payload}:l));
+        const next=sanitizeListsForCurrentUser((Array.isArray(prev)?prev:[]).map(l=>l.id===localSynced.id ? {...l,...localSynced} : ((sharedId&&l.sharedId===sharedId&&!isReceivedSharedList(l))?{...l,...payload}:l)));
         try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
         return next;
       });
@@ -8846,9 +8964,9 @@ const [lists,setLists]=useState(()=>{
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
       const hasLocal=existing.some(l=>l.id===currentList.id || (sharedId&&l.sharedId===sharedId));
-      const nl=hasLocal
+      const nl=sanitizeListsForCurrentUser(hasLocal
         ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
-        : [refreshed,...existing];
+        : [refreshed,...existing]);
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
       setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
@@ -9219,8 +9337,21 @@ const [lists,setLists]=useState(()=>{
     showToast(receivedShared ? "🗑 Lista recebida removida" : "🗑 Lista excluída");
 
     const remoteSharedId = getPrimarySharedRecordIdForDeletion(target);
-
     if(remoteSharedId){
+      const deletionCandidate={
+        ...target,
+        id: target.id || remoteSharedId,
+        sharedId: target.sharedId || remoteSharedId,
+        originalSharedId: target.originalSharedId || target.sourceSharedId || target.importedOriginalSharedId || remoteSharedId,
+        sourceSharedId: target.sourceSharedId || target.originalSharedId || target.importedOriginalSharedId || remoteSharedId,
+        importedOriginalSharedId: target.importedOriginalSharedId || target.originalSharedId || target.sourceSharedId || remoteSharedId,
+      };
+      if(receivedShared){
+        markReceivedListAsDeletedLocally(deletionCandidate);
+      }else{
+        markListAsDeletedLocally(deletionCandidate);
+      }
+
       if(receivedShared){
         // Lista recebida pode ter sharedId local nulo ou diferente.
         // A exclusão persistente deve ocultar o registro original do Supabase para este usuário.
