@@ -6832,7 +6832,17 @@ const [lists,setLists]=useState(()=>{
       let categories;
       const itemsWithMemory=applyUserMemoryToItems(pendingItems);
       try{categories=await aiOrganize(itemsWithMemory,listType);}
-      catch{categories=demoOrganize(itemsWithMemory);showToast("⚠️ IA indisponível — organização básica");}
+     catch(err){
+  console.error("Erro IA:", err);
+
+  categories = demoOrganize(itemsWithMemory) || [];
+
+  if (!Array.isArray(categories)) {
+    categories = [];
+  }
+
+  showToast("⚠️ IA indisponível — organização básica");
+}
       categories=enforceKnownCategoryRules(categories);
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
