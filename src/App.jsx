@@ -6884,8 +6884,20 @@ const [lists,setLists]=useState(()=>{
         setCurrentList(newList);
         setScreen("list");
       }
-      showToast(editingOriginal?"✅ Alterações salvas. Voltando para o início.":"✅ Lista organizada!");
-    }finally{setLoading(false);}
+     showToast(
+  editingOriginal
+    ? "✅ Alterações salvas. Voltando para o início."
+    : "✅ Lista organizada!"
+);
+} catch (err) {
+  console.error("Erro ao organizar lista:", err);
+  showToast(
+    "❌ Erro ao organizar lista: " + (err?.message || String(err)),
+    6000
+  );
+} finally {
+  setLoading(false);
+}
   };
 
   // ── Reutilizar lista ─────────────────────────────────────────────────
