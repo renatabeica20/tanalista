@@ -1,10 +1,13 @@
 export default function ModuleIcon({
   icon,
+  children,
   bg = "#EEF2FF",
   color = "#4338CA",
   size = 52,
   iconSize = 24,
 }) {
+  const content = icon || children;
+
   return (
     <div
       style={{
@@ -20,7 +23,7 @@ export default function ModuleIcon({
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.45)",
       }}
     >
-      {icon}
+      {content}
     </div>
   );
 }
