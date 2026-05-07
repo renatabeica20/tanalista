@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69.7 - Exclusão persistente de listas próprias e recebidas, sem afetar o dono original
+// Etapa 7.70.4 - Correção estrutural: exclusão persistente de listas próprias e recebidas
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1039,6 +1039,19 @@ async function hideSharedListRecordForCurrentUser(id) {
     ].filter(Boolean)));
 
     const now = new Date().toISOString();
+    const removedForUsers = Array.from(new Map([
+      ...(Array.isArray(data.removedForUsers) ? data.removedForUsers : []),
+      {
+        userId: userId || null,
+        userName: userName || null,
+        normalizedName: normalizeAuthName(userName || ""),
+        deviceId: deviceId || null,
+        removedAt: now,
+      },
+    ].filter(Boolean).map((entry) => {
+      const key = entry?.userId ? `user:${entry.userId}` : `name:${normalizeAuthName(entry?.userName || entry?.name || entry?.normalizedName || "")}`;
+      return [key, entry];
+    })).values());
     const sharedWith = Array.isArray(data.sharedWith) ? data.sharedWith : [];
     const normalizedUserName = normalizeAuthName(userName);
     let matchedSharedWith = false;
@@ -1078,6 +1091,7 @@ async function hideSharedListRecordForCurrentUser(id) {
         hiddenForNames,
         hiddenForNormalizedNames,
         hiddenForReceivedKeys,
+        removedForUsers,
         lastHiddenAt: now,
       },
     };
@@ -4704,7 +4718,14 @@ function wasListDeletedLocally(list) {
 function shouldOmitListFromLocalState(list) {
   // Regra única de bloqueio: qualquer lista já excluída por este usuário
   // não pode permanecer no estado, no localStorage nem voltar pela restauração da nuvem.
-  return Boolean(isListDeletionLockedV2(list) || wasListDeletedLocally(list) || wasReceivedListDeletedLocally(list));
+  return Boolean(
+    isListDeletionLockedV2(list) ||
+    wasOwnListDeletedForCurrentUser(list) ||
+    isRemoteOwnListDeleted(list) ||
+    wasSharedRecordRemovedByCurrentUser(list) ||
+    wasListDeletedLocally(list) ||
+    wasReceivedListDeletedLocally(list)
+  );
 }
 
 function isSharedRecordHiddenForCurrentUser(record) {
@@ -4723,6 +4744,8 @@ function isSharedRecordHiddenForCurrentUser(record) {
     data.isDeleted ||
     data.deletedAt ||
     data.status === "deleted" ||
+    hasRemoteRemovalForCurrentUser(record, userId, getAppUserName()) ||
+    isRemoteOwnListDeleted(record, userId, getAppUserName()) ||
     isSharedRecordRemovedForCurrentUser(record, userId, getAppUserName()) ||
     (deviceId && hiddenDevices.includes(deviceId)) ||
     (userId && hiddenUsers.includes(userId)) ||
@@ -4847,6 +4870,352 @@ function isListDeletionLockedV2(listOrRecord, { userName = "" } = {}) {
 
 function sanitizeListsForCurrentUser(items) {
   return mergeUniqueLists((Array.isArray(items) ? items : []).filter((list) => !shouldOmitListFromLocalState(list)));
+}
+
+
+// ── BLOQUEIO DEFINITIVO DE REIMPORTAÇÃO DE LISTAS RECEBIDAS ───────────────
+// Quando o usuário exclui uma lista recebida, o app registra o sharedId original
+// em uma lista de bloqueio por usuário. Isso impede que a rotina de restauração
+// do Supabase reimporte a mesma lista para "Listas recentes" após reiniciar o app.
+const USER_REMOVED_SHARED_RECORDS_STORAGE = "tnl_user_removed_shared_records_v3";
+
+function getUserRemovalScopeTokens(explicitName = "") {
+  const tokens = [];
+  const userId = getAppUserId();
+  const name = normalizeAuthName(explicitName || getAppUserName());
+  const deviceId = getAppDeviceId();
+  if (userId) tokens.push(`user:${normalizeDeletedKeyPart(userId)}`);
+  if (name) tokens.push(`name:${normalizeDeletedKeyPart(name)}`);
+  if (!userId && !name && deviceId) tokens.push(`device:${normalizeDeletedKeyPart(deviceId)}`);
+  return Array.from(new Set(tokens.filter(Boolean)));
+}
+
+function readUserRemovedSharedRecords() {
+  try {
+    const raw = localStorage.getItem(USER_REMOVED_SHARED_RECORDS_STORAGE) || "{}";
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeUserRemovedSharedRecords(data) {
+  try {
+    localStorage.setItem(USER_REMOVED_SHARED_RECORDS_STORAGE, JSON.stringify(data && typeof data === "object" ? data : {}));
+  } catch {}
+}
+
+function getSharedRecordRemovalIds(listOrRecord) {
+  if (!listOrRecord) return [];
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const ids = [
+    listOrRecord.id,
+    listOrRecord.sharedId,
+    listOrRecord.originalSharedId,
+    listOrRecord.sourceSharedId,
+    listOrRecord.importedOriginalSharedId,
+    listOrRecord.importedSharedId,
+    data.id,
+    data.sharedId,
+    data.originalSharedId,
+    data.sourceSharedId,
+    data.importedOriginalSharedId,
+    data.importedSharedId,
+  ];
+  return Array.from(new Set(ids.filter(Boolean).map(v => String(v))));
+}
+
+function markSharedRecordRemovedByCurrentUser(listOrRecord, explicitName = "") {
+  const ids = getSharedRecordRemovalIds(listOrRecord);
+  if (!ids.length) return;
+  const store = readUserRemovedSharedRecords();
+  const scopes = getUserRemovalScopeTokens(explicitName);
+  const now = new Date().toISOString();
+  scopes.forEach(scope => {
+    const current = Array.isArray(store[scope]) ? store[scope] : [];
+    const set = new Set(current);
+    ids.forEach(id => {
+      set.add(`shared:${id}`);
+      set.add(`id:${id}`);
+    });
+    store[scope] = Array.from(set).slice(-800);
+  });
+  store.__updatedAt = now;
+  writeUserRemovedSharedRecords(store);
+}
+
+function wasSharedRecordRemovedByCurrentUser(listOrRecord, explicitName = "") {
+  const ids = getSharedRecordRemovalIds(listOrRecord);
+  if (!ids.length) return false;
+  const checks = [];
+  ids.forEach(id => {
+    checks.push(`shared:${id}`);
+    checks.push(`id:${id}`);
+  });
+  const checkSet = new Set(checks);
+  const store = readUserRemovedSharedRecords();
+  return getUserRemovalScopeTokens(explicitName).some(scope => {
+    const arr = Array.isArray(store[scope]) ? store[scope] : [];
+    return arr.some(key => checkSet.has(key));
+  });
+}
+
+function hasRemoteRemovalForCurrentUser(record, explicitUserId = getAppUserId(), explicitName = getAppUserName()) {
+  const data = record?.data && typeof record.data === "object" ? record.data : {};
+  const removedForUsers = Array.isArray(data.removedForUsers) ? data.removedForUsers : [];
+  const normalizedName = normalizeAuthName(explicitName || getAppUserName());
+  const userId = explicitUserId || getAppUserId();
+  return removedForUsers.some(entry => {
+    if (!entry) return false;
+    if (typeof entry === "string") return normalizedName && normalizeAuthName(entry) === normalizedName;
+    if (userId && entry.userId && String(entry.userId) === String(userId)) return true;
+    return normalizedName && normalizeAuthName(entry.userName || entry.name || entry.normalizedName || "") === normalizedName;
+  });
+}
+
+function shouldBlockSharedRecordForCurrentUser(record, userId = getAppUserId(), userName = getAppUserName()) {
+  return Boolean(
+    isSharedRecordRemovedForCurrentUser(record, userId, userName) ||
+    hasRemoteRemovalForCurrentUser(record, userId, userName) ||
+    wasSharedRecordRemovedByCurrentUser(record, userName) ||
+    isSharedRecordHiddenForCurrentUser(record)
+  );
+}
+
+
+// ── EXCLUSÃO PERSISTENTE DE LISTAS PRÓPRIAS ─────────────────────────────
+// Listas próprias também são restauradas pelo Supabase. Por isso, ao excluir,
+// o app grava uma lápide local e, quando possível, marca o registro remoto como excluído.
+const OWN_DELETED_LISTS_STORAGE = "tnl_own_deleted_lists_v4";
+
+function getOwnDeletionScopes(explicitUserName = "") {
+  const scopes = ["global"];
+  const userId = getAppUserId();
+  const userName = normalizeAuthName(explicitUserName || getAppUserName());
+  const deviceId = getAppDeviceId();
+  if (userId) scopes.push(`user:${normalizeDeletedKeyPart(userId)}`);
+  if (userName) scopes.push(`name:${normalizeDeletedKeyPart(userName)}`);
+  if (deviceId) scopes.push(`device:${normalizeDeletedKeyPart(deviceId)}`);
+  return Array.from(new Set(scopes.filter(Boolean)));
+}
+
+function readOwnDeletedListsStore() {
+  try {
+    const raw = localStorage.getItem(OWN_DELETED_LISTS_STORAGE) || "{}";
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeOwnDeletedListsStore(store) {
+  try {
+    localStorage.setItem(OWN_DELETED_LISTS_STORAGE, JSON.stringify(store && typeof store === "object" ? store : {}));
+  } catch {}
+}
+
+function getOwnListDeletionFingerprints(listOrRecord) {
+  if (!listOrRecord) return [];
+  const data = listOrRecord.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const keys = [];
+  const add = (prefix, value) => {
+    const clean = normalizeDeletedKeyPart(value);
+    if (clean) keys.push(`${prefix}:${clean}`);
+  };
+
+  [
+    listOrRecord.id,
+    listOrRecord.sharedId,
+    listOrRecord.cloudId,
+    listOrRecord.remoteId,
+    data.id,
+    data.sharedId,
+    data.cloudId,
+    data.remoteId,
+  ].filter(Boolean).forEach((id) => {
+    add("id", id);
+    add("shared", id);
+    add("cloud", id);
+  });
+
+  const ownerId = data.userId || data.user_id || listOrRecord.userId || listOrRecord.user_id || "";
+  const ownerName = data.ownerName || data.remetente || data.deletedByName || listOrRecord.ownerName || listOrRecord.remetente || "";
+  const name = data.name || data.title || listOrRecord.name || listOrRecord.title || "";
+  const created = data.createdAt || data.created_at || listOrRecord.createdAt || listOrRecord.created_at || "";
+
+  if (ownerId && name) add("ownerid-name", `${ownerId}:${name}`);
+  if (ownerId && name && created) add("ownerid-name-created", `${ownerId}:${name}:${created}`);
+  if (ownerName && name) add("owner-name", `${ownerName}:${name}`);
+  if (ownerName && name && created) add("owner-name-created", `${ownerName}:${name}:${created}`);
+
+  getListPersistenceKeys(listOrRecord).forEach((k) => add("legacy", k));
+  getListPersistenceKeys(data).forEach((k) => add("legacy", k));
+
+  return Array.from(new Set(keys.filter(Boolean)));
+}
+
+function markOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
+  const fingerprints = getOwnListDeletionFingerprints(listOrRecord);
+  if (!fingerprints.length) return;
+  const store = readOwnDeletedListsStore();
+  const scopes = getOwnDeletionScopes(explicitUserName);
+  const now = new Date().toISOString();
+  scopes.forEach((scope) => {
+    const arr = Array.isArray(store[scope]) ? store[scope] : [];
+    const set = new Set(arr);
+    fingerprints.forEach((fp) => set.add(fp));
+    store[scope] = Array.from(set).slice(-1200);
+  });
+  store.__updatedAt = now;
+  writeOwnDeletedListsStore(store);
+}
+
+function wasOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
+  const fingerprints = getOwnListDeletionFingerprints(listOrRecord);
+  if (!fingerprints.length) return false;
+  const wanted = new Set(fingerprints);
+  const store = readOwnDeletedListsStore();
+  return getOwnDeletionScopes(explicitUserName).some((scope) => {
+    const arr = Array.isArray(store[scope]) ? store[scope] : [];
+    return arr.some((fp) => wanted.has(fp));
+  });
+}
+
+function isRemoteOwnListDeleted(record, explicitUserId = getAppUserId(), explicitName = getAppUserName()) {
+  const data = record?.data && typeof record.data === "object" ? record.data : {};
+  const normalizedName = normalizeAuthName(explicitName || getAppUserName());
+  const userId = explicitUserId || getAppUserId();
+  const deletedForUsers = Array.isArray(data.deletedForUsers) ? data.deletedForUsers : [];
+
+  const deletedForCurrentUser = deletedForUsers.some((entry) => {
+    if (!entry) return false;
+    if (typeof entry === "string") return normalizedName && normalizeAuthName(entry) === normalizedName;
+    if (userId && entry.userId && String(entry.userId) === String(userId)) return true;
+    return normalizedName && normalizeAuthName(entry.userName || entry.name || entry.normalizedName || "") === normalizedName;
+  });
+
+  const deletedByCurrentUser = Boolean(
+    (userId && data.deletedByUserId && String(data.deletedByUserId) === String(userId)) ||
+    (normalizedName && data.deletedByName && normalizeAuthName(data.deletedByName) === normalizedName)
+  );
+
+  return Boolean(
+    data.isDeleted === true ||
+    data.status === "deleted" ||
+    data.deletedAt ||
+    deletedForCurrentUser ||
+    deletedByCurrentUser ||
+    wasOwnListDeletedForCurrentUser(record, explicitName) ||
+    wasOwnListDeletedForCurrentUser({ ...(data || {}), id: data.id || record?.id, sharedId: record?.id || data.sharedId }, explicitName)
+  );
+}
+
+async function fetchSharedListRecordsByUrl(queryString) {
+  if (!hasSupabaseConfig() || !queryString) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?${queryString}&select=*`, {
+      method: "GET",
+      headers: supabaseHeaders({ "Cache-Control": "no-store" }),
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => []);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+async function findOwnedSharedListRecordsForDeletion(list) {
+  if (!list || !hasSupabaseConfig()) return [];
+  const map = new Map();
+  const addRecords = (records) => {
+    (Array.isArray(records) ? records : []).forEach((record) => {
+      if (record?.id) map.set(String(record.id), record);
+    });
+  };
+
+  const candidateIds = Array.from(new Set([
+    list.sharedId,
+    list.id,
+    list.cloudId,
+    list.remoteId,
+  ].filter(Boolean).map(String)));
+
+  for (const id of candidateIds) {
+    const record = await getSharedListRecord(id).catch(() => null);
+    if (record?.id) map.set(String(record.id), record);
+  }
+
+  const localId = list.id ? String(list.id) : "";
+  const userId = list.userId || getAppUserId() || "";
+  const ownerName = String(list.ownerName || list.remetente || getAppUserName() || "").trim();
+  const listName = String(list.name || list.title || "").trim();
+
+  if (localId && userId) {
+    addRecords(await fetchSharedListRecordsByUrl(`user_id=eq.${encodeURIComponent(userId)}&data->>id=eq.${encodeURIComponent(localId)}`));
+  }
+  if (localId && ownerName) {
+    addRecords(await fetchSharedListRecordsByUrl(`remetente=ilike.${encodeURIComponent(ownerName)}&data->>id=eq.${encodeURIComponent(localId)}`));
+  }
+  if (listName && userId) {
+    addRecords(await fetchSharedListRecordsByUrl(`user_id=eq.${encodeURIComponent(userId)}&title=eq.${encodeURIComponent(listName)}`));
+  }
+  if (listName && ownerName) {
+    addRecords(await fetchSharedListRecordsByUrl(`remetente=ilike.${encodeURIComponent(ownerName)}&title=eq.${encodeURIComponent(listName)}`));
+  }
+
+  return Array.from(map.values());
+}
+
+async function markOwnedSharedListRecordDeleted(recordOrId, list = {}) {
+  const id = typeof recordOrId === "string" ? recordOrId : recordOrId?.id;
+  if (!id || !hasSupabaseConfig()) return false;
+  try {
+    const record = typeof recordOrId === "string" ? await getSharedListRecord(id).catch(() => null) : recordOrId;
+    const data = record?.data && typeof record.data === "object" ? record.data : {};
+    const now = new Date().toISOString();
+    const userId = getAppUserId() || list?.userId || data?.userId || record?.user_id || null;
+    const userName = getAppUserName() || list?.ownerName || list?.remetente || data?.ownerName || data?.remetente || record?.remetente || "";
+    const deletedForUsers = Array.isArray(data.deletedForUsers) ? data.deletedForUsers : [];
+    const nextDeletedForUsers = [
+      ...deletedForUsers,
+      { userId, userName, normalizedName: normalizeAuthName(userName), deletedAt: now },
+    ];
+
+    const payload = {
+      data: {
+        ...data,
+        ...(list || {}),
+        id: data.id || list?.id || null,
+        sharedId: id,
+        isDeleted: true,
+        status: "deleted",
+        deletedAt: now,
+        deletedByUserId: userId,
+        deletedByName: userName || null,
+        deletedForUsers: nextDeletedForUsers,
+        deletedListKeys: Array.from(new Set([
+          ...(Array.isArray(data.deletedListKeys) ? data.deletedListKeys : []),
+          ...getListPersistenceKeys({ ...(list || {}), ...record, data }),
+          ...getOwnListDeletionFingerprints({ ...(list || {}), ...record, data }),
+        ].filter(Boolean))),
+        lastSyncedAt: now,
+      },
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: supabaseHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Erro ao marcar lista própria como excluída no Supabase:", err);
+    return false;
+  }
 }
 
 
@@ -7142,7 +7511,7 @@ const [lists,setLists]=useState(()=>{
         let changed=false;
         let restoredCount=0;
         for(const record of records){
-          if(isSharedRecordRemovedForCurrentUser(record, userId, userName || getAppUserName()) || isSharedRecordHiddenForCurrentUser(record))continue;
+          if(shouldBlockSharedRecordForCurrentUser(record, userId, userName || getAppUserName()) || isRemoteOwnListDeleted(record, userId, userName || getAppUserName()) || wasOwnListDeletedForCurrentUser(record, userName || getAppUserName()))continue;
           const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
           if(shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
@@ -7660,7 +8029,7 @@ const [lists,setLists]=useState(()=>{
     const existing=Array.isArray(existingRaw)?mergeUniqueLists(existingRaw.filter(l=>!shouldOmitListFromLocalState(l))):[];
     try{localStorage.setItem("tnl_lists",JSON.stringify(existing));}catch{}
 
-    if(sourceSharedId && (isSharedRecordRemovedForCurrentUser(record, currentUserId, currentUserName) || wasReceivedListDeletedLocally({
+    if(sourceSharedId && (shouldBlockSharedRecordForCurrentUser(record, currentUserId, currentUserName) || wasSharedRecordRemovedByCurrentUser({ ...baseData, id: sourceSharedId, sharedId: sourceSharedId }, currentUserName) || wasReceivedListDeletedLocally({
       ...baseData,
       id: baseData.id || sourceSharedId,
       sharedId: sourceSharedId || baseData.sharedId,
@@ -9367,8 +9736,10 @@ const [lists,setLists]=useState(()=>{
     // quando usuários diferentes acessarem o app no mesmo aparelho/navegador.
     if(receivedShared){
       markReceivedListAsDeletedLocally(target);
+      markSharedRecordRemovedByCurrentUser(target, getAppUserName());
     }else{
       markListAsDeletedLocally(target);
+      markOwnListDeletedForCurrentUser(target, getAppUserName());
     }
 
     const targetKeys=new Set([
@@ -9409,8 +9780,10 @@ const [lists,setLists]=useState(()=>{
       };
       if(receivedShared){
         markReceivedListAsDeletedLocally(deletionCandidate);
+        markSharedRecordRemovedByCurrentUser(deletionCandidate, getAppUserName());
       }else{
         markListAsDeletedLocally(deletionCandidate);
+        markOwnListDeletedForCurrentUser(deletionCandidate, getAppUserName());
       }
 
       if(receivedShared){
@@ -9425,9 +9798,19 @@ const [lists,setLists]=useState(()=>{
       let removedFromCloud=false;
       let persistedDeletion=false;
 
-      // Apenas listas próprias podem ser apagadas/soft-deletadas no servidor.
-      persistedDeletion=await softDeleteSharedListRecord(remoteSharedId,target);
-      removedFromCloud=await deleteSharedListRecord(remoteSharedId);
+      // Lista própria: localizar todos os registros remotos equivalentes, marcar como excluídos
+      // e gravar lápides locais com o id local e com o id real do Supabase.
+      const ownedRecords=await findOwnedSharedListRecordsForDeletion(deletionCandidate).catch(()=>[]);
+      const recordsToDelete=ownedRecords.length ? ownedRecords : [{ id: remoteSharedId, data: target }];
+      for(const record of recordsToDelete){
+        const enriched={...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId, data:{...(record.data||{}),...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId}};
+        markOwnListDeletedForCurrentUser(enriched, getAppUserName());
+        markListAsDeletedLocally(enriched);
+        const softOk=await markOwnedSharedListRecordDeleted(record, enriched).catch(()=>false);
+        persistedDeletion=persistedDeletion || softOk;
+        const hardOk=await deleteSharedListRecord(record.id || remoteSharedId).catch(()=>false);
+        removedFromCloud=removedFromCloud || hardOk;
+      }
 
       if(!removedFromCloud && !persistedDeletion){
         await hideSharedListRecordForCurrentUser(remoteSharedId);
