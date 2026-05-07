@@ -55,6 +55,7 @@ import ToastMessage from "./components/ToastMessage";
 import InstallPrompt from "./components/InstallPrompt";
 import HomeScreen from "./pages/HomeScreen";
 import AppLogo from "./components/AppLogo";
+import BrandWordmark from "./components/BrandWordmark";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -1370,14 +1371,7 @@ function getPremiumSectionHeaderStyle(theme, { isExtraCat = false, allDone = fal
 
 
 
-function BrandWordmark({ compact = false, color = "#111827" }) {
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:compact?8:12,justifyContent:"center"}}>
-      <AppLogo size={compact?42:64} radius={compact?14:20} />
-      <div style={{fontWeight:900,fontSize:compact?22:"clamp(28px, 9vw, 34px)",color,letterSpacing:"-1px",lineHeight:1,whiteSpace:"nowrap"}}>Tá na Lista</div>
-    </div>
-  );
-}
+
 
 function ModuleIcon({ type="compras", size=72, active=false }) {
   const iconMap = {
