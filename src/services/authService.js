@@ -1,10 +1,25 @@
-import { SUPABASE_URL } from "../config/env";
+import {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+} from "../config/env";
 import {
   APP_PIN_SESSION_NAME_KEY,
   APP_PIN_SESSION_AT_KEY,
 } from "../config/storageKeys";
 import { getStoredValue, setStoredValue, removeStoredValue } from "../utils/storageUtils";
 import { normalizeAuthName } from "../utils/formatters";
+function hasSupabaseConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
 export function isPinSessionVerified(name) {
   const clean = String(name || "").trim().toLowerCase();
   const verified = getStoredValue(APP_PIN_SESSION_NAME_KEY)
