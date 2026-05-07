@@ -32,3 +32,7 @@ export function clearPinSession() {
 export function normalizePin(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 6);
 }
+export function isValidPin(value) {
+  const pin = normalizePin(value);
+  return pin.length >= 4 && pin.length <= 6;
+}
