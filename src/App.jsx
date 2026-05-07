@@ -6600,15 +6600,35 @@ const [lists,setLists]=useState(()=>{
     if(!list)return list;
     const currentName=getAppUserName();
     const owner=list.ownerName || list.remetente || currentName;
-    const from=list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "";
-    const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizeAuthName(currentName);
-    const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizeAuthName(currentName);
+    const from=list.importedFrom || list.sharedOwner || "";
+    const normalizedCurrent=normalizeAuthName(currentName);
+    const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizedCurrent;
+    const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizedCurrent;
+    const hasImportedOrigin=Boolean(list.imported===true || list.receivedAt || list.importedAt || list.originalSharedId || list.sourceSharedId || list.importedOriginalSharedId);
+    const importedFromAnotherUser=Boolean(hasImportedOrigin && from && !fromIsCurrent);
+
+    // Listas recebidas de outra pessoa pertencem localmente ao usuário atual,
+    // mas devem manter o selo "Recebida de ...". Antes, qualquer saveLists()
+    // limpava esses metadados porque ownerName/remetente eram do usuário atual.
+    if(importedFromAnotherUser){
+      return {
+        ...list,
+        imported:true,
+        importedFrom:from,
+        sharedOwner:from,
+        sharedMode:list.sharedMode || "imported-copy",
+        isShared:false,
+      };
+    }
+
+    // Apenas limpa falsos positivos em listas próprias ou cópias independentes.
     if(ownerIsCurrent || fromIsCurrent){
       return {
         ...list,
         imported:false,
         importedFrom:null,
         sharedOwner:null,
+        sharedMode:null,
         // sharedId pode existir apenas para sincronização na nuvem.
         // O selo Compartilhada fica reservado ao envio explícito da lista.
         isShared:list.sharedAt ? list.isShared === true : false,
@@ -8211,17 +8231,31 @@ const [lists,setLists]=useState(()=>{
 
   const duplicateList=(list)=>{
     if(!list)return;
+    const now=new Date().toISOString();
     const copy={
       ...JSON.parse(JSON.stringify(list)),
-      id:Date.now().toString(),
+      id:`copy-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name:(list.name||"Lista")+" (cópia)",
       sharedId:null,
       sharedAt:null,
+      originalSharedId:null,
+      sourceSharedId:null,
+      importedOriginalSharedId:null,
       imported:false,
       importedFrom:null,
+      sharedOwner:null,
+      sharedMode:null,
       restoredFromCloud:false,
-      createdAt:new Date().toISOString(),
-      updatedAt:new Date().toISOString(),
+      cloudPersisted:false,
+      lastCloudSeenAt:null,
+      lastRemoteSignature:null,
+      ownerName:getAppUserName() || list.ownerName || list.remetente || "Usuário do Tá na Lista",
+      remetente:getAppUserName() || list.remetente || list.ownerName || "Usuário do Tá na Lista",
+      userId:getAppUserId() || null,
+      createdAt:now,
+      updatedAt:now,
+      receivedAt:null,
+      importedAt:null,
       finishedAt:null,
       completedAt:null,
       finalizedAt:null,
@@ -8235,6 +8269,8 @@ const [lists,setLists]=useState(()=>{
       locked:false,
       history:false,
       copiedFromListId:list.id || null,
+      copiedFromSharedId:list.sharedId || list.originalSharedId || list.sourceSharedId || null,
+      copiedFromImported:Boolean(list.imported || list.importedFrom || list.receivedAt || list.importedAt),
       status:"open",
       total:0,
       categories:(list.categories||[]).map(cat=>({
@@ -8242,6 +8278,9 @@ const [lists,setLists]=useState(()=>{
         items:(cat.items||[]).map(item=>({...item,checked:false,notFound:false,price:null}))
       }))
     };
+    // A cópia é uma nova lista própria. Ela não pode compartilhar a identidade
+    // nem os metadados de recebimento da lista original, para não alterar o selo
+    // "Recebida de ..." da lista importada ao salvar a cópia.
     saveLists([copy,...lists]);
     setListMenuId(null);
     showToast("📄 Cópia criada");
