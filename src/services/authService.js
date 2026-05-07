@@ -134,3 +134,88 @@ export async function createUserAuthProfile(name, pinHash) {
 
   return Array.isArray(data) ? data[0] : data;
 }
+export async function resetUserAuthPin(
+  name,
+  newPin,
+  newPinConfirm = ""
+) {
+  const clean = String(name || "").trim();
+
+  const safePin = normalizePin(newPin);
+  const safeConfirm = normalizePin(newPinConfirm);
+
+  if (!clean) {
+    return {
+      ok: false,
+      message: "Informe seu nome para recuperar o acesso.",
+    };
+  }
+
+  if (!hasSupabaseConfig()) {
+    return {
+      ok: false,
+      message: "Configuração do Supabase não encontrada.",
+    };
+  }
+
+  if (!isValidPin(safePin)) {
+    return {
+      ok: false,
+      message: "Informe um novo PIN de 4 a 6 dígitos.",
+    };
+  }
+
+  if (safePin !== safeConfirm) {
+    return {
+      ok: false,
+      message: "A confirmação do PIN não confere.",
+    };
+  }
+
+  const profile = await findUserAuthProfile(clean);
+
+  if (!profile?.id) {
+    return {
+      ok: false,
+      message: "Perfil não encontrado para este nome.",
+    };
+  }
+
+  const pinHash = await hashUserPin(clean, safePin);
+
+  const nextData = {
+    ...(profile.data || {}),
+    authProfile: true,
+    name: clean,
+    pinHash,
+    pinVersion: "sha256-v1",
+    updatedAt: new Date().toISOString(),
+  };
+
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${profile.id}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders({
+        Prefer: "return=representation",
+      }),
+      body: JSON.stringify({
+        data: nextData,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      message: "Não foi possível atualizar o PIN.",
+    };
+  }
+
+  markPinSessionVerified(clean);
+
+  return {
+    ok: true,
+    message: "PIN atualizado com sucesso.",
+  };
+}
