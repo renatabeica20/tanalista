@@ -57,6 +57,7 @@ import HomeScreen from "./pages/HomeScreen";
 import AppLogo from "./components/AppLogo";
 import BrandWordmark from "./components/BrandWordmark";
 import ModuleIcon from "./components/ModuleIcon";
+import ModalSheet from "./components/ModalSheet";
 import PriceStatsEntryCard from "./components/PriceStatsEntryCard";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
@@ -3433,29 +3434,7 @@ const createSecondaryBtn = {width:"100%",minHeight:52,padding:"13px 14px",border
 const createPrimaryBtn = {width:"100%",minHeight:58,padding:"16px 18px",borderRadius:22,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontWeight:900,fontSize:17,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 16px 34px rgba(109,40,217,0.30)"};
 const qBtn = {width:44,height:44,borderRadius:"50%",border:"2px solid #E5E7EB",background:"#FFFFFF",fontSize:22,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"};
 
-function ModalSheet({onClose,children}){
-  return(
-    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
-      style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.46)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:"max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom))",overflowY:"auto",overscrollBehavior:"contain",touchAction:"manipulation"}}>
-      <div style={{background:"#FFFFFF",borderRadius:24,padding:"20px",width:"100%",maxWidth:420,maxHeight:"calc(100dvh - 32px)",overflowY:"auto",WebkitOverflowScrolling:"touch",boxShadow:"0 24px 70px rgba(17,24,39,0.24)",border:"1px solid rgba(229,231,235,0.95)"}}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
-
-// ── Leitura inteligente de lista por foto (impresso/manuscrito) ──────────
-// Usa a função segura /api/anthropic com visão. É muito mais confiável para
-// lista manuscrita do que OCR local puro.
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Não foi possível ler a imagem"));
-    reader.readAsDataURL(file);
-  });
-}
 
 // ── PARSER PROFISSIONAL DE VOZ ───────────────────────────────────────────
 // Normaliza a fala antes de salvar: impede medidas soltas como "5 kg" de virarem itens.
