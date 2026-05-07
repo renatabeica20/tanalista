@@ -1,3 +1,3 @@
-export default function HomeScreen() {
-  return null;
+export default function HomeScreen({ children }) {
+  return children;
 }
