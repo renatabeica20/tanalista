@@ -48,6 +48,7 @@ import {
   updateSharedListRecord,
   deleteSharedListRecord,
 } from "./services/sharedListService";
+import GuidedTourOverlay from "./components/GuidedTourOverlay";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
