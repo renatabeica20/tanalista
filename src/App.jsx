@@ -998,13 +998,7 @@ function clearPinSession() {
   } catch {}
 }
 
-function normalizeAuthName(name) {
-  return String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
-}
+
 
 async function hashUserPin(name, pin) {
   const cleanName = normalizeAuthName(name);
