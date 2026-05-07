@@ -986,11 +986,7 @@ async function softDeleteSharedListRecord(id, list = null) {
 
 
 
-function isPinSessionVerified(name) {
-  const clean = String(name || "").trim().toLowerCase();
-  const verified = getStoredValue(APP_PIN_SESSION_NAME_KEY).trim().toLowerCase();
-  return Boolean(clean && verified && clean === verified);
-}
+
 
 function markPinSessionVerified(name) {
   const clean = String(name || "").trim();
