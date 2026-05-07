@@ -5141,8 +5141,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
           <>
            <ExpandableSection id="budget" title="Orçamento x Gasto" subtitle="Toque nos pontos do gráfico para ver lista, orçamento, gasto e economia/estouro." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[budgetSpentSeries, budgetLimitSeries].filter(s => s.points.length)} valueLabel="Valor" emptyText="Ainda não há listas com gasto e orçamento suficientes." />
-            </StatsExpandableSection>
-
+            </ExpandableSection>
             <ExpandableSection id="category" title="Gasto por Seção" subtitle="Selecione uma seção para acompanhar sua evolução ao longo das listas." openSection={openSection} setOpenSection={setOpenSection}>
               {categorySeriesAll.length ? (
                 <>
@@ -5161,7 +5160,7 @@ function PriceStatsScreen({ onBack, lists = [] }) {
               ) : (
                 <div style={{fontSize:13,color:"#6B7280",lineHeight:1.45,padding:"8px 2px"}}>Ainda não há dados suficientes por seção.</div>
               )}
-            </StatsExpandableSection>
+            </ExpandableSection>
 
            <ExpandableSection id="product" title="Evolução do Preço por Produto" subtitle="Pesquise um produto e visualize um gráfico por vez, com opção para listar todos." openSection={openSection} setOpenSection={setOpenSection}>
               <input
@@ -5204,11 +5203,10 @@ function PriceStatsScreen({ onBack, lists = [] }) {
                   </div>
                 </>
               )}
-            </StatsExpandableSection>
-
+            </ExpandableSection>
             <ExpandableSection id="year" title="Evolução Mensal Consolidada" subtitle="Linha consolidada dos gastos executados por lista dentro do período analisado." openSection={openSection} setOpenSection={setOpenSection}>
               <StatsLineChart series={[consolidatedByListSeries]} valueLabel="Valor gasto" emptyText="Ainda não há evolução consolidada registrada." />
-            </StatsExpandableSection>
+            </ExpandableSection>
           </>
         )}
       </div>
