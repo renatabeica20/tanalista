@@ -808,49 +808,7 @@ async function createSharedListRecord(list) {
 
 
 
-async function updateSharedListRecord(id, list) {
-  if (!id || !hasSupabaseConfig()) return null;
 
-  const userId = list?.userId || getAppUserId() || null;
-  const payload = {
-    title: list?.name || "Lista de compras",
-    list_type: list?.type || "geral",
-    budget: Number(list?.budget || 0),
-    data: {
-      ...list,
-      userId,
-      sharedId: id,
-      lastSyncedAt: new Date().toISOString(),
-    },
-    user_id: userId,
-  };
-
-  const patchSharedList = async (bodyPayload) => fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(bodyPayload),
-  });
-
-  let res = await patchSharedList(payload);
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    if (/user_id|column/i.test(text)) {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.user_id;
-      res = await patchSharedList(fallbackPayload);
-      if (!res.ok) {
-        const retryText = await res.text().catch(() => "");
-        throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${retryText}`.trim());
-      }
-    } else {
-      throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${text}`.trim());
-    }
-  }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data[0] : data;
-}
 
 async function deleteSharedListRecord(id) {
   if (!id || !hasSupabaseConfig()) return false;
