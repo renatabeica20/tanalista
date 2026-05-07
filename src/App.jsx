@@ -1,22 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  ANTHROPIC_MODEL_CLASSIFY,
+  ANTHROPIC_MODEL_ORGANIZE,
+  ANTHROPIC_MODEL_VISION,
+  APP_PUBLIC_URL,
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+} from "./config/env";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
-const ANTHROPIC_MODEL_CLASSIFY = import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY || "claude-3-5-haiku-latest";
-const ANTHROPIC_MODEL_ORGANIZE = import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE || "claude-3-5-sonnet-latest";
-const ANTHROPIC_MODEL_VISION = import.meta.env.VITE_ANTHROPIC_MODEL_VISION || "claude-3-5-sonnet-latest";
-
-// ── Domínio público oficial do app ───────────────────────────────────────
-// Use esta URL em todos os links compartilhados para evitar que usuários recebam links do domínio vercel.app.
-const APP_PUBLIC_URL = (import.meta.env.VITE_APP_PUBLIC_URL || "https://tanalistaapp.com.br").replace(/\/+$/, "");
-
-// ── Supabase: listas compartilháveis ──────────────────────────────────────
-// Usa a REST API do Supabase diretamente para evitar dependência adicional.
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "")
-  .replace(/\/rest\/v1\/?$/, "")
-  .replace(/\/$/, "");
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
