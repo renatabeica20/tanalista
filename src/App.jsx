@@ -57,6 +57,7 @@ import HomeScreen from "./pages/HomeScreen";
 import AppLogo from "./components/AppLogo";
 import BrandWordmark from "./components/BrandWordmark";
 import ModuleIcon from "./components/ModuleIcon";
+import PriceStatsEntryCard from "./components/PriceStatsEntryCard";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -4723,84 +4724,6 @@ function PriceInsightBadge({ itemName, price }) {
 
 
 
-function PriceStatsEntryCard({ onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        width:"100%",
-        boxSizing:"border-box",
-        border:"1px solid #E5E7EB",
-        background:"#FFFFFF",
-        borderRadius:18,
-        padding:"14px 16px",
-        margin:"18px 0 22px",
-        boxShadow:"0 8px 18px rgba(17,24,39,0.05)",
-        cursor:"pointer",
-        fontFamily:"inherit",
-        textAlign:"left",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"space-between",
-        gap:12,
-        clear:"both"
-      }}
-    >
-      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{
-          width:40,
-          height:40,
-          borderRadius:14,
-          display:"flex",
-          alignItems:"center",
-          justifyContent:"center",
-          background:"#F5F3FF",
-          color:"#5B21B6",
-          fontSize:21,
-          flexShrink:0
-        }}>📊</div>
-        <div style={{minWidth:0}}>
-          <div style={{
-            fontWeight:900,
-            color:"#4C1D95",
-            fontSize:16,
-            lineHeight:1.15,
-            whiteSpace:"nowrap",
-            overflow:"hidden",
-            textOverflow:"ellipsis"
-          }}>
-            Estatísticas de preços
-          </div>
-          <div style={{
-            fontSize:12,
-            color:"#6B7280",
-            marginTop:3,
-            lineHeight:1.3,
-            whiteSpace:"nowrap",
-            overflow:"hidden",
-            textOverflow:"ellipsis"
-          }}>
-            Ver análise de variação dos itens comprados
-          </div>
-        </div>
-      </div>
-      <div style={{
-        width:30,
-        height:30,
-        borderRadius:12,
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"center",
-        background:"#F9FAFB",
-        border:"1px solid #E5E7EB",
-        color:"#6D28D9",
-        fontWeight:900,
-        flexShrink:0,
-        fontSize:18
-      }}>›</div>
-    </button>
-  );
-}
 
 
 function formatBRL(value) {
