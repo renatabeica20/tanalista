@@ -4719,6 +4719,7 @@ function shouldOmitListFromLocalState(list) {
   // Regra única de bloqueio: qualquer lista já excluída por este usuário
   // não pode permanecer no estado, no localStorage nem voltar pela restauração da nuvem.
   return Boolean(
+    isOwnListPermanentlyDeleted(list) ||
     isOwnListTombstoneSnapshotMatch(list) ||
     isListDeletionLockedV2(list) ||
     wasOwnListDeletedForCurrentUser(list) ||
@@ -5122,6 +5123,124 @@ function isOwnListTombstoneSnapshotMatch(listOrRecord, explicitUserName = "") {
 }
 
 
+// ── REGISTRO PERMANENTE DE EXCLUSÃO DE LISTAS PRÓPRIAS ───────────────────
+// Esta é a trava mais rígida do app. Ela existe porque listas próprias antigas
+// podem voltar do Supabase em um segundo ciclo com outro sharedId/record.id.
+// O bloqueio cruza ids, dono, nome, tipo, data de criação e assinatura dos itens.
+const OWN_PERMANENT_DELETION_REGISTRY_STORAGE = "tnl_own_permanent_deletion_registry_v1";
+
+function readOwnPermanentDeletionRegistry() {
+  try {
+    const raw = localStorage.getItem(OWN_PERMANENT_DELETION_REGISTRY_STORAGE) || "[]";
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOwnPermanentDeletionRegistry(items) {
+  try {
+    localStorage.setItem(OWN_PERMANENT_DELETION_REGISTRY_STORAGE, JSON.stringify((Array.isArray(items) ? items : []).slice(-1000)));
+  } catch {}
+}
+
+function getListCreatedStampForDeletion(listOrRecord) {
+  const base = getListComparableData(listOrRecord);
+  const value = base.createdAt || base.created_at || base.created || base.data?.createdAt || base.data?.created_at || "";
+  const t = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(t) && t > 0 ? t : 0;
+}
+
+function buildPermanentOwnDeletionEntry(listOrRecord, explicitUserName = "") {
+  const base = getListComparableData(listOrRecord);
+  const ownerName = base.ownerName || base.remetente || base.deletedByName || explicitUserName || getAppUserName() || "";
+  const userId = base.userId || base.user_id || getAppUserId() || "";
+  const ids = Array.from(new Set([
+    base.id,
+    base.sharedId,
+    base.cloudId,
+    base.remoteId,
+    base.originalSharedId,
+    base.sourceSharedId,
+    base.importedOriginalSharedId,
+    base.data?.id,
+    base.data?.sharedId,
+    base.data?.originalSharedId,
+    base.data?.sourceSharedId,
+  ].filter(Boolean).map(String)));
+  return {
+    ids,
+    ownerName: normalizeAuthName(ownerName),
+    userId: userId ? String(userId) : "",
+    name: normalizeDeletedKeyPart(base.name || base.title || ""),
+    type: normalizeDeletedKeyPart(base.type || base.list_type || ""),
+    itemSig: getListItemsSignature(base),
+    categoryNames: (Array.isArray(base.categories) ? base.categories : [])
+      .map((cat) => normalizeDeletedKeyPart(cat?.name || ""))
+      .filter(Boolean)
+      .sort()
+      .join("|"),
+    createdStamp: getListCreatedStampForDeletion(base),
+    deletedStamp: Date.now(),
+  };
+}
+
+function markOwnListPermanentlyDeleted(listOrRecord, explicitUserName = "") {
+  const entry = buildPermanentOwnDeletionEntry(listOrRecord, explicitUserName);
+  if (!entry.ids.length && !entry.name && !entry.itemSig) return;
+  const current = readOwnPermanentDeletionRegistry();
+  const entryIds = new Set(entry.ids || []);
+  const same = (other) => {
+    const otherIds = new Set(other.ids || []);
+    if ([...entryIds].some((id) => otherIds.has(id))) return true;
+    const sameOwner = Boolean(
+      (entry.userId && other.userId && entry.userId === other.userId) ||
+      (entry.ownerName && other.ownerName && entry.ownerName === other.ownerName)
+    );
+    if (sameOwner && entry.name && other.name && entry.name === other.name) return true;
+    if (sameOwner && entry.itemSig && other.itemSig && entry.itemSig === other.itemSig) return true;
+    return false;
+  };
+  const next = current.filter((item) => !same(item));
+  next.push(entry);
+  writeOwnPermanentDeletionRegistry(next);
+}
+
+function isOwnListPermanentlyDeleted(listOrRecord, explicitUserName = "") {
+  const probe = buildPermanentOwnDeletionEntry(listOrRecord, explicitUserName);
+  if (!probe.ids.length && !probe.name && !probe.itemSig) return false;
+  const probeIds = new Set(probe.ids || []);
+  const currentName = normalizeAuthName(explicitUserName || getAppUserName() || "");
+  return readOwnPermanentDeletionRegistry().some((entry) => {
+    const entryIds = new Set(entry.ids || []);
+    if ([...probeIds].some((id) => entryIds.has(id))) return true;
+
+    const sameUserId = Boolean(probe.userId && entry.userId && probe.userId === entry.userId);
+    const sameOwnerName = Boolean(probe.ownerName && entry.ownerName && probe.ownerName === entry.ownerName);
+    const sameCurrentUser = Boolean(currentName && entry.ownerName && currentName === entry.ownerName);
+    const sameOwner = sameUserId || sameOwnerName || sameCurrentUser;
+    if (!sameOwner) return false;
+
+    // Se a lista foi criada depois da exclusão, permite uma nova lista com o mesmo nome.
+    // Registros antigos ou sem createdAt continuam bloqueados.
+    const createdAfterDeletion = Boolean(probe.createdStamp && entry.deletedStamp && probe.createdStamp > entry.deletedStamp + 2000);
+    if (createdAfterDeletion) return false;
+
+    if (probe.name && entry.name && probe.name === entry.name) return true;
+    if (probe.itemSig && entry.itemSig && probe.itemSig === entry.itemSig) return true;
+    if (probe.name && entry.name && probe.name === entry.name && probe.type && entry.type && probe.type === entry.type) return true;
+    return false;
+  });
+}
+
+function sanitizeAndStoreTnlLists(items) {
+  const safe = mergeUniqueLists((Array.isArray(items) ? items : []).filter((list) => !shouldOmitListFromLocalState(list)));
+  try { localStorage.setItem("tnl_lists", JSON.stringify(safe)); } catch {}
+  return safe;
+}
+
+
 function getOwnDeletionScopes(explicitUserName = "") {
   const scopes = ["global"];
   const userId = getAppUserId();
@@ -5219,11 +5338,13 @@ function markOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
   });
   store.__updatedAt = now;
   writeOwnDeletedListsStore(store);
+  markOwnListPermanentlyDeleted(enriched, explicitUserName);
   markOwnListTombstoneSnapshot(enriched, explicitUserName);
   markListDeletionLockV2(enriched, { received: false, userName: explicitUserName });
 }
 
 function wasOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
+  if (isOwnListPermanentlyDeleted(listOrRecord, explicitUserName)) return true;
   if (isOwnListTombstoneSnapshotMatch(listOrRecord, explicitUserName)) return true;
   const fingerprints = getOwnListDeletionFingerprints(listOrRecord);
   if (!fingerprints.length) return false;
@@ -7134,10 +7255,7 @@ export default function App(){
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const safe=Array.isArray(stored)?mergeUniqueLists(stored.filter(l=>!shouldOmitListFromLocalState(l))):[];
-      if(Array.isArray(stored) && safe.length!==stored.length){
-        try{localStorage.setItem("tnl_lists",JSON.stringify(safe));}catch{}
-      }
+      const safe=Array.isArray(stored)?sanitizeAndStoreTnlLists(stored):[];
       return safe;
     }catch{return[]}
   });
@@ -7637,18 +7755,15 @@ const [lists,setLists]=useState(()=>{
   };
 
   const saveLists=(nl)=>{
-    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[])
-      .map(normalizeListOwnershipFlags)
-      .filter(l=>!shouldOmitListFromLocalState(l)));
+    const safe=sanitizeAndStoreTnlLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
     setLists(safe);
-    localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
 
   useEffect(()=>{
     const safe=mergeUniqueLists((Array.isArray(lists)?lists:[]).filter(l=>!shouldOmitListFromLocalState(l)));
     if(safe.length !== (Array.isArray(lists)?lists.length:0)){
       setLists(safe);
-      try{localStorage.setItem("tnl_lists",JSON.stringify(safe));}catch{}
+      sanitizeAndStoreTnlLists(safe);
     }
   },[lists]);
 
@@ -7675,10 +7790,10 @@ const [lists,setLists]=useState(()=>{
             name: record?.data?.name || record?.title,
             data: record?.data || {},
           };
-          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
+          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListPermanentlyDeleted(record, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
           const local=sharedRecordToLocalList(record, userId, effectiveName);
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
-          if(isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
+          if(isOwnListPermanentlyDeleted(restoreCandidate, effectiveName) || isOwnListPermanentlyDeleted(local, effectiveName) || isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -7702,8 +7817,7 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!changed)return current;
-        const merged=sanitizeListsForCurrentUser(Array.from(byKey.values()));
-        try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
+        const merged=sanitizeAndStoreTnlLists(Array.from(byKey.values()));
         if(!silent && restoredCount>0)showToast(`${restoredCount} lista(s) recuperada(s)`);
         return merged;
       });
@@ -7716,11 +7830,11 @@ const [lists,setLists]=useState(()=>{
 
   const persistListRecordToCloud=useCallback(async(list,{silent=true}={})=>{
     if(!list || !hasSupabaseConfig())return list;
-    if(isOwnListTombstoneSnapshotMatch(list, getAppUserName()) || shouldOmitListFromLocalState(list) || wasOwnListDeletedForCurrentUser(list, getAppUserName()))return list;
+    if(isOwnListPermanentlyDeleted(list, getAppUserName()) || isOwnListTombstoneSnapshotMatch(list, getAppUserName()) || shouldOmitListFromLocalState(list) || wasOwnListDeletedForCurrentUser(list, getAppUserName()))return list;
     try{
       const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
       const ownDeleteProbe={...list,ownerName,remetente:ownerName,userId:list.userId || getAppUserId()};
-      if(isOwnListTombstoneSnapshotMatch(ownDeleteProbe, ownerName) || shouldOmitListFromLocalState(ownDeleteProbe) || wasOwnListDeletedForCurrentUser(ownDeleteProbe, ownerName))return list;
+      if(isOwnListPermanentlyDeleted(ownDeleteProbe, ownerName) || isOwnListTombstoneSnapshotMatch(ownDeleteProbe, ownerName) || shouldOmitListFromLocalState(ownDeleteProbe) || wasOwnListDeletedForCurrentUser(ownDeleteProbe, ownerName))return list;
       const userId=await registerAppUser(ownerName,{force:true});
       const base=preserveReceivedShareMeta({
         ...list,
@@ -8193,8 +8307,7 @@ const [lists,setLists]=useState(()=>{
     const currentUserId=await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
     const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
     const existingRaw=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-    const existing=Array.isArray(existingRaw)?mergeUniqueLists(existingRaw.filter(l=>!shouldOmitListFromLocalState(l))):[];
-    try{localStorage.setItem("tnl_lists",JSON.stringify(existing));}catch{}
+    const existing=Array.isArray(existingRaw)?sanitizeAndStoreTnlLists(existingRaw):[];
 
     if(sourceSharedId && (shouldBlockSharedRecordForCurrentUser(record, currentUserId, currentUserName) || wasSharedRecordRemovedByCurrentUser({ ...baseData, id: sourceSharedId, sharedId: sourceSharedId }, currentUserName) || wasReceivedListDeletedLocally({
       ...baseData,
@@ -8287,9 +8400,8 @@ const [lists,setLists]=useState(()=>{
       isShared:false,
       sharedMode:"simultaneous"
     }, received);
-    const nl=sanitizeListsForCurrentUser([finalReceived,...existing]);
+    const nl=sanitizeAndStoreTnlLists([finalReceived,...existing]);
     setLists(nl);
-    localStorage.setItem("tnl_lists",JSON.stringify(nl));
     setCurrentList(finalReceived);
     setScreen("list");
     setSearch("");
@@ -9451,6 +9563,7 @@ const [lists,setLists]=useState(()=>{
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
     const sharedId=list?.sharedId;
     if(!sharedId)return null;
+    if(isOwnListPermanentlyDeleted(list, getAppUserName()) || shouldOmitListFromLocalState(list))return null;
     try{
       if(!silent)setSharedSyncing(true);
 
@@ -9478,7 +9591,7 @@ const [lists,setLists]=useState(()=>{
       if(remoteBeforeSave && isSharedRecordRemovedForCurrentUser(remoteBeforeSave)){
         markReceivedListAsDeletedLocally(list);
         setLists(prev=>sanitizeListsForCurrentUser((Array.isArray(prev)?prev:[]).filter(l=>l.id!==list.id && l.sharedId!==sharedId)));
-        try{localStorage.setItem("tnl_lists",JSON.stringify(sanitizeListsForCurrentUser((JSON.parse(localStorage.getItem("tnl_lists")||"[]")||[]).filter(l=>l.id!==list.id && l.sharedId!==sharedId))));}catch{}
+        sanitizeAndStoreTnlLists((JSON.parse(localStorage.getItem("tnl_lists")||"[]")||[]).filter(l=>l.id!==list.id && l.sharedId!==sharedId));
         return null;
       }
       const remoteDataBeforeSave=remoteBeforeSave?.data && typeof remoteBeforeSave.data === "object" ? remoteBeforeSave.data : {};
@@ -9516,8 +9629,7 @@ const [lists,setLists]=useState(()=>{
         : markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===localSynced.id?{...cur,...localSynced}:cur);
       setLists(prev=>{
-        const next=sanitizeListsForCurrentUser((Array.isArray(prev)?prev:[]).map(l=>l.id===localSynced.id ? {...l,...localSynced} : ((sharedId&&l.sharedId===sharedId&&!isReceivedSharedList(l))?{...l,...payload}:l)));
-        try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
+        const next=sanitizeAndStoreTnlLists((Array.isArray(prev)?prev:[]).map(l=>l.id===localSynced.id ? {...l,...localSynced} : ((sharedId&&l.sharedId===sharedId&&!isReceivedSharedList(l))?{...l,...payload}:l)));
         return next;
       });
       setSharedUpdateNotice({type:"ok",msg:"Lista sincronizada agora"});
@@ -9539,6 +9651,15 @@ const [lists,setLists]=useState(()=>{
     try{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      if(isOwnListPermanentlyDeleted({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data }, getAppUserName()) || shouldOmitListFromLocalState({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data })){
+        markOwnListPermanentlyDeleted({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data }, getAppUserName());
+        const cleaned=sanitizeAndStoreTnlLists((JSON.parse(localStorage.getItem("tnl_lists")||"[]")||[]).filter(l=>l.id!==currentList?.id && l.sharedId!==sharedId));
+        setLists(cleaned);
+        setCurrentList(null);
+        setScreen("home");
+        showToast("🗑 Esta lista foi excluída",2200);
+        return;
+      }
       const currentUserName = getAppUserName();
       const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
       const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
@@ -9561,11 +9682,10 @@ const [lists,setLists]=useState(()=>{
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
       const hasLocal=existing.some(l=>l.id===currentList.id || (sharedId&&l.sharedId===sharedId));
-      const nl=sanitizeListsForCurrentUser(hasLocal
+      const nl=sanitizeAndStoreTnlLists(hasLocal
         ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
         : [refreshed,...existing]);
       setLists(nl);
-      localStorage.setItem("tnl_lists",JSON.stringify(nl));
       setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
       showToast("🔄 Lista atualizada");
     }catch(err){
@@ -9896,7 +10016,16 @@ const [lists,setLists]=useState(()=>{
     const target=lists.find(l=>l.id===id || l.sharedId===id);
     if(!target){setConfirmDelete(null);return;}
 
-    const receivedShared=isReceivedSharedList(target) || target.imported===true || target.isReceivedList===true;
+    const currentAuthName=normalizeAuthName(getAppUserName());
+    const targetOwnerName=normalizeAuthName(target.ownerName || target.remetente || "");
+    const targetOriginName=normalizeAuthName(getReceivedOriginName(target));
+    const targetUserId=target.userId || target.user_id || null;
+    const currentUserId=getAppUserId() || null;
+    const belongsToCurrentUser=Boolean(
+      (currentUserId && targetUserId && String(currentUserId)===String(targetUserId)) ||
+      (currentAuthName && targetOwnerName && currentAuthName===targetOwnerName)
+    );
+    const receivedShared=Boolean((isReceivedSharedList(target) || target.imported===true || target.isReceivedList===true) && targetOriginName && targetOriginName!==currentAuthName && !belongsToCurrentUser);
 
     // Para lista recebida, a exclusão é apenas local/individual.
     // Não grava chave de exclusão global por sharedId, para não ocultar a lista do dono original
@@ -9911,6 +10040,7 @@ const [lists,setLists]=useState(()=>{
         remetente:target.remetente || target.ownerName || getAppUserName(),
         userId:target.userId || getAppUserId(),
       };
+      markOwnListPermanentlyDeleted(ownTarget, getAppUserName());
       markOwnListTombstoneSnapshot(ownTarget, getAppUserName());
       markListAsDeletedLocally(ownTarget);
       markOwnListDeletedForCurrentUser(ownTarget, getAppUserName());
@@ -9962,6 +10092,7 @@ const [lists,setLists]=useState(()=>{
           remetente:deletionCandidate.remetente || deletionCandidate.ownerName || getAppUserName(),
           userId:deletionCandidate.userId || getAppUserId(),
         };
+        markOwnListPermanentlyDeleted(ownDeletionCandidate, getAppUserName());
         markOwnListTombstoneSnapshot(ownDeletionCandidate, getAppUserName());
         markListAsDeletedLocally(ownDeletionCandidate);
         markOwnListDeletedForCurrentUser(ownDeletionCandidate, getAppUserName());
@@ -9985,6 +10116,7 @@ const [lists,setLists]=useState(()=>{
       const recordsToDelete=ownedRecords.length ? ownedRecords : [{ id: remoteSharedId, data: target }];
       for(const record of recordsToDelete){
         const enriched={...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId, data:{...(record.data||{}),...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId}};
+        markOwnListPermanentlyDeleted(enriched, getAppUserName());
         markOwnListTombstoneSnapshot(enriched, getAppUserName());
         markOwnListDeletedForCurrentUser(enriched, getAppUserName());
         markListAsDeletedLocally(enriched);
