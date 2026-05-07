@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69.4 - Compartilhamento simultâneo real, sharedWith e sincronização central
+// Etapa 7.69.5 - Deep link, sincronização entre abas/PWA e listas compartilhadas aceitas
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -50,7 +50,7 @@ async function registrarEvento(eventType, metadata = {}) {
         ...(metadata && typeof metadata === "object" ? metadata : {}),
         user_name: userName,
         device_id: deviceId,
-        app_version: "etapa-7.68-analytics",
+        app_version: "etapa-7.69.5-sync-links",
       },
     };
 
@@ -637,33 +637,103 @@ async function getSharedListsByOwnerName(name) {
   }
 }
 
+async function getSharedListsAcceptedByUser(userId, name) {
+  if (!hasSupabaseConfig()) return [];
+
+  const queries = [];
+  if (userId) queries.push({ userId });
+  const cleanName = String(name || "").trim();
+  if (cleanName) queries.push({ userName: cleanName });
+  if (!queries.length) return [];
+
+  const results = [];
+  for (const query of queries) {
+    try {
+      const encoded = encodeURIComponent(JSON.stringify([query]));
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?data->sharedWith=cs.${encoded}&list_type=neq.auth_profile&select=*&order=created_at.desc`, {
+        method: "GET",
+        headers: supabaseHeaders({ "Cache-Control": "no-store" }),
+        cache: "no-store",
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (Array.isArray(data)) results.push(...data);
+    } catch {
+      // Alguns ambientes do PostgREST podem não aceitar filtro JSONB por path.
+      // Nesse caso, a restauração continua funcionando pelas listas próprias.
+    }
+  }
+  return results;
+}
+
 async function getSharedListsForUser(userId, name) {
   const byUser = userId ? await getSharedListsByUserId(userId) : [];
   const byName = name ? await getSharedListsByOwnerName(name) : [];
+  const byAccepted = await getSharedListsAcceptedByUser(userId, name);
   const map = new Map();
-  [...byUser, ...byName].forEach(record => {
+  [...byUser, ...byName, ...byAccepted].forEach(record => {
     if (!record) return;
-    const key = record?.data?.id ? `id:${String(record.data.id)}` : (record?.id || record?.data?.sharedId || JSON.stringify(record));
+    const key = record?.id || record?.data?.sharedId || record?.data?.id || JSON.stringify(record);
     const prev = map.get(key);
-    const prevStamp = getListComparableStamp(prev || {});
+    const prevStamp = getListComparableStamp({ ...(prev || {}), ...(prev?.data || {}) });
     const nextStamp = getListComparableStamp({ ...(record || {}), ...(record?.data || {}) });
     if (key && (!prev || nextStamp >= prevStamp)) map.set(key, record);
   });
   return Array.from(map.values()).sort((a, b) => getListComparableStamp({ ...(b || {}), ...(b?.data || {}) }) - getListComparableStamp({ ...(a || {}), ...(a?.data || {}) }));
 }
 
-function sharedRecordToLocalList(record) {
+function getSharedWithEntryForUser(record, userId, name) {
+  const sharedWith = Array.isArray(record?.data?.sharedWith) ? record.data.sharedWith : [];
+  const normalized = normalizeAuthName(name || getAppUserName() || "");
+  return sharedWith.find((entry) => {
+    if (!entry) return false;
+    if (userId && entry.userId && String(entry.userId) === String(userId)) return true;
+    return normalized && normalizeAuthName(entry.userName || entry.name || "") === normalized;
+  }) || null;
+}
+
+function sharedRecordToLocalList(record, viewerUserId = null, viewerName = "") {
   const base = record?.data || {};
-  return {
+  const currentName = String(viewerName || getAppUserName() || "").trim();
+  const currentUserId = viewerUserId || getAppUserId() || null;
+  const remoteOwner = record?.remetente || base.ownerName || base.remetente || "Usuario do Ta na Lista";
+  const sharedEntry = getSharedWithEntryForUser(record, currentUserId, currentName);
+  const isReceivedByViewer = Boolean(sharedEntry && normalizeAuthName(remoteOwner) !== normalizeAuthName(currentName));
+
+  const local = {
     ...base,
-    id: base.id || `shared-${record?.id || Date.now()}`,
+    id: isReceivedByViewer
+      ? (sharedEntry.importedListId || base.id || `received-${record?.id || Date.now()}`)
+      : (base.id || `shared-${record?.id || Date.now()}`),
     sharedId: record?.id || base.sharedId || null,
-    userId: record?.user_id || base.userId || null,
-    ownerName: record?.remetente || base.ownerName || base.remetente || getAppUserName() || "Usuario do Ta na Lista",
-    remetente: record?.remetente || base.remetente || base.ownerName || getAppUserName() || "Usuario do Ta na Lista",
+    userId: isReceivedByViewer ? currentUserId : (record?.user_id || base.userId || currentUserId),
+    ownerName: isReceivedByViewer ? currentName : remoteOwner,
+    remetente: isReceivedByViewer ? currentName : (base.remetente || remoteOwner),
+    sharedWith: Array.isArray(base.sharedWith) ? base.sharedWith : [],
+    sharedEvents: Array.isArray(base.sharedEvents) ? base.sharedEvents : [],
     restoredFromCloud: true,
     restoredAt: new Date().toISOString(),
   };
+
+  if (!isReceivedByViewer) return local;
+
+  return preserveReceivedShareMeta({
+    ...local,
+    imported: true,
+    isReceivedList: true,
+    importedFrom: remoteOwner,
+    receivedFromName: remoteOwner,
+    sharedOwner: remoteOwner,
+    originalOwnerName: remoteOwner,
+    originalRemetente: remoteOwner,
+    originalSharedId: record?.id || base.originalSharedId || base.sharedId || null,
+    sourceSharedId: record?.id || base.sourceSharedId || base.sharedId || null,
+    importedOriginalSharedId: record?.id || base.importedOriginalSharedId || base.sharedId || null,
+    receivedAt: sharedEntry.acceptedAt || base.receivedAt || new Date().toISOString(),
+    importedAt: sharedEntry.acceptedAt || base.importedAt || new Date().toISOString(),
+    sharedMode: "simultaneous",
+    isShared: false,
+  }, local);
 }
 
 async function registerAppUser(name, { force = false } = {}) {
@@ -6736,7 +6806,7 @@ const [lists,setLists]=useState(()=>{
         let restoredCount=0;
         for(const record of records){
           if(isSharedRecordHiddenForCurrentUser(record))continue;
-          const local=sharedRecordToLocalList(record);
+          const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
           if(wasListDeletedLocally(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
@@ -6836,6 +6906,47 @@ const [lists,setLists]=useState(()=>{
       showToast("☁️ Listas locais sincronizadas com sua conta",2200);
     }
   },[lists,persistListRecordToCloud,showToast]);
+
+
+  const refreshListsFromCloudForCurrentUser=useCallback(async({silent=true, reason="manual"}={})=>{
+    const name=getAppUserName();
+    if(!name || !isPinSessionVerified(name) || !hasSupabaseConfig())return;
+    try{
+      const userId=await registerAppUser(name,{force:true}).catch(()=>getAppUserId());
+      await restoreUserListsFromCloud(userId || getAppUserId(), name, {silent});
+      syncNotificationsFromLists(lists);
+      if(!silent) showToast("Listas sincronizadas",1600);
+      await registrarEvento("cloud_lists_refreshed", { reason });
+    }catch(err){
+      console.warn("Não foi possível atualizar listas ao retornar ao app:",err);
+    }
+  },[restoreUserListsFromCloud,syncNotificationsFromLists,lists,showToast]);
+
+  useEffect(()=>{
+    const refresh=()=>refreshListsFromCloudForCurrentUser({silent:true,reason:"app_focus"});
+    const onVisibility=()=>{ if(document.visibilityState === "visible") refresh(); };
+    window.addEventListener("focus",refresh);
+    document.addEventListener("visibilitychange",onVisibility);
+    return()=>{
+      window.removeEventListener("focus",refresh);
+      document.removeEventListener("visibilitychange",onVisibility);
+    };
+  },[refreshListsFromCloudForCurrentUser]);
+
+  useEffect(()=>{
+    let channel=null;
+    try{
+      if(typeof BroadcastChannel !== "undefined"){
+        channel=new BroadcastChannel("ta-na-lista-sync");
+        channel.onmessage=(event)=>{
+          if(event?.data?.type === "shared-list-imported" || event?.data?.type === "lists-updated"){
+            refreshListsFromCloudForCurrentUser({silent:true,reason:event.data.type});
+          }
+        };
+      }
+    }catch{}
+    return()=>{ try{ channel?.close?.(); }catch{} };
+  },[refreshListsFromCloudForCurrentUser]);
   useEffect(()=>{
     const existingName=getAppUserName();
     if(existingName && isPinSessionVerified(existingName)){
@@ -7310,6 +7421,13 @@ const [lists,setLists]=useState(()=>{
       list_name: finalReceived.name || "",
       imported_from: sender,
     });
+    try{
+      if(typeof BroadcastChannel !== "undefined"){
+        const channel = new BroadcastChannel("ta-na-lista-sync");
+        channel.postMessage({type:"shared-list-imported", sharedId: finalReceived.sharedId || sourceSharedId || null, at: Date.now()});
+        channel.close();
+      }
+    }catch{}
     showToast("📲 Lista recebida salva no seu app");
     return finalReceived;
   },[showToast, addNotification, senderName, userNameInput, persistListRecordToCloud]);
@@ -7326,6 +7444,12 @@ const [lists,setLists]=useState(()=>{
       }
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+      const loggedName = getAppUserName();
+      if(loggedName && isPinSessionVerified(loggedName)){
+        await importSharedRecordToApp(record);
+        try { window.history.replaceState({}, document.title, "/"); } catch {}
+        return;
+      }
       setSharedPreviewExpanded(false);
       setSharedLandingRecord(record);
       if(!getAppUserName()){
