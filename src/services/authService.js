@@ -25,3 +25,7 @@ export function markPinSessionVerified(name) {
     new Date().toISOString()
   );
 }
+export function clearPinSession() {
+  removeStoredValue(APP_PIN_SESSION_NAME_KEY);
+  removeStoredValue(APP_PIN_SESSION_AT_KEY);
+}
