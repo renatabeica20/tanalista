@@ -2,6 +2,8 @@ import {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
 } from "../config/env";
+import { getStoredValue } from "../utils/storageUtils";
+import { APP_USER_ID_KEY } from "../config/storageKeys";
 
 export function hasSupabaseConfig() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -13,6 +15,9 @@ export function supabaseHeaders(extra = {}) {
     Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     "Content-Type": "application/json",
     ...extra,
+    function getAppUserId() {
+  return getStoredValue(APP_USER_ID_KEY) || null;
+}
   };
 }
 
