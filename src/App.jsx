@@ -1011,10 +1011,7 @@ async function hashUserPin(name, pin) {
 }
 
 
-function isValidPin(value) {
-  const pin = normalizePin(value);
-  return pin.length >= 4 && pin.length <= 6;
-}
+
 
 async function findUserAuthProfile(name) {
   const clean = String(name || "").trim();
