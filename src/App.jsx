@@ -4976,6 +4976,11 @@ function hasRemoteRemovalForCurrentUser(record, explicitUserId = getAppUserId(),
 
 function shouldBlockSharedRecordForCurrentUser(record, userId = getAppUserId(), userName = getAppUserName()) {
   return Boolean(
+    isRemoteOwnListDeleted(record, userId, userName) ||
+    wasOwnListDeletedForCurrentUser(record, userName) ||
+    wasOwnListDeletedForCurrentUser({ ...(record?.data || {}), id: record?.data?.id || record?.id, sharedId: record?.id || record?.data?.sharedId }, userName) ||
+    isListDeletionLockedV2(record, { userName }) ||
+    isListDeletionLockedV2({ ...(record?.data || {}), id: record?.data?.id || record?.id, sharedId: record?.id || record?.data?.sharedId }, { userName }) ||
     isSharedRecordRemovedForCurrentUser(record, userId, userName) ||
     hasRemoteRemovalForCurrentUser(record, userId, userName) ||
     wasSharedRecordRemovedByCurrentUser(record, userName) ||
@@ -4987,7 +4992,7 @@ function shouldBlockSharedRecordForCurrentUser(record, userId = getAppUserId(), 
 // ── EXCLUSÃO PERSISTENTE DE LISTAS PRÓPRIAS ─────────────────────────────
 // Listas próprias também são restauradas pelo Supabase. Por isso, ao excluir,
 // o app grava uma lápide local e, quando possível, marca o registro remoto como excluído.
-const OWN_DELETED_LISTS_STORAGE = "tnl_own_deleted_lists_v4";
+const OWN_DELETED_LISTS_STORAGE = "tnl_own_deleted_lists_v5";
 
 function getOwnDeletionScopes(explicitUserName = "") {
   const scopes = ["global"];
@@ -5040,14 +5045,22 @@ function getOwnListDeletionFingerprints(listOrRecord) {
     add("cloud", id);
   });
 
-  const ownerId = data.userId || data.user_id || listOrRecord.userId || listOrRecord.user_id || "";
-  const ownerName = data.ownerName || data.remetente || data.deletedByName || listOrRecord.ownerName || listOrRecord.remetente || "";
+  const ownerId = data.userId || data.user_id || listOrRecord.userId || listOrRecord.user_id || getAppUserId() || "";
+  const ownerName = data.ownerName || data.remetente || data.deletedByName || listOrRecord.ownerName || listOrRecord.remetente || getAppUserName() || "";
   const name = data.name || data.title || listOrRecord.name || listOrRecord.title || "";
   const created = data.createdAt || data.created_at || listOrRecord.createdAt || listOrRecord.created_at || "";
+  const type = data.type || data.list_type || listOrRecord.type || listOrRecord.list_type || "";
 
+  // Lista própria pode existir duplicada no Supabase com ids diferentes.
+  // Por isso a lápide usa também uma chave estável por usuário + título,
+  // sem depender do sharedId nem da data de criação.
+  if (name) add("title", name);
+  if (name && type) add("title-type", `${name}:${type}`);
   if (ownerId && name) add("ownerid-name", `${ownerId}:${name}`);
+  if (ownerId && name && type) add("ownerid-name-type", `${ownerId}:${name}:${type}`);
   if (ownerId && name && created) add("ownerid-name-created", `${ownerId}:${name}:${created}`);
   if (ownerName && name) add("owner-name", `${ownerName}:${name}`);
+  if (ownerName && name && type) add("owner-name-type", `${ownerName}:${name}:${type}`);
   if (ownerName && name && created) add("owner-name-created", `${ownerName}:${name}:${created}`);
 
   getListPersistenceKeys(listOrRecord).forEach((k) => add("legacy", k));
@@ -5057,7 +5070,15 @@ function getOwnListDeletionFingerprints(listOrRecord) {
 }
 
 function markOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
-  const fingerprints = getOwnListDeletionFingerprints(listOrRecord);
+  const enriched = listOrRecord && typeof listOrRecord === "object"
+    ? {
+        ...listOrRecord,
+        ownerName: listOrRecord.ownerName || listOrRecord.remetente || getAppUserName(),
+        remetente: listOrRecord.remetente || listOrRecord.ownerName || getAppUserName(),
+        userId: listOrRecord.userId || listOrRecord.user_id || getAppUserId(),
+      }
+    : listOrRecord;
+  const fingerprints = getOwnListDeletionFingerprints(enriched);
   if (!fingerprints.length) return;
   const store = readOwnDeletedListsStore();
   const scopes = getOwnDeletionScopes(explicitUserName);
@@ -5066,10 +5087,11 @@ function markOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
     const arr = Array.isArray(store[scope]) ? store[scope] : [];
     const set = new Set(arr);
     fingerprints.forEach((fp) => set.add(fp));
-    store[scope] = Array.from(set).slice(-1200);
+    store[scope] = Array.from(set).slice(-1600);
   });
   store.__updatedAt = now;
   writeOwnDeletedListsStore(store);
+  markListDeletionLockV2(enriched, { received: false, userName: explicitUserName });
 }
 
 function wasOwnListDeletedForCurrentUser(listOrRecord, explicitUserName = "") {
@@ -7511,8 +7533,20 @@ const [lists,setLists]=useState(()=>{
         let changed=false;
         let restoredCount=0;
         for(const record of records){
-          if(shouldBlockSharedRecordForCurrentUser(record, userId, userName || getAppUserName()) || isRemoteOwnListDeleted(record, userId, userName || getAppUserName()) || wasOwnListDeletedForCurrentUser(record, userName || getAppUserName()))continue;
-          const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
+          const effectiveName=userName || getAppUserName();
+          const recordDeleteProbe={
+            ...(record?.data || {}),
+            id: record?.data?.id || record?.id,
+            sharedId: record?.id || record?.data?.sharedId,
+            ownerName: record?.data?.ownerName || record?.data?.remetente || record?.remetente || effectiveName,
+            remetente: record?.data?.remetente || record?.remetente || record?.data?.ownerName || effectiveName,
+            userId: record?.data?.userId || record?.user_id || userId || getAppUserId(),
+            title: record?.title || record?.data?.title || record?.data?.name,
+            name: record?.data?.name || record?.title,
+            data: record?.data || {},
+          };
+          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
+          const local=sharedRecordToLocalList(record, userId, effectiveName);
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
           if(shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
           const key=local.sharedId||local.id;
@@ -7552,8 +7586,11 @@ const [lists,setLists]=useState(()=>{
 
   const persistListRecordToCloud=useCallback(async(list,{silent=true}={})=>{
     if(!list || !hasSupabaseConfig())return list;
+    if(shouldOmitListFromLocalState(list) || wasOwnListDeletedForCurrentUser(list, getAppUserName()))return list;
     try{
       const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
+      const ownDeleteProbe={...list,ownerName,remetente:ownerName,userId:list.userId || getAppUserId()};
+      if(shouldOmitListFromLocalState(ownDeleteProbe) || wasOwnListDeletedForCurrentUser(ownDeleteProbe, ownerName))return list;
       const userId=await registerAppUser(ownerName,{force:true});
       const base=preserveReceivedShareMeta({
         ...list,
@@ -9738,8 +9775,14 @@ const [lists,setLists]=useState(()=>{
       markReceivedListAsDeletedLocally(target);
       markSharedRecordRemovedByCurrentUser(target, getAppUserName());
     }else{
-      markListAsDeletedLocally(target);
-      markOwnListDeletedForCurrentUser(target, getAppUserName());
+      const ownTarget={
+        ...target,
+        ownerName:target.ownerName || target.remetente || getAppUserName(),
+        remetente:target.remetente || target.ownerName || getAppUserName(),
+        userId:target.userId || getAppUserId(),
+      };
+      markListAsDeletedLocally(ownTarget);
+      markOwnListDeletedForCurrentUser(ownTarget, getAppUserName());
     }
 
     const targetKeys=new Set([
@@ -9782,8 +9825,14 @@ const [lists,setLists]=useState(()=>{
         markReceivedListAsDeletedLocally(deletionCandidate);
         markSharedRecordRemovedByCurrentUser(deletionCandidate, getAppUserName());
       }else{
-        markListAsDeletedLocally(deletionCandidate);
-        markOwnListDeletedForCurrentUser(deletionCandidate, getAppUserName());
+        const ownDeletionCandidate={
+          ...deletionCandidate,
+          ownerName:deletionCandidate.ownerName || deletionCandidate.remetente || getAppUserName(),
+          remetente:deletionCandidate.remetente || deletionCandidate.ownerName || getAppUserName(),
+          userId:deletionCandidate.userId || getAppUserId(),
+        };
+        markListAsDeletedLocally(ownDeletionCandidate);
+        markOwnListDeletedForCurrentUser(ownDeletionCandidate, getAppUserName());
       }
 
       if(receivedShared){
