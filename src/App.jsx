@@ -5492,6 +5492,185 @@ async function markOwnedSharedListRecordDeleted(recordOrId, list = {}) {
 }
 
 
+// ── LÁPIDE REMOTA DE EXCLUSÃO DE LISTA PRÓPRIA ───────────────────────────
+// Necessária para que a exclusão feita em um aparelho seja respeitada em outros aparelhos.
+// Se o PATCH/DELETE do registro original falhar por RLS ou duplicidade antiga, o app ainda
+// publica um marcador de exclusão no Supabase e usa esse marcador para bloquear restaurações futuras.
+const OWN_DELETED_LIST_MARKER_TYPE = "deleted_list_marker";
+
+function isOwnDeletionMarkerRecord(record) {
+  const data = record?.data && typeof record.data === "object" ? record.data : {};
+  return Boolean(record?.list_type === OWN_DELETED_LIST_MARKER_TYPE || data.deletionMarker === true || data.markerType === OWN_DELETED_LIST_MARKER_TYPE);
+}
+
+function remoteOwnDeletionMarkerBelongsToUser(marker, explicitUserId = getAppUserId(), explicitName = getAppUserName()) {
+  if (!marker) return false;
+  const data = marker?.data && typeof marker.data === "object" ? marker.data : {};
+  const userId = explicitUserId || getAppUserId() || "";
+  const normalizedName = normalizeAuthName(explicitName || getAppUserName() || "");
+  const markerUserId = data.userId || data.user_id || marker.user_id || data.deletedByUserId || "";
+  const markerName = data.userName || data.ownerName || data.remetente || data.deletedByName || marker.remetente || "";
+  return Boolean(
+    (userId && markerUserId && String(userId) === String(markerUserId)) ||
+    (normalizedName && markerName && normalizeAuthName(markerName) === normalizedName)
+  );
+}
+
+function getRemoteOwnDeletionMarkerFingerprints(marker) {
+  const data = marker?.data && typeof marker.data === "object" ? marker.data : {};
+  const values = [
+    ...(Array.isArray(data.deletedFingerprints) ? data.deletedFingerprints : []),
+    ...(Array.isArray(data.deletedListKeys) ? data.deletedListKeys : []),
+    ...(Array.isArray(data.listPersistenceKeys) ? data.listPersistenceKeys : []),
+    ...(Array.isArray(data.remoteRecordIds) ? data.remoteRecordIds.flatMap((id) => [`id:${id}`, `shared:${id}`, `cloud:${id}`]) : []),
+  ];
+  [data.targetLocalId, data.targetSharedId, data.targetCloudId].filter(Boolean).forEach((id) => {
+    values.push(`id:${id}`, `shared:${id}`, `cloud:${id}`);
+  });
+  return Array.from(new Set(values.filter(Boolean).map(String)));
+}
+
+function remoteOwnDeletionMarkersMatchList(markers, listOrRecord, explicitUserId = getAppUserId(), explicitName = getAppUserName()) {
+  if (!Array.isArray(markers) || !markers.length || !listOrRecord) return false;
+  const probe = new Set([
+    ...getOwnListDeletionFingerprints(listOrRecord),
+    ...getListPersistenceKeys(listOrRecord),
+    ...getListPersistenceKeys(listOrRecord?.data && typeof listOrRecord.data === "object" ? listOrRecord.data : null),
+  ].filter(Boolean).map(String));
+
+  const data = listOrRecord?.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+  const probeName = normalizeDeletedKeyPart(data.name || data.title || listOrRecord.name || listOrRecord.title || "");
+  const probeType = normalizeDeletedKeyPart(data.type || data.list_type || listOrRecord.type || listOrRecord.list_type || "");
+  const probeOwnerId = String(data.userId || data.user_id || listOrRecord.userId || listOrRecord.user_id || explicitUserId || "");
+  const probeOwnerName = normalizeAuthName(data.ownerName || data.remetente || listOrRecord.ownerName || listOrRecord.remetente || explicitName || "");
+
+  return markers.some((marker) => {
+    if (!isOwnDeletionMarkerRecord(marker)) return false;
+    if (!remoteOwnDeletionMarkerBelongsToUser(marker, explicitUserId, explicitName)) return false;
+    const markerData = marker?.data && typeof marker.data === "object" ? marker.data : {};
+    const markerFingerprints = getRemoteOwnDeletionMarkerFingerprints(marker);
+    if (markerFingerprints.some((fp) => probe.has(String(fp)))) return true;
+
+    const markerName = normalizeDeletedKeyPart(markerData.targetListName || markerData.name || markerData.title || marker.title || "");
+    const markerType = normalizeDeletedKeyPart(markerData.targetListType || markerData.type || "");
+    const markerOwnerId = String(markerData.userId || markerData.user_id || marker.user_id || "");
+    const markerOwnerName = normalizeAuthName(markerData.userName || markerData.ownerName || markerData.remetente || marker.remetente || "");
+    const sameOwner = Boolean(
+      (probeOwnerId && markerOwnerId && probeOwnerId === markerOwnerId) ||
+      (probeOwnerName && markerOwnerName && probeOwnerName === markerOwnerName)
+    );
+    if (!sameOwner || !probeName || !markerName || probeName !== markerName) return false;
+    if (probeType && markerType && probeType !== markerType) return false;
+    return true;
+  });
+}
+
+function syncRemoteOwnDeletionMarkersToLocal(markers, explicitUserId = getAppUserId(), explicitName = getAppUserName()) {
+  if (!Array.isArray(markers) || !markers.length) return;
+  const relevant = markers.filter((m) => isOwnDeletionMarkerRecord(m) && remoteOwnDeletionMarkerBelongsToUser(m, explicitUserId, explicitName));
+  if (!relevant.length) return;
+
+  const ownStore = readOwnDeletedListsStore();
+  const deletedKeys = getDeletedListKeys();
+  const scopes = getOwnDeletionScopes(explicitName);
+
+  relevant.forEach((marker) => {
+    const data = marker?.data && typeof marker.data === "object" ? marker.data : {};
+    const fingerprints = getRemoteOwnDeletionMarkerFingerprints(marker);
+    scopes.forEach((scope) => {
+      const arr = Array.isArray(ownStore[scope]) ? ownStore[scope] : [];
+      const set = new Set(arr);
+      fingerprints.forEach((fp) => set.add(fp));
+      ownStore[scope] = Array.from(set).slice(-2000);
+    });
+    fingerprints.forEach((fp) => deletedKeys.add(fp));
+
+    const pseudo = {
+      id: data.targetLocalId || data.targetSharedId || marker.id,
+      sharedId: data.targetSharedId || (Array.isArray(data.remoteRecordIds) ? data.remoteRecordIds[0] : marker.id),
+      name: data.targetListName || data.name || marker.title || "Lista excluída",
+      title: data.targetListName || data.name || marker.title || "Lista excluída",
+      type: data.targetListType || data.type || "geral",
+      ownerName: data.ownerName || data.userName || explicitName || getAppUserName(),
+      remetente: data.remetente || data.userName || explicitName || getAppUserName(),
+      userId: data.userId || data.user_id || explicitUserId || getAppUserId(),
+      createdAt: data.targetCreatedAt || data.createdAt || "",
+      data,
+    };
+    markOwnListPermanentlyDeleted(pseudo, explicitName);
+    markOwnListTombstoneSnapshot(pseudo, explicitName);
+  });
+
+  ownStore.__updatedAt = new Date().toISOString();
+  writeOwnDeletedListsStore(ownStore);
+  saveDeletedListKeys(deletedKeys);
+}
+
+async function createOwnDeletionMarkerRecord(listOrRecord, remoteRecords = []) {
+  if (!hasSupabaseConfig() || !listOrRecord) return false;
+  try {
+    const userName = getAppUserName() || listOrRecord.ownerName || listOrRecord.remetente || "Usuário";
+    const userId = getAppUserId() || listOrRecord.userId || listOrRecord.user_id || null;
+    const allTargets = [listOrRecord, ...(Array.isArray(remoteRecords) ? remoteRecords : [])].filter(Boolean);
+    const deletedFingerprints = Array.from(new Set(allTargets.flatMap((target) => [
+      ...getOwnListDeletionFingerprints(target),
+      ...getListPersistenceKeys(target),
+      ...getListPersistenceKeys(target?.data && typeof target.data === "object" ? target.data : null),
+    ]).filter(Boolean).map(String)));
+    const remoteRecordIds = Array.from(new Set((Array.isArray(remoteRecords) ? remoteRecords : []).map((r) => r?.id).filter(Boolean).map(String)));
+    const data = listOrRecord?.data && typeof listOrRecord.data === "object" ? listOrRecord.data : {};
+    const targetListName = listOrRecord.name || listOrRecord.title || data.name || data.title || "Lista excluída";
+    const targetListType = listOrRecord.type || listOrRecord.list_type || data.type || data.list_type || "geral";
+    const now = new Date().toISOString();
+
+    const payload = {
+      title: `Exclusão - ${targetListName}`,
+      list_type: OWN_DELETED_LIST_MARKER_TYPE,
+      budget: 0,
+      remetente: userName,
+      user_id: userId,
+      data: {
+        deletionMarker: true,
+        markerType: OWN_DELETED_LIST_MARKER_TYPE,
+        deletedAt: now,
+        userId,
+        userName,
+        ownerName: userName,
+        remetente: userName,
+        targetListName,
+        targetListType,
+        targetLocalId: listOrRecord.id || data.id || null,
+        targetSharedId: listOrRecord.sharedId || data.sharedId || remoteRecordIds[0] || null,
+        targetCreatedAt: listOrRecord.createdAt || listOrRecord.created_at || data.createdAt || data.created_at || null,
+        remoteRecordIds,
+        deletedFingerprints,
+        deletedListKeys: deletedFingerprints,
+      },
+    };
+
+    const postMarker = async (bodyPayload) => fetch(`${SUPABASE_URL}/rest/v1/shared_lists`, {
+      method: "POST",
+      headers: supabaseHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(bodyPayload),
+    });
+
+    let res = await postMarker(payload);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      if (/user_id|column/i.test(text)) {
+        const fallback = { ...payload };
+        delete fallback.user_id;
+        res = await postMarker(fallback);
+      }
+    }
+    return res.ok;
+  } catch (err) {
+    console.warn("Erro ao criar marcador remoto de exclusão:", err);
+    return false;
+  }
+}
+
+
 function getListIdentityKey(list) {
   if (!list) return "";
   const data = list.data && typeof list.data === "object" ? list.data : null;
@@ -7772,13 +7951,17 @@ const [lists,setLists]=useState(()=>{
     try{
       const records=await getSharedListsForUser(userId, userName || getAppUserName());
       if(!records.length)return;
+      const effectiveRestoreName=userName || getAppUserName();
+      const remoteDeletionMarkers=records.filter(isOwnDeletionMarkerRecord);
+      syncRemoteOwnDeletionMarkersToLocal(remoteDeletionMarkers, userId || getAppUserId(), effectiveRestoreName);
       setLists(prev=>{
         const current=sanitizeListsForCurrentUser(prev);
         const byKey=new Map(current.map(l=>[l.sharedId||l.id,l]));
         let changed=false;
         let restoredCount=0;
         for(const record of records){
-          const effectiveName=userName || getAppUserName();
+          const effectiveName=effectiveRestoreName;
+          if(isOwnDeletionMarkerRecord(record)) continue;
           const recordDeleteProbe={
             ...(record?.data || {}),
             id: record?.data?.id || record?.id,
@@ -7790,10 +7973,10 @@ const [lists,setLists]=useState(()=>{
             name: record?.data?.name || record?.title,
             data: record?.data || {},
           };
-          if(shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListPermanentlyDeleted(record, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
+          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, recordDeleteProbe, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, record, userId, effectiveName) || shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListPermanentlyDeleted(record, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
           const local=sharedRecordToLocalList(record, userId, effectiveName);
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
-          if(isOwnListPermanentlyDeleted(restoreCandidate, effectiveName) || isOwnListPermanentlyDeleted(local, effectiveName) || isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
+          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, restoreCandidate, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, local, userId, effectiveName) || isOwnListPermanentlyDeleted(restoreCandidate, effectiveName) || isOwnListPermanentlyDeleted(local, effectiveName) || isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -10046,6 +10229,15 @@ const [lists,setLists]=useState(()=>{
       markOwnListDeletedForCurrentUser(ownTarget, getAppUserName());
     }
 
+    if(!receivedShared){
+      await createOwnDeletionMarkerRecord({
+        ...target,
+        ownerName:target.ownerName || target.remetente || getAppUserName(),
+        remetente:target.remetente || target.ownerName || getAppUserName(),
+        userId:target.userId || getAppUserId(),
+      }, []).catch(()=>false);
+    }
+
     const targetKeys=new Set([
       ...getListPersistenceKeys(target),
       ...getReceivedListPersistenceKeys(target),
@@ -10113,6 +10305,7 @@ const [lists,setLists]=useState(()=>{
       // Lista própria: localizar todos os registros remotos equivalentes, marcar como excluídos
       // e gravar lápides locais com o id local e com o id real do Supabase.
       const ownedRecords=await findOwnedSharedListRecordsForDeletion(deletionCandidate).catch(()=>[]);
+      await createOwnDeletionMarkerRecord(deletionCandidate, ownedRecords.length ? ownedRecords : [{ id: remoteSharedId, data: target }]).catch(()=>false);
       const recordsToDelete=ownedRecords.length ? ownedRecords : [{ id: remoteSharedId, data: target }];
       for(const record of recordsToDelete){
         const enriched={...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId, data:{...(record.data||{}),...deletionCandidate, sharedId:record.id || deletionCandidate.sharedId}};
