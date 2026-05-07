@@ -7,6 +7,18 @@ import {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
 } from "./config/env";
+import {
+  APP_USER_NAME_KEY,
+  APP_DEVICE_ID_KEY,
+  APP_USER_REGISTERED_KEY,
+  APP_USER_ID_KEY,
+  APP_PIN_SESSION_NAME_KEY,
+  APP_PIN_SESSION_AT_KEY,
+  APP_INSTALL_PROMPT_DISMISSED_KEY,
+  APP_INSTALL_PROMPT_LAST_SHOWN_KEY,
+  APP_GUIDED_TOUR_DONE_KEY,
+  APP_GUIDED_TOUR_DISMISSED_KEY,
+} from "./config/storageKeys";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -215,17 +227,6 @@ if (typeof document !== "undefined") {
 
 // ── Cadastro leve de usuários ─────────────────────────────────────────────
 // Identifica o usuário sem login/senha. O device_id permite mensurar usuários únicos.
-const APP_USER_NAME_KEY = "tnl_user_name";
-const APP_DEVICE_ID_KEY = "tnl_device_id";
-const APP_USER_REGISTERED_KEY = "tnl_user_registered_device_id";
-const APP_USER_ID_KEY = "tnl_user_id";
-const APP_PIN_SESSION_NAME_KEY = "tnl_pin_verified_name";
-const APP_PIN_SESSION_AT_KEY = "tnl_pin_verified_at";
-const APP_INSTALL_PROMPT_DISMISSED_KEY = "tnl_install_prompt_dismissed";
-const APP_INSTALL_PROMPT_LAST_SHOWN_KEY = "tnl_install_prompt_last_shown";
-
-const APP_GUIDED_TOUR_DONE_KEY = "tnl_guided_tour_done_v2";
-const APP_GUIDED_TOUR_DISMISSED_KEY = "tnl_guided_tour_dismissed_v2";
 
 const GUIDED_TOUR_STEPS = [
   {
