@@ -56,6 +56,7 @@ import InstallPrompt from "./components/InstallPrompt";
 import HomeScreen from "./pages/HomeScreen";
 import AppLogo from "./components/AppLogo";
 import BrandWordmark from "./components/BrandWordmark";
+import ModuleIcon from "./components/ModuleIcon";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -1373,81 +1374,7 @@ function getPremiumSectionHeaderStyle(theme, { isExtraCat = false, allDone = fal
 
 
 
-function ModuleIcon({ type="compras", size=72, active=false }) {
-  const iconMap = {
-    compras: "/compras.svg",
-    festa: "/festa.svg",
-    conta: "/conta.svg",
-    saude: "/saude.svg",
-    eventos: "/eventos.svg",
-    condominio: "/condominio.svg",
-  };
 
-  const fallbackMap = {
-    compras: "🛒",
-    festa: "🎉",
-    conta: "💳",
-    saude: "💊",
-    eventos: "🎟️",
-    condominio: "🏢",
-  };
-
-  const src = iconMap[type] || iconMap.compras;
-  const fallback = fallbackMap[type] || "•";
-
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.round(size * 0.24),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        margin: "0 auto",
-        position: "relative",
-        flexShrink: 0,
-      }}
-    >
-      <img
-        src={src}
-        alt={type}
-        style={{
-          width: size,
-          height: size,
-          objectFit: "contain",
-          display: "block",
-          borderRadius: Math.round(size * 0.24),
-          boxShadow: active
-            ? "0 18px 34px rgba(109,40,217,0.28)"
-            : "0 14px 26px rgba(109,40,217,0.18)",
-        }}
-        onError={(e)=>{
-          e.currentTarget.style.display="none";
-          const fallbackNode = e.currentTarget.nextSibling;
-          if (fallbackNode) fallbackNode.style.display="flex";
-        }}
-      />
-      <span
-        style={{
-          display:"none",
-          width:size,
-          height:size,
-          borderRadius:Math.round(size*0.24),
-          alignItems:"center",
-          justifyContent:"center",
-          color:"#FFFFFF",
-          fontSize:Math.round(size*0.44),
-          fontWeight:900,
-          background:"linear-gradient(135deg,#4C1D95,#7C3AED)",
-          boxShadow:active?"0 18px 34px rgba(109,40,217,0.28)":"0 14px 26px rgba(109,40,217,0.18)",
-        }}
-      >
-        {fallback}
-      </span>
-    </div>
-  );
-}
 
 function WhatsAppIcon({ size = 20 }) {
   // Ícone do WhatsApp no padrão visual reconhecido: círculo verde, balão e telefone brancos.
