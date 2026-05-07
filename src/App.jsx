@@ -32,6 +32,7 @@ import {
   formatDate,
   formatDateTime,
   normalizeText,
+  normalizeAuthName,
 } from "./utils/formatters";
 import {
   isPinSessionVerified,
@@ -42,7 +43,7 @@ import {
   hashUserPin,
   verifyOrCreateUserPin,
   resetUserAuthPin,
-  normalizeAuthName,
+  
 } from "./services/authService";
 import {
   hasSupabaseConfig,
