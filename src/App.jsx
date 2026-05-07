@@ -50,6 +50,7 @@ import {
 } from "./services/sharedListService";
 import GuidedTourOverlay from "./components/GuidedTourOverlay";
 import ToastMessage from "./components/ToastMessage";
+import InstallPrompt from "./components/InstallPrompt";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
