@@ -29,3 +29,6 @@ export function clearPinSession() {
   removeStoredValue(APP_PIN_SESSION_NAME_KEY);
   removeStoredValue(APP_PIN_SESSION_AT_KEY);
 }
+export function normalizePin(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 6);
+}
