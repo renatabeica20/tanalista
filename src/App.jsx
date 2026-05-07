@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.70.4 - Correção estrutural: exclusão persistente de listas próprias e recebidas
+// Etapa 7.71.1 - Compartilhamento com dono preservado, status e notificações
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -50,7 +50,7 @@ async function registrarEvento(eventType, metadata = {}) {
         ...(metadata && typeof metadata === "object" ? metadata : {}),
         user_name: userName,
         device_id: deviceId,
-        app_version: "etapa-7.70.1-deletion-lock-v2",
+        app_version: "etapa-7.71.1-owner-share-preserved",
       },
     };
 
@@ -702,6 +702,21 @@ function isSharedRecordRemovedForCurrentUser(record, userId = getAppUserId(), na
   return Boolean(entry && isSharedWithEntryRemoved(entry));
 }
 
+function isSharedRecordOwnedByViewer(record, viewerUserId = getAppUserId(), viewerName = getAppUserName()) {
+  const data = record?.data && typeof record.data === "object" ? record.data : {};
+  const normalizedViewer = normalizeAuthName(viewerName || getAppUserName() || "");
+  const ownerNames = [record?.remetente, data?.ownerName, data?.remetente, data?.originalOwnerName, data?.originalRemetente]
+    .filter(Boolean)
+    .map((value) => normalizeAuthName(value));
+  const ownerIds = [record?.user_id, data?.ownerUserId, data?.createdByUserId, data?.userId]
+    .filter(Boolean)
+    .map((value) => String(value));
+  return Boolean(
+    (viewerUserId && ownerIds.includes(String(viewerUserId))) ||
+    (normalizedViewer && ownerNames.includes(normalizedViewer))
+  );
+}
+
 function sharedRecordToLocalList(record, viewerUserId = null, viewerName = "") {
   const base = record?.data || {};
   const currentName = String(viewerName || getAppUserName() || "").trim();
@@ -716,7 +731,7 @@ function sharedRecordToLocalList(record, viewerUserId = null, viewerName = "") {
       ? (sharedEntry.importedListId || base.id || `received-${record?.id || Date.now()}`)
       : (base.id || `shared-${record?.id || Date.now()}`),
     sharedId: record?.id || base.sharedId || null,
-    userId: isReceivedByViewer ? currentUserId : (record?.user_id || base.userId || currentUserId),
+    userId: isReceivedByViewer ? currentUserId : (isSharedRecordOwnedByViewer(record, currentUserId, currentName) ? (currentUserId || base.userId || record?.user_id || null) : (record?.user_id || base.userId || currentUserId)),
     ownerName: isReceivedByViewer ? currentName : remoteOwner,
     remetente: isReceivedByViewer ? currentName : (base.remetente || remoteOwner),
     sharedWith: Array.isArray(base.sharedWith) ? base.sharedWith : [],
@@ -725,7 +740,22 @@ function sharedRecordToLocalList(record, viewerUserId = null, viewerName = "") {
     restoredAt: new Date().toISOString(),
   };
 
-  if (!isReceivedByViewer) return local;
+  if (!isReceivedByViewer) {
+    const sharedWith = Array.isArray(base.sharedWith) ? base.sharedWith : [];
+    return {
+      ...local,
+      imported: false,
+      isReceivedList: false,
+      importedFrom: null,
+      receivedFromName: null,
+      sharedOwner: null,
+      originalOwnerName: base.originalOwnerName || remoteOwner,
+      originalRemetente: base.originalRemetente || remoteOwner,
+      isShared: Boolean(base.isShared === true || record?.id || sharedWith.length),
+      shareStatus: base.shareStatus || (sharedWith.length ? "active" : local.shareStatus),
+      sharedAt: base.sharedAt || base.createdAt || record?.created_at || local.sharedAt || new Date().toISOString(),
+    };
+  }
 
   return preserveReceivedShareMeta({
     ...local,
@@ -977,6 +1007,51 @@ async function updateSharedListRecord(id, list) {
     } else {
       throw new Error(`Erro ao sincronizar lista compartilhada (${res.status}) ${text}`.trim());
     }
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function patchSharedListExecutionRecord(id, list, existingRecord = null) {
+  if (!id || !hasSupabaseConfig()) return null;
+
+  const existingData = existingRecord?.data && typeof existingRecord.data === "object" ? existingRecord.data : {};
+  const ownerUserId = existingRecord?.user_id || existingData.userId || existingData.ownerUserId || existingData.createdByUserId || null;
+  const ownerName = existingRecord?.remetente || existingData.ownerName || existingData.remetente || list?.ownerName || list?.remetente || getAppUserName() || "";
+  const now = new Date().toISOString();
+  const payloadData = {
+    ...existingData,
+    ...list,
+    id: existingData.id || list?.id || id,
+    sharedId: id,
+    userId: ownerUserId || existingData.userId || null,
+    ownerUserId: existingData.ownerUserId || ownerUserId || null,
+    ownerName,
+    remetente: existingData.remetente || ownerName,
+    isShared: true,
+    shareStatus: existingData.shareStatus || list?.shareStatus || "active",
+    lastSyncedAt: now,
+  };
+
+  const body = {
+    title: payloadData.name || existingRecord?.title || "Lista de compras",
+    list_type: payloadData.type || existingRecord?.list_type || "geral",
+    budget: Number(payloadData.budget || existingRecord?.budget || 0),
+    data: payloadData,
+  };
+  if (ownerUserId) body.user_id = ownerUserId;
+  if (ownerName) body.remetente = ownerName;
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: supabaseHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ao sincronizar execução compartilhada (${res.status}) ${text}`.trim());
   }
 
   const data = await res.json();
@@ -8069,10 +8144,19 @@ const [lists,setLists]=useState(()=>{
             name: record?.data?.name || record?.title,
             data: record?.data || {},
           };
-          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, recordDeleteProbe, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, record, userId, effectiveName) || shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName) || isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListPermanentlyDeleted(record, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || shouldOmitListFromLocalState(recordDeleteProbe) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
+          const recordBelongsToViewer = isSharedRecordOwnedByViewer(record, userId || getAppUserId(), effectiveName);
+          const blockSharedForViewer = !recordBelongsToViewer && shouldBlockSharedRecordForCurrentUser(record, userId, effectiveName);
+          const omitRecordProbe = recordBelongsToViewer
+            ? (isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))
+            : shouldOmitListFromLocalState(recordDeleteProbe);
+          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, recordDeleteProbe, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, record, userId, effectiveName) || blockSharedForViewer || isOwnListPermanentlyDeleted(recordDeleteProbe, effectiveName) || isOwnListPermanentlyDeleted(record, effectiveName) || isOwnListTombstoneSnapshotMatch(recordDeleteProbe, effectiveName) || isOwnListTombstoneSnapshotMatch(record, effectiveName) || omitRecordProbe || wasOwnListDeletedForCurrentUser(recordDeleteProbe, effectiveName))continue;
           const local=sharedRecordToLocalList(record, userId, effectiveName);
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
-          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, restoreCandidate, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, local, userId, effectiveName) || isOwnListPermanentlyDeleted(restoreCandidate, effectiveName) || isOwnListPermanentlyDeleted(local, effectiveName) || isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
+          const localBelongsToViewer = isSharedRecordOwnedByViewer({ ...record, data: restoreCandidate }, userId || getAppUserId(), effectiveName);
+          const omitRestored = localBelongsToViewer
+            ? (isOwnListPermanentlyDeleted(restoreCandidate, effectiveName) || isOwnListPermanentlyDeleted(local, effectiveName) || isOwnListTombstoneSnapshotMatch(restoreCandidate, effectiveName) || isOwnListTombstoneSnapshotMatch(local, effectiveName) || wasOwnListDeletedForCurrentUser(restoreCandidate, effectiveName) || wasOwnListDeletedForCurrentUser(local, effectiveName))
+            : (shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }));
+          if(remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, restoreCandidate, userId, effectiveName) || remoteOwnDeletionMarkersMatchList(remoteDeletionMarkers, local, userId, effectiveName) || omitRestored)continue;
           const key=local.sharedId||local.id;
           if(!key)continue;
           const existing=byKey.get(key);
@@ -9935,7 +10019,9 @@ const [lists,setLists]=useState(()=>{
         sharedId,
       } : preserveReceivedShareMeta({...remoteDataBeforeSave,...protectedList,sharedEvents:mergedEvents,lastSyncedAt:nowSync,lastSyncSource:getAppDeviceId()}, protectedList);
 
-      const record=await updateSharedListRecord(sharedId,payload);
+      const record=receivedSimultaneous
+        ? await patchSharedListExecutionRecord(sharedId, payload, remoteBeforeSave)
+        : await updateSharedListRecord(sharedId,payload);
       const localSynced=receivedSimultaneous
         ? markListCloudSynced(preserveReceivedShareMeta({...protectedList,categories:payload.categories,total:payload.total,status:payload.status,sharedEvents:mergedEvents,lastSyncedAt:nowSync}, protectedList), record?.data||payload)
         : markListCloudSynced(payload,record?.data||payload);
@@ -9963,7 +10049,12 @@ const [lists,setLists]=useState(()=>{
     try{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
-      if(isOwnListPermanentlyDeleted({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data }, getAppUserName()) || shouldOmitListFromLocalState({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data })){
+      const refreshProbe = { ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data };
+      const refreshBelongsToViewer = isSharedRecordOwnedByViewer(record, getAppUserId(), getAppUserName());
+      const refreshBlocked = refreshBelongsToViewer
+        ? (isOwnListPermanentlyDeleted(refreshProbe, getAppUserName()) || isOwnListTombstoneSnapshotMatch(refreshProbe, getAppUserName()) || wasOwnListDeletedForCurrentUser(refreshProbe, getAppUserName()))
+        : shouldOmitListFromLocalState(refreshProbe);
+      if(refreshBlocked){
         markOwnListPermanentlyDeleted({ ...(record.data || {}), id: record.data?.id || record.id, sharedId: record.id, data: record.data }, getAppUserName());
         const cleaned=sanitizeAndStoreTnlLists((JSON.parse(localStorage.getItem("tnl_lists")||"[]")||[]).filter(l=>l.id!==currentList?.id && l.sharedId!==sharedId));
         setLists(cleaned);
