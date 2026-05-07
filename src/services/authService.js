@@ -13,3 +13,15 @@ export function isPinSessionVerified(name) {
 
   return Boolean(clean && verified && clean === verified);
 }
+export function markPinSessionVerified(name) {
+  const clean = String(name || "").trim();
+
+  if (!clean) return;
+
+  setStoredValue(APP_PIN_SESSION_NAME_KEY, clean);
+
+  setStoredValue(
+    APP_PIN_SESSION_AT_KEY,
+    new Date().toISOString()
+  );
+}
