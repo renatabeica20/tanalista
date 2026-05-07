@@ -49,6 +49,7 @@ import {
   deleteSharedListRecord,
 } from "./services/sharedListService";
 import GuidedTourOverlay from "./components/GuidedTourOverlay";
+import ToastMessage from "./components/ToastMessage";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -8563,9 +8564,7 @@ const [lists,setLists]=useState(()=>{
       <style>{`@keyframes tnlPulseBack{0%,100%{transform:scale(1);box-shadow:0 12px 28px rgba(17,24,39,0.24)}50%{transform:scale(1.10);box-shadow:0 18px 40px rgba(255,255,255,0.32),0 12px 28px rgba(17,24,39,0.24)}}`}</style>
 
       {/* TOAST */}
-      <div style={{position:"fixed",bottom:100,left:16,right:16,margin:"0 auto",maxWidth:460,transform:`translateY(${toast.show?0:16}px)`,background:"#111827",color:"white",padding:"14px 18px",borderRadius:18,fontSize:14,fontWeight:600,zIndex:600,opacity:toast.show?1:0,transition:"all 0.3s",whiteSpace:"normal",lineHeight:1.35,textAlign:"center",boxShadow:"0 18px 42px rgba(17,24,39,0.18)",pointerEvents:"none"}}>
-        {toast.msg}
-      </div>
+      <ToastMessage message={toast.msg} />
 
       {/* AVISO DE NOVA VERSÃO DISPONÍVEL */}
       {updateNotice.show && (
