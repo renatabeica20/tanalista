@@ -15,7 +15,7 @@ export default function PriceStatsScreen({
   const [selectedCategoryName, setSelectedCategoryName] = useState("");
   const stats =
   typeof getPriceStatsSummary === "function"
-    ? getPriceStatsSummary(lists)
+    ? getPriceStatsSummary()
     : { totalRecords: 0 };
 const normalizeStatsKey =
   typeof normalizeCacheKey === "function"
