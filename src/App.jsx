@@ -6410,7 +6410,11 @@ export default function App(){
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      return Array.isArray(stored)?mergeUniqueLists(stored):[];
+      const safe=Array.isArray(stored)?mergeUniqueLists(stored.filter(l=>!shouldOmitListFromLocalState(l))):[];
+      if(Array.isArray(stored) && safe.length!==stored.length){
+        try{localStorage.setItem("tnl_lists",JSON.stringify(safe));}catch{}
+      }
+      return safe;
     }catch{return[]}
   });
   const [currentList,setCurrentList]=useState(null);
@@ -6916,6 +6920,14 @@ const [lists,setLists]=useState(()=>{
     localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
 
+  useEffect(()=>{
+    const safe=mergeUniqueLists((Array.isArray(lists)?lists:[]).filter(l=>!shouldOmitListFromLocalState(l)));
+    if(safe.length !== (Array.isArray(lists)?lists.length:0)){
+      setLists(safe);
+      try{localStorage.setItem("tnl_lists",JSON.stringify(safe));}catch{}
+    }
+  },[lists]);
+
   const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
     if(!userId && !userName)return;
     try{
@@ -6953,7 +6965,7 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!changed)return current;
-        const merged=mergeUniqueLists(Array.from(byKey.values()));
+        const merged=mergeUniqueLists(Array.from(byKey.values()).filter(l=>!shouldOmitListFromLocalState(l)));
         try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
         if(!silent && restoredCount>0)showToast(`${restoredCount} lista(s) recuperada(s)`);
         return merged;
@@ -7440,7 +7452,28 @@ const [lists,setLists]=useState(()=>{
     const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
     const currentUserId=await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
     const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
-    const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+    const existingRaw=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+    const existing=Array.isArray(existingRaw)?mergeUniqueLists(existingRaw.filter(l=>!shouldOmitListFromLocalState(l))):[];
+    try{localStorage.setItem("tnl_lists",JSON.stringify(existing));}catch{}
+
+    if(sourceSharedId && wasReceivedListDeletedLocally({
+      ...baseData,
+      id: baseData.id || sourceSharedId,
+      sharedId: sourceSharedId || baseData.sharedId,
+      originalSharedId: sourceSharedId || baseData.sharedId,
+      sourceSharedId: sourceSharedId || baseData.sharedId,
+      importedOriginalSharedId: sourceSharedId || baseData.sharedId,
+      imported: true,
+      isReceivedList: true,
+      importedFrom: sender,
+      receivedFromName: sender,
+      sharedOwner: sender,
+    })){
+      setSharedLandingRecord(null);
+      try { window.history.replaceState({}, document.title, "/"); } catch {}
+      showToast("🗑 Esta lista já foi excluída por este usuário",2200);
+      return null;
+    }
 
     const already=existing.find(l=>{
       const sameSource=sourceSharedId && (l.sharedId===sourceSharedId || l.originalSharedId===sourceSharedId || l.sourceSharedId===sourceSharedId || l.importedOriginalSharedId===sourceSharedId);
@@ -9147,7 +9180,9 @@ const [lists,setLists]=useState(()=>{
 
     if(currentList && sameList(currentList)){
       setCurrentList(null);
-      archiveFinishedListsBeforeHome();
+      setSearch("");
+      setCollapsedCats({});
+      setScreen("home");
     }
 
     showToast(receivedShared ? "🗑 Lista recebida removida" : "🗑 Lista excluída");
