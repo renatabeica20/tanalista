@@ -1004,34 +1004,7 @@ async function softDeleteSharedListRecord(id, list = null) {
 
 
 
-async function verifyOrCreateUserPin(name, pin, pinConfirm = "") {
-  const clean = String(name || "").trim();
-  const safePin = normalizePin(pin);
-  const safeConfirm = normalizePin(pinConfirm);
 
-  if (!clean) return { ok: false, message: "Informe seu nome para continuar." };
-  if (!isValidPin(safePin)) return { ok: false, message: "Informe um PIN de 4 a 6 dígitos." };
-
-  const existing = await findUserAuthProfile(clean);
-  const hash = await hashUserPin(clean, safePin);
-
-  if (existing?.data?.pinHash) {
-    if (existing.data.pinHash !== hash) {
-      return { ok: false, message: "PIN incorreto para este usuário." };
-    }
-    return { ok: true, mode: "login", profile: existing };
-  }
-
-  if (!safeConfirm) {
-    return { ok: false, message: "Primeiro acesso: confirme o PIN para criar seu cadastro." };
-  }
-  if (safePin !== safeConfirm) {
-    return { ok: false, message: "Os PINs informados não conferem." };
-  }
-
-  const created = await createUserAuthProfile(clean, hash);
-  return { ok: true, mode: "created", profile: created };
-}
 
 
 async function appendSharedListEvent(id, event = {}) {
