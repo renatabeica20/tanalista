@@ -692,6 +692,16 @@ function getSharedWithEntryForUser(record, userId, name) {
   }) || null;
 }
 
+function isSharedWithEntryRemoved(entry) {
+  const status = String(entry?.status || "").trim().toLowerCase();
+  return ["removed", "deleted", "hidden", "excluded", "excluida", "excluída", "removida"].includes(status);
+}
+
+function isSharedRecordRemovedForCurrentUser(record, userId = getAppUserId(), name = getAppUserName()) {
+  const entry = getSharedWithEntryForUser(record, userId, name);
+  return Boolean(entry && isSharedWithEntryRemoved(entry));
+}
+
 function sharedRecordToLocalList(record, viewerUserId = null, viewerName = "") {
   const base = record?.data || {};
   const currentName = String(viewerName || getAppUserName() || "").trim();
@@ -1014,17 +1024,61 @@ async function hideSharedListRecordForCurrentUser(id) {
       ...(Array.isArray(data.hiddenForReceivedKeys) ? data.hiddenForReceivedKeys : []),
       ...getReceivedListPersistenceKeys(record),
       ...getReceivedListPersistenceKeys({ ...record, data }),
+      ...getReceivedListPersistenceKeys({
+        ...data,
+        id: data.id || id,
+        sharedId: id || data.sharedId,
+        originalSharedId: id || data.originalSharedId || data.sharedId,
+        sourceSharedId: id || data.sourceSharedId || data.sharedId,
+        importedOriginalSharedId: id || data.importedOriginalSharedId || data.sharedId,
+        imported: true,
+        isReceivedList: true,
+        importedFrom: record?.remetente || data.ownerName || data.remetente || "",
+        receivedFromName: record?.remetente || data.ownerName || data.remetente || "",
+      }),
     ].filter(Boolean)));
+
+    const now = new Date().toISOString();
+    const sharedWith = Array.isArray(data.sharedWith) ? data.sharedWith : [];
+    const normalizedUserName = normalizeAuthName(userName);
+    let matchedSharedWith = false;
+    const nextSharedWith = sharedWith.map((entry) => {
+      if (!entry) return entry;
+      const sameUser = Boolean(userId && entry.userId && String(entry.userId) === String(userId));
+      const sameName = Boolean(normalizedUserName && normalizeAuthName(entry.userName || entry.name || "") === normalizedUserName);
+      if (!sameUser && !sameName) return entry;
+      matchedSharedWith = true;
+      return {
+        ...entry,
+        userId: entry.userId || userId || null,
+        userName: entry.userName || userName || entry.name || "Usuário",
+        status: "removed",
+        removedAt: now,
+        hiddenAt: now,
+        updatedAt: now,
+      };
+    });
+    if (!matchedSharedWith && (userId || userName)) {
+      nextSharedWith.unshift({
+        userId: userId || null,
+        userName: userName || "Usuário",
+        status: "removed",
+        removedAt: now,
+        hiddenAt: now,
+        updatedAt: now,
+      });
+    }
 
     const payload = {
       data: {
         ...data,
+        sharedWith: nextSharedWith,
         hiddenForDeviceIds,
         hiddenForUserIds,
         hiddenForNames,
         hiddenForNormalizedNames,
         hiddenForReceivedKeys,
-        lastHiddenAt: new Date().toISOString(),
+        lastHiddenAt: now,
       },
     };
 
@@ -4669,6 +4723,7 @@ function isSharedRecordHiddenForCurrentUser(record) {
     data.isDeleted ||
     data.deletedAt ||
     data.status === "deleted" ||
+    isSharedRecordRemovedForCurrentUser(record, userId, getAppUserName()) ||
     (deviceId && hiddenDevices.includes(deviceId)) ||
     (userId && hiddenUsers.includes(userId)) ||
     (userName && hiddenNames.includes(userName)) ||
@@ -7087,7 +7142,7 @@ const [lists,setLists]=useState(()=>{
         let changed=false;
         let restoredCount=0;
         for(const record of records){
-          if(isSharedRecordHiddenForCurrentUser(record))continue;
+          if(isSharedRecordRemovedForCurrentUser(record, userId, userName || getAppUserName()) || isSharedRecordHiddenForCurrentUser(record))continue;
           const local=sharedRecordToLocalList(record, userId, userName || getAppUserName());
           const restoreCandidate={ ...local, id: local.id || record?.data?.id || record?.id, sharedId: local.sharedId || record?.id || record?.data?.sharedId, originalSharedId: local.originalSharedId || record?.id || record?.data?.originalSharedId, sourceSharedId: local.sourceSharedId || record?.id || record?.data?.sourceSharedId, data: { ...(record?.data || {}), ...local, sharedId: local.sharedId || record?.id } };
           if(shouldOmitListFromLocalState(restoreCandidate) || shouldOmitListFromLocalState(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: restoreCandidate }))continue;
@@ -7605,7 +7660,7 @@ const [lists,setLists]=useState(()=>{
     const existing=Array.isArray(existingRaw)?mergeUniqueLists(existingRaw.filter(l=>!shouldOmitListFromLocalState(l))):[];
     try{localStorage.setItem("tnl_lists",JSON.stringify(existing));}catch{}
 
-    if(sourceSharedId && wasReceivedListDeletedLocally({
+    if(sourceSharedId && (isSharedRecordRemovedForCurrentUser(record, currentUserId, currentUserName) || wasReceivedListDeletedLocally({
       ...baseData,
       id: baseData.id || sourceSharedId,
       sharedId: sourceSharedId || baseData.sharedId,
@@ -7617,7 +7672,7 @@ const [lists,setLists]=useState(()=>{
       importedFrom: sender,
       receivedFromName: sender,
       sharedOwner: sender,
-    })){
+    }))){
       setSharedLandingRecord(null);
       try { window.history.replaceState({}, document.title, "/"); } catch {}
       showToast("🗑 Esta lista já foi excluída por este usuário",2200);
@@ -8884,6 +8939,12 @@ const [lists,setLists]=useState(()=>{
       }
 
       const remoteBeforeSave=await getSharedListRecord(sharedId).catch(()=>null);
+      if(remoteBeforeSave && isSharedRecordRemovedForCurrentUser(remoteBeforeSave)){
+        markReceivedListAsDeletedLocally(list);
+        setLists(prev=>sanitizeListsForCurrentUser((Array.isArray(prev)?prev:[]).filter(l=>l.id!==list.id && l.sharedId!==sharedId)));
+        try{localStorage.setItem("tnl_lists",JSON.stringify(sanitizeListsForCurrentUser((JSON.parse(localStorage.getItem("tnl_lists")||"[]")||[]).filter(l=>l.id!==list.id && l.sharedId!==sharedId))));}catch{}
+        return null;
+      }
       const remoteDataBeforeSave=remoteBeforeSave?.data && typeof remoteBeforeSave.data === "object" ? remoteBeforeSave.data : {};
       const protectedList=preserveReceivedShareMeta(list, remoteDataBeforeSave);
       const remoteEvents=Array.isArray(remoteDataBeforeSave.sharedEvents) ? remoteDataBeforeSave.sharedEvents : [];
