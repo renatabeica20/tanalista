@@ -8691,6 +8691,7 @@ const [lists,setLists]=useState(()=>{
       ════════════════════════════════════ */}
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
       {screen==="home"&&(
+<HomeScreen>
         <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)",position:"relative"}}>
           <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",paddingTop:24,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:28,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
             <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
@@ -8896,7 +8897,8 @@ const [lists,setLists]=useState(()=>{
             </div>
           </div>
         </div>
-      )}
+     </HomeScreen>
+)}
 
       {/* CONFIRM DELETE */}
       {confirmDelete&&(
