@@ -41,23 +41,17 @@ import {
   isValidPin,
   hashUserPin,
 } from "./services/authService";
+import {
+  hasSupabaseConfig,
+  supabaseHeaders,
+  getSharedListRecord,
+} from "./services/sharedListService";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
 
-function hasSupabaseConfig() {
-  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-}
 
-function supabaseHeaders(extra = {}) {
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    "Content-Type": "application/json",
-    ...extra,
-  };
-}
 
 
 // ── EVENTOS ANALÍTICOS (Supabase app_events) ─────────────────────────────
