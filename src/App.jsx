@@ -990,12 +990,6 @@ async function softDeleteSharedListRecord(id, list = null) {
 
 
 
-function clearPinSession() {
-  try {
-    localStorage.removeItem(APP_PIN_SESSION_NAME_KEY);
-    localStorage.removeItem(APP_PIN_SESSION_AT_KEY);
-  } catch {}
-}
 
 
 
