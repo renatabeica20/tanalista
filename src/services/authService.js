@@ -36,3 +36,25 @@ export function isValidPin(value) {
   const pin = normalizePin(value);
   return pin.length >= 4 && pin.length <= 6;
 }
+export async function hashUserPin(name, pin) {
+  const cleanName = normalizeAuthName(name);
+  const cleanPin = String(pin || "").trim();
+  const raw = `ta-na-lista:v1:${cleanName}:${cleanPin}`;
+
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const data = new TextEncoder().encode(raw);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  let h = 0;
+
+  for (let i = 0; i < raw.length; i++) {
+    h = (Math.imul(31, h) + raw.charCodeAt(i)) | 0;
+  }
+
+  return `fallback-${Math.abs(h)}`;
+}
