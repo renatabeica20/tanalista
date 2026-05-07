@@ -8919,7 +8919,7 @@ formatBRL={formatBRL}
           </div>
           <button onClick={()=>reuseList(reuseModal)} style={{...btnG}}>🔁 Usar como base</button>
         </ModalSheet>
-      )}
+   
 
     </div>
   );
