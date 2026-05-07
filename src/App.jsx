@@ -1002,78 +1002,7 @@ async function softDeleteSharedListRecord(id, list = null) {
 
 
 
-async function resetUserAuthPin(name, newPin, newPinConfirm = "") {
-  const clean = String(name || "").trim();
-  const safePin = normalizePin(newPin);
-  const safeConfirm = normalizePin(newPinConfirm);
 
-  if (!clean) return { ok: false, message: "Informe seu nome para recuperar o acesso." };
-  if (!hasSupabaseConfig()) return { ok: false, message: "Configuração do Supabase não encontrada." };
-  if (!isValidPin(safePin)) return { ok: false, message: "Informe um novo PIN de 4 a 6 dígitos." };
-  if (!safeConfirm) return { ok: false, message: "Confirme o novo PIN para redefinir o acesso." };
-  if (safePin !== safeConfirm) return { ok: false, message: "Os PINs informados não conferem." };
-
-  const profile = await findUserAuthProfile(clean);
-  if (!profile?.id || !profile?.data?.pinHash) {
-    return { ok: false, message: "Não encontrei PIN cadastrado para este nome. Use o primeiro acesso para criar um PIN." };
-  }
-
-  // Recuperação de PIN compatível com iOS/Safari.
-  // Em alguns aparelhos o localStorage pode regenerar o device_id, fazendo o mesmo iPhone parecer outro aparelho.
-  // Por isso, se o perfil de PIN existe e o nome informado confere, a recuperação é permitida e a sessão local é reancorada.
-  const deviceId = getAppDeviceId();
-  const storedUserId = getAppUserId();
-  const storedName = normalizeAuthName(getAppUserName());
-  const appUser = await findAppUserByName(clean);
-  const cleanNormalized = normalizeAuthName(clean);
-  const profileNameMatches = Boolean(
-    normalizeAuthName(profile?.remetente) === cleanNormalized ||
-    normalizeAuthName(profile?.data?.name) === cleanNormalized
-  );
-  const deviceMatches = Boolean(appUser?.device_id && appUser.device_id === deviceId);
-  const localUserMatches = Boolean(storedUserId && appUser?.id && storedUserId === appUser.id);
-  const localNameMatches = Boolean(storedName && storedName === cleanNormalized);
-  const appUserNameMatches = Boolean(appUser?.nome && normalizeAuthName(appUser.nome) === cleanNormalized);
-
-  if (!profileNameMatches && !deviceMatches && !localUserMatches && !localNameMatches && !appUserNameMatches) {
-    return {
-      ok: false,
-      message: "Não foi possível validar este usuário para redefinir o PIN. Confira o nome informado e tente novamente.",
-    };
-  }
-
-  saveAppUserName(clean);
-  if (appUser?.id) saveAppUserId(appUser.id);
-  setStoredValue(APP_USER_REGISTERED_KEY, deviceId);
-
-  const pinHash = await hashUserPin(clean, safePin);
-  const payload = {
-    data: {
-      ...(profile.data || {}),
-      authProfile: true,
-      name: clean,
-      pinHash,
-      pinVersion: "sha256-v1",
-      resetAt: new Date().toISOString(),
-      resetDeviceId: deviceId,
-    },
-  };
-
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(profile.id)}`, {
-    method: "PATCH",
-    headers: supabaseHeaders({ Prefer: "return=representation" }),
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Não foi possível redefinir o PIN (${res.status}) ${detail}`.trim());
-  }
-
-  const data = await res.json().catch(() => []);
-  markPinSessionVerified(clean);
-  return { ok: true, profile: Array.isArray(data) ? data[0] : data };
-}
 
 async function verifyOrCreateUserPin(name, pin, pinConfirm = "") {
   const clean = String(name || "").trim();
