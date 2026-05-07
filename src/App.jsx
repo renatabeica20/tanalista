@@ -1522,7 +1522,7 @@ function getSharedRecipientsStatusText(list = {}) {
   if (!entries.length) return "";
   return entries.slice(0, 3).map((entry) => {
     const name = entry.userName || entry.name || "usuário";
-    return `${name}: ${getSharedStatusLabelFromEntry(entry)}`;
+    return `Com ${name}: ${getSharedStatusLabelFromEntry(entry)}`;
   }).join(" • ");
 }
 
@@ -6892,7 +6892,7 @@ function AppHeader({ userName, onSwitchUser, onNotifications, unreadCount = 0 })
   );
 }
 
-function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
+function NotificationsScreen({ notifications = [], onBack, onMarkAllRead, onClearAll }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
   useEffect(() => {
     onMarkAllRead?.();
@@ -6900,8 +6900,8 @@ function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
 
   const typeMeta = (type) => {
     if (type === "shared-accepted") return { icon: "✅", color: "#047857", bg: "#ECFDF5" };
-    if (type === "started") return { icon: "🛒", color: "#6D28D9", bg: "#F5F3FF" };
-    if (type === "finished") return { icon: "🏁", color: "#B91C1C", bg: "#FEF2F2" };
+    if (type === "started" || type === "shared-started") return { icon: "🛒", color: "#6D28D9", bg: "#F5F3FF" };
+    if (type === "finished" || type === "shared-finished") return { icon: "🏁", color: "#B91C1C", bg: "#FEF2F2" };
     return { icon: "🔔", color: "#374151", bg: "#F9FAFB" };
   };
 
@@ -6925,7 +6925,9 @@ function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
               <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Notificações</div>
               <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>{unreadCount ? `${unreadCount} nova(s) notificação(ões)` : "Tudo em dia"}</div>
             </div>
-            <div style={{width:44}} />
+            {notifications.length ? (
+              <button onClick={onClearAll} style={{minWidth:72,height:38,borderRadius:14,border:"1px solid rgba(255,255,255,0.30)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",padding:"0 10px"}}>Limpar</button>
+            ) : <div style={{width:72}} />}
           </div>
         </div>
 
@@ -7738,6 +7740,12 @@ const [lists,setLists]=useState(()=>{
       return next;
     });
   }, []);
+
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+    saveStoredNotifications([]);
+    showToast("🔕 Notificações limpas", 1800);
+  }, [showToast]);
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
@@ -8562,14 +8570,35 @@ const [lists,setLists]=useState(()=>{
   const publishSharedList=async(list)=>{
     if(!list)throw new Error("Lista não encontrada.");
     if(list.sharedId){
-      syncSharedListToCloud(list,{silent:true});
-      return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
+      const ownerName=getSenderName();
+      const now=new Date().toISOString();
+      const published={
+        ...list,
+        ownerName:list.ownerName || ownerName,
+        remetente:list.remetente || ownerName,
+        isShared:true,
+        sharedAt:list.sharedAt || now,
+        shareStatus:"active",
+        updatedAt:now,
+        lastLocalUpdateAt:now,
+      };
+      setCurrentList(prev=>prev&&prev.id===list.id?{...prev,...published}:prev);
+      saveLists(lists.map(l=>l.id===list.id?{...l,...published}:l));
+      await updateSharedListRecord(published.sharedId, published).catch(()=>syncSharedListToCloud(published,{silent:true}));
+      await registrarEvento("share_list", {
+        list_id: published.id || null,
+        shared_id: published.sharedId || null,
+        list_name: published.name || "",
+        list_type: published.type || "",
+        reshared_existing_record: true,
+      });
+      return{sharedId:published.sharedId,link:makeShareUrl(published.sharedId),list:published,mode:"supabase"};
     }
 
-    const record=await createSharedListRecord(list);
+    const record=await createSharedListRecord({...list,isShared:true,sharedAt:new Date().toISOString(),shareStatus:"active"});
     if(!record?.id)throw new Error("Não foi possível gerar o link curto da lista no Supabase.");
 
-    const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString(),isShared:true};
+    const updated={...list,sharedId:record.id,userId:record.user_id || list.userId || getAppUserId() || null,ownerName:record.remetente || list.ownerName || getAppUserName(),sharedAt:new Date().toISOString(),isShared:true,shareStatus:"active"};
     setCurrentList(prev=>prev&&prev.id===list.id?updated:prev);
     saveLists(lists.map(l=>l.id===list.id?updated:l));
     await registrarEvento("share_list", {
@@ -10521,7 +10550,7 @@ const [lists,setLists]=useState(()=>{
   };
 
   // ─────────────────────────────────────────────────────────────────────
-  if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
+  if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} onClearAll={clearAllNotifications} />;
   if(showPriceStatsScreen) return <PriceStatsScreen lists={lists} onBack={()=>setShowPriceStatsScreen(false)} />;
 
   // Login leve e isolado: evita renderizar toda a tela principal por baixo do modal.
@@ -10884,7 +10913,7 @@ const [lists,setLists]=useState(()=>{
                 {recentLists.map(list=>{
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=list.isShared === true;
+                  const shared=list.isShared === true || (Array.isArray(list.sharedWith) && list.sharedWith.length>0);
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:20,boxShadow:"0 10px 24px rgba(17,24,39,0.07)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative",width:"100%",maxWidth:"100%",boxSizing:"border-box"}}>
@@ -10935,7 +10964,7 @@ const [lists,setLists]=useState(()=>{
                   const stats=getListCardStats(list);
                   const icons={mercado:"🛒",festa:"🎉",construcao:"🏗️",eletrico:"⚡",escolar:"🏫",farmacia:"💊",condominio:"🏢",outros:"📦"};
                   const originMeta=getListOriginMeta(list);
-                  const shared=list.isShared === true;
+                  const shared=list.isShared === true || (Array.isArray(list.sharedWith) && list.sharedWith.length>0);
                   const finished=isListFinished(list);
                   return(
                     <div key={list.id} style={{background:"rgba(255,255,255,0.98)",borderRadius:22,boxShadow:"0 12px 28px rgba(17,24,39,0.06)",border:"1px solid #E5E7EB",overflow:"visible",position:"relative"}}>
