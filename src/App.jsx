@@ -1438,6 +1438,94 @@ async function patchOriginalSharedRecipientStatus(originalSharedId, status = "ac
   }
 }
 
+
+function getSharedExecutionStatusFromList(list = {}) {
+  if (list?.finishedAt || list?.completedAt || list?.finalizedAt || list?.status === "completed" || list?.status === "finished") return "completed";
+  const hasStarted = Boolean(
+    list?.startedAt || list?.sharedStartedAt ||
+    (Array.isArray(list?.categories) && list.categories.some((cat) =>
+      Array.isArray(cat?.items) && cat.items.some((item) => item?.checked || item?.notFound || Number(item?.price || 0) > 0)
+    ))
+  );
+  if (hasStarted) return "started";
+  return "accepted";
+}
+
+function mergeSharedWithStatusForList(existingSharedWith = [], list = {}, status = null) {
+  const currentUserId = getAppUserId() || list?.userId || null;
+  const currentUserName = getAppUserName() || list?.ownerName || list?.remetente || "Usuário";
+  const normalizedCurrentName = normalizeAuthName(currentUserName);
+  const effectiveStatus = status || getSharedExecutionStatusFromList(list);
+  const now = new Date().toISOString();
+  const base = Array.isArray(existingSharedWith) ? existingSharedWith : [];
+  let matched = false;
+  const next = base.map((entry) => {
+    if (!entry) return entry;
+    const sameUser = Boolean(
+      (currentUserId && entry.userId && String(entry.userId) === String(currentUserId)) ||
+      (normalizedCurrentName && normalizeAuthName(entry.userName || entry.name || "") === normalizedCurrentName)
+    );
+    if (!sameUser) return entry;
+    matched = true;
+    const updated = {
+      ...entry,
+      userId: currentUserId || entry.userId || null,
+      userName: currentUserName || entry.userName || entry.name || "Usuário",
+      importedListId: list?.id || entry.importedListId || null,
+      importedSharedId: list?.sharedId || entry.importedSharedId || null,
+      status: effectiveStatus,
+      acceptedAt: entry.acceptedAt || list?.receivedAt || list?.importedAt || now,
+      updatedAt: now,
+    };
+    if (effectiveStatus === "started" || effectiveStatus === "completed" || effectiveStatus === "finished") {
+      updated.startedAt = entry.startedAt || list?.startedAt || list?.sharedStartedAt || now;
+    }
+    if (effectiveStatus === "completed" || effectiveStatus === "finished") {
+      updated.status = "completed";
+      updated.completedAt = list?.finishedAt || list?.completedAt || list?.finalizedAt || entry.completedAt || now;
+      updated.finishedAt = updated.completedAt;
+    }
+    return updated;
+  });
+  if (!matched && (currentUserId || currentUserName)) {
+    const entry = {
+      userId: currentUserId,
+      userName: currentUserName,
+      importedListId: list?.id || null,
+      importedSharedId: list?.sharedId || null,
+      status: effectiveStatus,
+      acceptedAt: list?.receivedAt || list?.importedAt || now,
+      updatedAt: now,
+    };
+    if (effectiveStatus === "started" || effectiveStatus === "completed" || effectiveStatus === "finished") entry.startedAt = list?.startedAt || list?.sharedStartedAt || now;
+    if (effectiveStatus === "completed" || effectiveStatus === "finished") {
+      entry.status = "completed";
+      entry.completedAt = list?.finishedAt || list?.completedAt || list?.finalizedAt || now;
+      entry.finishedAt = entry.completedAt;
+    }
+    next.unshift(entry);
+  }
+  return next;
+}
+
+function getSharedStatusLabelFromEntry(entry = {}) {
+  const status = String(entry?.status || "").toLowerCase();
+  if (status === "completed" || status === "finished" || entry?.completedAt || entry?.finishedAt) return "finalizada";
+  if (status === "started" || entry?.startedAt) return "iniciada";
+  if (status === "accepted" || entry?.acceptedAt) return "recebida";
+  if (status === "removed") return "removida";
+  return status || "compartilhada";
+}
+
+function getSharedRecipientsStatusText(list = {}) {
+  const entries = Array.isArray(list?.sharedWith) ? list.sharedWith.filter(Boolean) : [];
+  if (!entries.length) return "";
+  return entries.slice(0, 3).map((entry) => {
+    const name = entry.userName || entry.name || "usuário";
+    return `${name}: ${getSharedStatusLabelFromEntry(entry)}`;
+  }).join(" • ");
+}
+
 function getReceivedOriginName(list) {
   return list?.receivedFromName || list?.importedFrom || list?.sharedOwner || list?.originalOwnerName || list?.originalRemetente || list?.sourceOwnerName || "";
 }
@@ -7983,8 +8071,20 @@ const [lists,setLists]=useState(()=>{
           if(existing){
             // Atualiza metadados remotos importantes, especialmente sharedWith/eventos,
             // sem apagar a identidade local de lista recebida quando for o caso.
+            const existingIsReceived = isReceivedSharedList(existing);
+            const shouldMirrorRemoteExecution = Boolean(existing.sharedId && (existing.isShared === true || existingIsReceived));
             byKey.set(key, preserveReceivedShareMeta({
               ...existing,
+              ...(shouldMirrorRemoteExecution ? {
+                categories:Array.isArray(local.categories)?local.categories:existing.categories,
+                total:Number(local.total || existing.total || 0),
+                status:local.status || existing.status,
+                startedAt:local.startedAt || existing.startedAt,
+                sharedStartedAt:local.sharedStartedAt || existing.sharedStartedAt,
+                finishedAt:local.finishedAt || existing.finishedAt,
+                completedAt:local.completedAt || existing.completedAt,
+                finalizedAt:local.finalizedAt || existing.finalizedAt,
+              } : {}),
               sharedWith:Array.isArray(local.sharedWith)?local.sharedWith:existing.sharedWith,
               sharedEvents:Array.isArray(local.sharedEvents)?local.sharedEvents:existing.sharedEvents,
               lastSharedWithAt:local.lastSharedWithAt||existing.lastSharedWithAt,
@@ -9799,7 +9899,7 @@ const [lists,setLists]=useState(()=>{
         completedAt:protectedList.completedAt || remoteDataBeforeSave.completedAt || null,
         finalizedAt:protectedList.finalizedAt || remoteDataBeforeSave.finalizedAt || null,
         sharedEvents:mergedEvents,
-        sharedWith:Array.isArray(remoteDataBeforeSave.sharedWith)?remoteDataBeforeSave.sharedWith:[],
+        sharedWith:mergeSharedWithStatusForList(remoteDataBeforeSave.sharedWith, protectedList, getSharedExecutionStatusFromList(protectedList)),
         lastSyncedAt:nowSync,
         lastSyncSource:getAppDeviceId(),
         isShared:true,
@@ -9894,9 +9994,17 @@ const [lists,setLists]=useState(()=>{
     refreshSharedListFromCloud().catch(()=>null);
   },[screen,currentList?.id,currentList?.sharedId,currentList?.isShared,currentList?.imported]);
 
+  useEffect(()=>{
+    if(screen!=="list" || !currentList?.sharedId || !isRealSharedList(currentList))return;
+    const timer=setInterval(()=>{
+      refreshSharedListFromCloud().catch(()=>null);
+    },7000);
+    return()=>clearInterval(timer);
+  },[screen,currentList?.id,currentList?.sharedId,currentList?.isShared,currentList?.imported,refreshSharedListFromCloud]);
+
   // Etapa 4: sincronização manual.
-  // A lista compartilhada é atualizada pelo botão “Atualizar”, evitando
-  // conflito e notificações excessivas durante a compra.
+  // A lista compartilhada também é atualizada automaticamente durante a execução,
+  // para que quem compartilhou veja marcações, preços e finalização quase em tempo real.
 
   const getCatSubtotal=(cat)=>cat.items.reduce((s,i)=>s+(i.notFound?0:getItemLineTotal(i)),0);
 
@@ -9933,7 +10041,7 @@ const [lists,setLists]=useState(()=>{
     setCurrentList(updated);
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
     if(updated.sharedId){
-      syncSharedListToCloud(updated,{silent:true,force:!isRealSharedList(updated)});
+      syncSharedListToCloud(updated,{silent:true,force:isReceivedSharedList(updated) || !isRealSharedList(updated)});
     }
   };
 
@@ -10789,7 +10897,7 @@ const [lists,setLists]=useState(()=>{
                             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap",marginTop:5}}>
                               <span style={{fontSize:11,fontWeight:900,color:finished?"#B91C1C":"#047857",background:finished?"#FEE2E2":"#ECFDF5",border:"1px solid "+(finished?"#FCA5A5":"#A7F3D0"),borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>{finished?"Finalizada":"Em aberto"}</span>
                               {shared&&<span style={{fontSize:10,fontWeight:900,color:"#6D28D9",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Compartilhada</span>}
-                              {shared&&Array.isArray(list.sharedWith)&&list.sharedWith.length>0&&<span style={{fontSize:10,fontWeight:900,color:"#1D4ED8",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Com {list.sharedWith.map(u=>u.userName||u.name).filter(Boolean).slice(0,2).join(", ")}</span>}
+                              {shared&&Array.isArray(list.sharedWith)&&list.sharedWith.length>0&&<span style={{fontSize:10,fontWeight:900,color:"#1D4ED8",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap"}}>Compartilhada • {getSharedRecipientsStatusText(list) || `Com ${list.sharedWith.map(u=>u.userName||u.name).filter(Boolean).slice(0,2).join(", ")}`}</span>}
                             </div>
                           </div>
                           <div style={{fontSize:11,color:"#6B7280",marginTop:5,fontWeight:700,textAlign:"center"}}>{formatListDate(list.createdAt)}</div>
