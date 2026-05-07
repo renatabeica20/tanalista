@@ -102,3 +102,29 @@ export async function updateSharedListRecord(id, list) {
 
   return Array.isArray(data) ? data[0] : data;
 }
+export async function deleteSharedListRecord(id) {
+  if (!id || !hasSupabaseConfig()) return false;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/shared_lists?id=eq.${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: supabaseHeaders(),
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+
+      throw new Error(
+        `Erro ao excluir lista compartilhada (${res.status}) ${text}`.trim()
+      );
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("Erro ao excluir lista compartilhada no Supabase:", err);
+    return false;
+  }
+}
