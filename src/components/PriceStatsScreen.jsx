@@ -13,8 +13,14 @@ export default function PriceStatsScreen({
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [selectedProductName, setSelectedProductName] = useState("");
   const [selectedCategoryName, setSelectedCategoryName] = useState("");
-  const stats = getPriceStatsSummary(lists);
-
+  const stats =
+  typeof getPriceStatsSummary === "function"
+    ? getPriceStatsSummary(lists)
+    : { totalRecords: 0 };
+const normalizeStatsKey =
+  typeof normalizeCacheKey === "function"
+    ? normalizeCacheKey
+    : (value) => String(value || "").toLowerCase().trim();
   const shortListLabel = (value, fallback = "Lista", total = 1) => {
     const raw = String(value || fallback).trim() || fallback;
     const clean = raw.replace(/\s+/g, " ").trim();
@@ -57,7 +63,7 @@ export default function PriceStatsScreen({
     }))
   };
 
-  const normalizeStatsSearch = (value) => normalizeCacheKey(value || "");
+  const normalizeStatsSearch = (value) => normalizeStatsKey(value || "");
   const filteredProductSeries = (stats.priceSeries || []).filter((item) => {
     const q = normalizeStatsSearch(productQuery);
     if (!q) return true;
