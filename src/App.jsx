@@ -6846,7 +6846,12 @@ const [lists,setLists]=useState(()=>{
 
       // Toda lista criada pelo usuário passa a ser salva também na nuvem.
       // Assim ela aparece no computador e no celular com o mesmo nome de usuário.
-      newList=await persistListRecordToCloud(newList,{silent:false});
+     try {
+  newList = await persistListRecordToCloud(newList, { silent: false });
+} catch (err) {
+  console.warn("Falha ao salvar lista na nuvem. Mantendo lista local:", err);
+  showToast("⚠️ Lista salva apenas neste aparelho. Nuvem indisponível.", 3600);
+}
       await registrarEvento(editingOriginal ? "update_list" : "create_list", {
         list_id: newList.id || null,
         shared_id: newList.sharedId || null,
