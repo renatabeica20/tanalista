@@ -1010,9 +1010,6 @@ async function hashUserPin(name, pin) {
   return `fallback-${Math.abs(h)}`;
 }
 
-function normalizePin(value) {
-  return String(value || "").replace(/\D/g, "").slice(0, 6);
-}
 
 function isValidPin(value) {
   const pin = normalizePin(value);
