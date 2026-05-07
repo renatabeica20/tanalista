@@ -73,3 +73,27 @@ export async function hashUserPin(name, pin) {
 
   return `fallback-${Math.abs(h)}`;
 }
+export async function findUserAuthProfile(name) {
+  const clean = String(name || "").trim();
+
+  if (!clean || !hasSupabaseConfig()) return null;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/shared_lists?list_type=eq.auth_profile&remetente=ilike.${encodeURIComponent(clean)}&select=*&order=created_at.asc&limit=1`,
+      {
+        method: "GET",
+        headers: supabaseHeaders({ "Cache-Control": "no-store" }),
+        cache: "no-store",
+      }
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
+  }
+}
