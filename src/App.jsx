@@ -6921,8 +6921,9 @@ const [lists,setLists]=useState(()=>{
           });
         });
       });
-      savePriceHistory(Array.from(byKey.values()).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))));
-    }catch(err){
+    const rebuiltHistory = Array.from(byKey.values()).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+savePriceHistory(rebuiltHistory);
+return rebuiltHistory;
       console.warn("Nao foi possivel reconstruir historico de precos",err);
     }
   },[lists,getItemLineTotal]);
