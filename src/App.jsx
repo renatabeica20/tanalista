@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.69.3 - Compartilhamento preservado, notificações de execução e origem protegida
+// Etapa 7.69.4 - Compartilhamento simultâneo real, sharedWith e sincronização central
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1293,7 +1293,7 @@ function preserveReceivedShareMeta(nextList, previousList = {}) {
     originalSharedId,
     sourceSharedId: originalSharedId,
     importedOriginalSharedId: originalSharedId,
-    sharedMode: "imported-copy",
+    sharedMode: "simultaneous",
     isShared: false,
     receivedAt: receivedAt || new Date().toISOString(),
     importedAt: nextList.importedAt || previousList.importedAt || receivedAt || new Date().toISOString(),
@@ -6697,7 +6697,7 @@ const [lists,setLists]=useState(()=>{
         sharedOwner:from,
         originalOwnerName:list.originalOwnerName || from,
         originalRemetente:list.originalRemetente || from,
-        sharedMode:"imported-copy",
+        sharedMode:"simultaneous",
         isShared:false,
       }, list);
     }
@@ -6731,22 +6731,39 @@ const [lists,setLists]=useState(()=>{
       if(!records.length)return;
       setLists(prev=>{
         const current=Array.isArray(prev)?prev:[];
-        const known=new Set(current.map(l=>l.sharedId||l.id));
-        const restored=[];
+        const byKey=new Map(current.map(l=>[l.sharedId||l.id,l]));
+        let changed=false;
+        let restoredCount=0;
         for(const record of records){
           if(isSharedRecordHiddenForCurrentUser(record))continue;
           const local=sharedRecordToLocalList(record);
           if(wasListDeletedLocally(local) || isSharedRecordHiddenForCurrentUser({ ...record, data: local }))continue;
           const key=local.sharedId||local.id;
-          if(key && !known.has(key)){
-            restored.push(local);
-            known.add(key);
+          if(!key)continue;
+          const existing=byKey.get(key);
+          if(existing){
+            // Atualiza metadados remotos importantes, especialmente sharedWith/eventos,
+            // sem apagar a identidade local de lista recebida quando for o caso.
+            byKey.set(key, preserveReceivedShareMeta({
+              ...existing,
+              sharedWith:Array.isArray(local.sharedWith)?local.sharedWith:existing.sharedWith,
+              sharedEvents:Array.isArray(local.sharedEvents)?local.sharedEvents:existing.sharedEvents,
+              lastSharedWithAt:local.lastSharedWithAt||existing.lastSharedWithAt,
+              lastEventAt:local.lastEventAt||existing.lastEventAt,
+              lastCloudSeenAt:local.lastCloudSeenAt||existing.lastCloudSeenAt,
+              lastSyncedAt:local.lastSyncedAt||existing.lastSyncedAt,
+            }, existing));
+            changed=true;
+          }else{
+            byKey.set(key,local);
+            restoredCount++;
+            changed=true;
           }
         }
-        if(!restored.length)return current;
-        const merged=mergeUniqueLists([...restored,...current]);
+        if(!changed)return current;
+        const merged=mergeUniqueLists(Array.from(byKey.values()));
         try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
-        if(!silent)showToast(`${restored.length} lista(s) recuperada(s)`);
+        if(!silent && restoredCount>0)showToast(`${restoredCount} lista(s) recuperada(s)`);
         return merged;
       });
     }catch(err){
@@ -7193,7 +7210,7 @@ const [lists,setLists]=useState(()=>{
     const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
 
     const already=existing.find(l=>{
-      const sameSource=sourceSharedId && (l.originalSharedId===sourceSharedId || l.sourceSharedId===sourceSharedId || l.importedOriginalSharedId===sourceSharedId);
+      const sameSource=sourceSharedId && (l.sharedId===sourceSharedId || l.originalSharedId===sourceSharedId || l.sourceSharedId===sourceSharedId || l.importedOriginalSharedId===sourceSharedId);
       const sameUser=!currentUserId || !l.userId || l.userId===currentUserId;
       return sameSource && sameUser;
     });
@@ -7213,7 +7230,9 @@ const [lists,setLists]=useState(()=>{
     const received={
       ...JSON.parse(JSON.stringify(baseData)),
       id:localId,
-      sharedId:null,
+      // Compartilhamento simultâneo: a lista recebida mantém o sharedId original.
+      // Assim, marcações, preços e finalização atualizam o mesmo registro central no Supabase.
+      sharedId:sourceSharedId || baseData.sharedId || null,
       originalSharedId:sourceSharedId || baseData.sharedId || null,
       sourceSharedId:sourceSharedId || baseData.sharedId || null,
       userId: currentUserId || getAppUserId() || null,
@@ -7223,7 +7242,7 @@ const [lists,setLists]=useState(()=>{
       imported:true,
       importedFrom:sender,
       sharedOwner:sender,
-      sharedMode:"imported-copy",
+      sharedMode:"simultaneous",
       receivedAt:new Date().toISOString(),
       importedAt:new Date().toISOString(),
       createdAt:new Date().toISOString(),
@@ -7245,8 +7264,23 @@ const [lists,setLists]=useState(()=>{
       return null;
     }
 
-    const persisted=await persistListRecordToCloud(received,{silent:true});
-    const finalReceived=preserveReceivedShareMeta({...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,isReceivedList:true,importedFrom:sender,receivedFromName:sender,sharedOwner:sender,originalOwnerName:sender,originalRemetente:sender,isShared:false,sharedMode:"imported-copy"}, received);
+    // Não cria cópia independente no Supabase. A lista recebida usa o sharedId original
+    // para permitir acompanhamento simultâneo por quem compartilhou.
+    const finalReceived=preserveReceivedShareMeta({
+      ...received,
+      originalSharedId:received.originalSharedId,
+      sourceSharedId:received.sourceSharedId,
+      sharedId:received.sharedId,
+      imported:true,
+      isReceivedList:true,
+      importedFrom:sender,
+      receivedFromName:sender,
+      sharedOwner:sender,
+      originalOwnerName:sender,
+      originalRemetente:sender,
+      isShared:false,
+      sharedMode:"simultaneous"
+    }, received);
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
     localStorage.setItem("tnl_lists",JSON.stringify(nl));
@@ -8429,12 +8463,35 @@ const [lists,setLists]=useState(()=>{
       const eventMap=new Map();
       [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
       const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
-      const payload=preserveReceivedShareMeta({...remoteDataBeforeSave,...protectedList,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()}, protectedList);
+      const nowSync=new Date().toISOString();
+      const receivedSimultaneous=isReceivedSharedList(protectedList) && Boolean(protectedList.originalSharedId || protectedList.sourceSharedId || protectedList.importedOriginalSharedId);
+
+      // Se quem recebeu está executando a lista, atualiza o registro central preservando
+      // os metadados do dono/remetente. Somente o estado operacional da lista é sincronizado.
+      const payload=receivedSimultaneous ? {
+        ...remoteDataBeforeSave,
+        categories:protectedList.categories,
+        total:protectedList.total,
+        status:protectedList.status,
+        startedAt:protectedList.startedAt || remoteDataBeforeSave.startedAt || null,
+        finishedAt:protectedList.finishedAt || remoteDataBeforeSave.finishedAt || null,
+        completedAt:protectedList.completedAt || remoteDataBeforeSave.completedAt || null,
+        finalizedAt:protectedList.finalizedAt || remoteDataBeforeSave.finalizedAt || null,
+        sharedEvents:mergedEvents,
+        sharedWith:Array.isArray(remoteDataBeforeSave.sharedWith)?remoteDataBeforeSave.sharedWith:[],
+        lastSyncedAt:nowSync,
+        lastSyncSource:getAppDeviceId(),
+        isShared:true,
+        sharedId,
+      } : preserveReceivedShareMeta({...remoteDataBeforeSave,...protectedList,sharedEvents:mergedEvents,lastSyncedAt:nowSync,lastSyncSource:getAppDeviceId()}, protectedList);
+
       const record=await updateSharedListRecord(sharedId,payload);
-      const synced=markListCloudSynced(payload,record?.data||payload);
-      setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
+      const localSynced=receivedSimultaneous
+        ? markListCloudSynced(preserveReceivedShareMeta({...protectedList,categories:payload.categories,total:payload.total,status:payload.status,sharedEvents:mergedEvents,lastSyncedAt:nowSync}, protectedList), record?.data||payload)
+        : markListCloudSynced(payload,record?.data||payload);
+      setCurrentList(cur=>cur?.id===localSynced.id?{...cur,...localSynced}:cur);
       setLists(prev=>{
-        const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===synced.id || (sharedId&&l.sharedId===sharedId)?{...l,...synced}:l);
+        const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===localSynced.id ? {...l,...localSynced} : ((sharedId&&l.sharedId===sharedId&&!isReceivedSharedList(l))?{...l,...payload}:l));
         try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
         return next;
       });
