@@ -50,7 +50,7 @@ async function registrarEvento(eventType, metadata = {}) {
         ...(metadata && typeof metadata === "object" ? metadata : {}),
         user_name: userName,
         device_id: deviceId,
-        app_version: "etapa-7.70.1-deletion-lock-v2",
+        app_version: "7.71.2-sync-consolidated",
       },
     };
 
@@ -927,6 +927,15 @@ async function updateSharedListRecord(id, list) {
     ? (existingRecord?.remetente || existingData?.ownerName || existingData?.remetente || list?.originalOwnerName || list?.originalRemetente || list?.receivedFromName || list?.importedFrom || list?.sharedOwner || getAppUserName() || "Usuário do Tá na Lista")
     : (list?.ownerName || list?.remetente || getAppUserName() || "Usuário do Tá na Lista");
 
+// Proteção estrutural:
+// listas recebidas nunca podem sobrescrever o proprietário original.
+if (receivedSimultaneous) {
+  list.ownerName = ownerName;
+  list.remetente = ownerName;
+  list.isShared = false;
+  list.imported = true;
+}
+
   const safeData = receivedSimultaneous
     ? {
         ...existingData,
@@ -1634,6 +1643,24 @@ function addLocalSharedEventToList(list, event) {
     sharedEvents: [event, ...current].slice(0, 80),
     lastEventAt: event.createdAt || new Date().toISOString(),
   };
+}
+
+
+
+function deduplicateListsBySharedId(lists = []) {
+  const map = new Map();
+  (Array.isArray(lists) ? lists : []).forEach((list) => {
+    if (!list) return;
+    const key = list.sharedId || list.originalSharedId || list.id;
+    if (!key) return;
+    const existing = map.get(key);
+    const currentStamp = new Date(list.updatedAt || list.lastSyncedAt || list.createdAt || 0).getTime();
+    const existingStamp = existing ? new Date(existing.updatedAt || existing.lastSyncedAt || existing.createdAt || 0).getTime() : 0;
+    if (!existing || currentStamp >= existingStamp) {
+      map.set(key, list);
+    }
+  });
+  return Array.from(map.values());
 }
 
 
