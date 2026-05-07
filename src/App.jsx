@@ -60,6 +60,7 @@ import ModuleIcon from "./components/ModuleIcon";
 import ModalSheet from "./components/ModalSheet";
 import PriceStatsEntryCard from "./components/PriceStatsEntryCard";
 import AppHeader from "./components/AppHeader";
+import NotificationsScreen from "./pages/NotificationsScreen";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -4923,70 +4924,7 @@ function StatsDetailList({ rows = [], labelKey = "label", valueKey = "value" }) 
 
 
 
-function NotificationsScreen({ notifications = [], onBack, onMarkAllRead }) {
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  useEffect(() => {
-    onMarkAllRead?.();
-  }, []);
 
-  const typeMeta = (type) => {
-    if (type === "shared-accepted") return { icon: "✅", color: "#047857", bg: "#ECFDF5" };
-    if (type === "started") return { icon: "🛒", color: "#6D28D9", bg: "#F5F3FF" };
-    if (type === "finished") return { icon: "🏁", color: "#B91C1C", bg: "#FEF2F2" };
-    return { icon: "🔔", color: "#374151", bg: "#F9FAFB" };
-  };
-
-  const formatNotifTime = (value) => {
-    try {
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return "";
-      return d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
-    } catch {
-      return "";
-    }
-  };
-
-  return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(180deg,#FAF7FF 0%,#FFFFFF 52%,#F9FAFB 100%)",padding:"22px 18px 34px",boxSizing:"border-box",fontFamily:"inherit"}}>
-      <div style={{maxWidth:520,width:"100%",margin:"0 auto"}}>
-        <div style={{background:"linear-gradient(135deg,#5B21B6,#8B5CF6)",borderRadius:28,padding:"18px 16px",color:"#FFFFFF",boxShadow:"0 18px 44px rgba(109,40,217,0.22)",marginBottom:18}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-            <button onClick={onBack} style={{width:44,height:44,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.28)",background:"rgba(255,255,255,0.16)",color:"#FFFFFF",fontSize:24,cursor:"pointer",fontFamily:"inherit"}}>←</button>
-            <div style={{textAlign:"center",flex:1,minWidth:0}}>
-              <div style={{fontSize:24,fontWeight:900,lineHeight:1.1}}>Notificações</div>
-              <div style={{fontSize:13,fontWeight:700,opacity:.86,marginTop:5}}>{unreadCount ? `${unreadCount} nova(s) notificação(ões)` : "Tudo em dia"}</div>
-            </div>
-            <div style={{width:44}} />
-          </div>
-        </div>
-
-        {!notifications.length ? (
-          <div style={{background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:24,padding:26,textAlign:"center",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
-            <div style={{fontSize:42,marginBottom:8}}>🔔</div>
-            <div style={{fontSize:19,fontWeight:900,color:"#111827",marginBottom:6}}>Nenhuma notificação</div>
-            <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>As atualizações de listas compartilhadas aparecerão aqui.</div>
-          </div>
-        ) : (
-          <div style={{display:"grid",gap:10}}>
-            {notifications.map((n) => {
-              const meta = typeMeta(n.type);
-              return (
-                <div key={n.id} style={{background:"#FFFFFF",border:n.read?"1px solid #E5E7EB":"1.5px solid #C4B5FD",borderRadius:20,padding:14,boxShadow:n.read?"0 8px 18px rgba(17,24,39,0.04)":"0 14px 30px rgba(109,40,217,0.10)",display:"flex",gap:12,alignItems:"flex-start"}}>
-                  <div style={{width:38,height:38,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",background:meta.bg,color:meta.color,fontSize:19,flexShrink:0}}>{meta.icon}</div>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{fontSize:14,fontWeight:n.read?750:900,color:"#111827",lineHeight:1.35}}>{n.message}</div>
-                    <div style={{fontSize:11,fontWeight:800,color:"#6B7280",marginTop:5}}>{formatNotifTime(n.createdAt)}</div>
-                  </div>
-                  {!n.read && <span style={{width:9,height:9,borderRadius:999,background:"#DC2626",marginTop:5,flexShrink:0}} />}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 
 function PriceStatsScreen({ onBack, lists = [] }) {
