@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-// Etapa 7.68 - Fluxo Itens em Casa com salvamento seguro, leitura/edição e ajuda contextual
+// Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1555,6 +1555,76 @@ const CAT_THEME = {
   "Itens Extras":            { bg:"#FFF3E0", border:"#E64A19", header:"#BF360C", icon:"⭐" },
   "Outros":                  { bg:"#FAFAFA", border:"#757575", header:"#424242", icon:"📦" },
 };
+
+
+
+// ── HORTIFRUTI: PESO MÉDIO ESTIMADO POR UNIDADE ─────────────────────────
+// Base aproximada para quando o usuário informa itens vendidos por kg em unidades.
+// O app sempre apresenta como estimativa e permite ajuste manual do peso real.
+const HORTIFRUTI_UNIT_WEIGHT = {
+  batata: { avgKg: 0.18, minKg: 0.12, maxKg: 0.25, aliases: ["batata inglesa", "batata comum"] },
+  "batata doce": { avgKg: 0.25, minKg: 0.15, maxKg: 0.45, aliases: ["batata-doce"] },
+  tomate: { avgKg: 0.12, minKg: 0.08, maxKg: 0.18, aliases: ["tomate comum", "tomate salada"] },
+  cebola: { avgKg: 0.15, minKg: 0.09, maxKg: 0.22, aliases: ["cebola branca", "cebola roxa"] },
+  cenoura: { avgKg: 0.10, minKg: 0.07, maxKg: 0.16, aliases: [] },
+  pimentao: { avgKg: 0.16, minKg: 0.10, maxKg: 0.25, aliases: ["pimentão", "pimentao verde", "pimentão verde", "pimentao vermelho", "pimentão vermelho", "pimentao amarelo", "pimentão amarelo"] },
+  pepino: { avgKg: 0.22, minKg: 0.15, maxKg: 0.35, aliases: ["pepino japones", "pepino japonês"] },
+  abobrinha: { avgKg: 0.25, minKg: 0.18, maxKg: 0.40, aliases: [] },
+  chuchu: { avgKg: 0.35, minKg: 0.25, maxKg: 0.50, aliases: [] },
+  beterraba: { avgKg: 0.18, minKg: 0.12, maxKg: 0.28, aliases: [] },
+  mandioca: { avgKg: 0.45, minKg: 0.25, maxKg: 0.80, aliases: ["aipim", "macaxeira"] },
+  alho: { avgKg: 0.05, minKg: 0.03, maxKg: 0.08, aliases: ["cabeça de alho", "cabeca de alho"] },
+  berinjela: { avgKg: 0.30, minKg: 0.20, maxKg: 0.45, aliases: [] },
+  abobora: { avgKg: 1.00, minKg: 0.50, maxKg: 2.50, aliases: ["abóbora", "moranga"] },
+
+  banana: { avgKg: 0.12, minKg: 0.08, maxKg: 0.16, aliases: ["banana prata", "banana nanica", "banana caturra", "banana maca", "banana maçã"] },
+  maca: { avgKg: 0.15, minKg: 0.11, maxKg: 0.22, aliases: ["maçã", "maca gala", "maçã gala", "maca fuji", "maçã fuji"] },
+  laranja: { avgKg: 0.18, minKg: 0.13, maxKg: 0.25, aliases: ["laranja pera", "laranja pêra", "laranja bahia"] },
+  limao: { avgKg: 0.08, minKg: 0.05, maxKg: 0.12, aliases: ["limão", "limao tahiti", "limão tahiti"] },
+  pera: { avgKg: 0.16, minKg: 0.12, maxKg: 0.23, aliases: ["pêra"] },
+  manga: { avgKg: 0.35, minKg: 0.25, maxKg: 0.60, aliases: ["manga tommy", "manga palmer"] },
+  mamao: { avgKg: 0.80, minKg: 0.50, maxKg: 1.30, aliases: ["mamão", "mamao papaia", "mamão papaia", "mamao formosa", "mamão formosa"] },
+  abacate: { avgKg: 0.45, minKg: 0.25, maxKg: 0.80, aliases: [] },
+  abacaxi: { avgKg: 1.20, minKg: 0.90, maxKg: 1.80, aliases: [] },
+  melancia: { avgKg: 5.00, minKg: 3.00, maxKg: 8.00, aliases: [] },
+  melao: { avgKg: 1.50, minKg: 1.00, maxKg: 2.30, aliases: ["melão"] },
+  uva: { avgKg: 0.50, minKg: 0.30, maxKg: 0.80, aliases: ["cacho de uva", "uva verde", "uva roxa"] },
+  kiwi: { avgKg: 0.08, minKg: 0.06, maxKg: 0.12, aliases: [] },
+
+  alface: { avgKg: 0.35, minKg: 0.25, maxKg: 0.50, aliases: ["pé de alface", "pe de alface"] },
+  couve: { avgKg: 0.25, minKg: 0.15, maxKg: 0.35, aliases: ["maço de couve", "maco de couve"] },
+  brocolis: { avgKg: 0.35, minKg: 0.25, maxKg: 0.50, aliases: ["brócolis"] },
+  couveFlor: { avgKg: 0.60, minKg: 0.40, maxKg: 0.90, aliases: ["couve flor", "couve-flor"] },
+  repolho: { avgKg: 1.00, minKg: 0.70, maxKg: 1.50, aliases: [] }
+};
+
+function getHortifrutiUnitWeightInfo(productName) {
+  const clean = normalizePlainText(productName || "");
+  if (!clean) return null;
+  for (const [key, info] of Object.entries(HORTIFRUTI_UNIT_WEIGHT)) {
+    const aliases = [key, ...(Array.isArray(info.aliases) ? info.aliases : [])].map(normalizePlainText);
+    if (aliases.some(alias => alias && (clean === alias || clean.includes(alias) || alias.includes(clean)))) {
+      return { key, ...info };
+    }
+  }
+  return null;
+}
+
+function getEstimatedProduceWeight(item) {
+  const unit = normalizePlainText(item?.unit || "unidade");
+  if (!["unidade", "un", "unid", "und", "peca", "peça"].includes(unit)) return null;
+  const qty = Number(String(item?.qty ?? 1).replace(",", "."));
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  const info = getHortifrutiUnitWeightInfo(item?.name || "");
+  if (!info) return null;
+  return {
+    ...info,
+    qty,
+    estimatedKg: Number((qty * info.avgKg).toFixed(3)),
+    minTotalKg: Number((qty * info.minKg).toFixed(3)),
+    maxTotalKg: Number((qty * info.maxKg).toFixed(3)),
+  };
+}
 
 function getCatTheme(name) {
   return CAT_THEME[name] || { bg:"#FAFAFA", border:"#BDBDBD", header:"#424242", icon:"📦" };
@@ -7011,59 +7081,102 @@ const [lists,setLists]=useState(()=>{
     return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
   };
 
-  const importSharedRecordToApp=useCallback((record, embeddedFallback=null)=>{
-    const sharedId=record?.id || extractSharedIdFromUrl();
+  const importSharedRecordToApp=useCallback(async(record, embeddedFallback=null)=>{
+    const sourceSharedId=record?.id || extractSharedIdFromUrl();
     const baseData=record?.data || embeddedFallback;
     if(!baseData)throw new Error("Lista compartilhada não encontrada.");
 
+    const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
+    const currentUserId=await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
+    const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
+    const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
+
+    const already=existing.find(l=>{
+      const sameSource=sourceSharedId && (l.originalSharedId===sourceSharedId || l.sourceSharedId===sourceSharedId || l.importedOriginalSharedId===sourceSharedId);
+      const sameUser=!currentUserId || !l.userId || l.userId===currentUserId;
+      return sameSource && sameUser;
+    });
+
+    if(already){
+      setCurrentList(already);
+      setScreen("list");
+      setSearch("");
+      setCollapsedCats({});
+      setSharedLandingRecord(null);
+      try { window.history.replaceState({}, document.title, "/"); } catch {}
+      showToast("📲 Lista compartilhada já estava salva");
+      return already;
+    }
+
+    const localId=`imported-${sourceSharedId || Date.now()}-${Math.random().toString(36).slice(2)}`;
     const received={
-      ...baseData,
-      id:baseData.id||("shared-"+(sharedId||Date.now())),
-      sharedId:sharedId||baseData.sharedId,
-      userId: baseData.userId || record?.user_id || null,
-      isShared:true,
+      ...JSON.parse(JSON.stringify(baseData)),
+      id:localId,
+      sharedId:null,
+      originalSharedId:sourceSharedId || baseData.sharedId || null,
+      sourceSharedId:sourceSharedId || baseData.sharedId || null,
+      userId: currentUserId || getAppUserId() || null,
+      ownerName: currentUserName,
+      remetente: currentUserName,
+      isShared:false,
       imported:true,
-      importedFrom:record?.remetente || baseData.remetente || "Não informado",
-      remetente:record?.remetente || baseData.remetente || "Não informado",
-      sharedOwner:record?.remetente || baseData.remetente || "Não informado",
-      sharedMode:"manual-sync",
-      isShared:true,
+      importedFrom:sender,
+      sharedOwner:sender,
+      sharedMode:"imported-copy",
       receivedAt:new Date().toISOString(),
       importedAt:new Date().toISOString(),
-      lastSyncedAt:new Date().toISOString(),
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      status:"open",
+      isFinished:false,
+      finishedAt:null,
+      completedAt:null,
+      finalizedAt:null,
+      locked:false,
+      isReadOnly:false,
+      readOnly:false,
+      history:false,
     };
 
-    const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
     if(wasListDeletedLocally(received)){
       setSharedLandingRecord(null);
       showToast("🗑 Esta lista já foi excluída neste aparelho",2200);
-      return;
+      return null;
     }
-    const already=existing.some(l=>((sharedId&&l.sharedId===sharedId)||l.id===received.id));
-    if(!already){
-      const nl=[received,...existing];
-      setLists(nl);
-      localStorage.setItem("tnl_lists",JSON.stringify(nl));
-    }
-    setCurrentList(received);
+
+    const persisted=await persistListRecordToCloud(received,{silent:true});
+    const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
+    const nl=mergeUniqueLists([finalReceived,...existing]);
+    setLists(nl);
+    localStorage.setItem("tnl_lists",JSON.stringify(nl));
+    setCurrentList(finalReceived);
     setScreen("list");
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
     try { window.history.replaceState({}, document.title, "/"); } catch {}
+
     const actorName = getAppUserName() || "Usuário";
-    if (received.sharedId) {
-      appendSharedListEvent(received.sharedId, {
+    if (sourceSharedId) {
+      appendSharedListEvent(sourceSharedId, {
         type: "shared-accepted",
         actorName,
-        targetName: record?.remetente || baseData.remetente || baseData.ownerName || "",
-        listName: received.name || "Lista",
-        listId: received.id,
-        message: `${actorName} aceitou a lista "${received.name || "compartilhada"}".`,
+        targetName: sender,
+        listName: finalReceived.name || "Lista",
+        listId: finalReceived.id,
+        message: `${actorName} importou a lista "${finalReceived.name || "compartilhada"}".`,
       });
     }
-    showToast("📲 Lista recebida aberta no Tá na Lista");
-  },[showToast, addNotification]);
+    await registrarEvento("shared_list_imported", {
+      list_id: finalReceived.id || null,
+      shared_id: finalReceived.sharedId || null,
+      original_shared_id: sourceSharedId || null,
+      list_name: finalReceived.name || "",
+      imported_from: sender,
+    });
+    showToast("📲 Lista recebida salva no seu app");
+    return finalReceived;
+  },[showToast, addNotification, senderName, userNameInput, persistListRecordToCloud]);
 
   const loadSharedListFromUrl=useCallback(async()=>{
     const embedded=extractEmbeddedListFromUrl();
@@ -7072,7 +7185,7 @@ const [lists,setLists]=useState(()=>{
     setLoading(true);
     try{
       if(embedded){
-        importSharedRecordToApp(null, embedded);
+        await importSharedRecordToApp(null, embedded);
         return;
       }
       const record=await getSharedListRecord(sharedId);
@@ -7844,7 +7957,9 @@ const [lists,setLists]=useState(()=>{
     if(["kg","quilo","quilos"].includes(u))return q;
     if(["g","grama","gramas"].includes(u))return q/1000;
     const stored=normalizeCalcNumber(item?.purchaseWeightKg,0);
-    return stored>0?stored:null;
+    if(stored>0)return stored;
+    const estimated=getEstimatedProduceWeight(item);
+    return estimated?.estimatedKg || null;
   };
 
   const qtyToLiter=(item)=>{
@@ -8110,7 +8225,16 @@ const [lists,setLists]=useState(()=>{
       finishedAt:null,
       completedAt:null,
       finalizedAt:null,
+      finished:false,
+      completed:false,
+      finalizada:false,
+      finalized:false,
       isFinished:false,
+      isReadOnly:false,
+      readOnly:false,
+      locked:false,
+      history:false,
+      copiedFromListId:list.id || null,
       status:"open",
       total:0,
       categories:(list.categories||[]).map(cat=>({
@@ -8350,10 +8474,23 @@ const [lists,setLists]=useState(()=>{
         item.priceMode=normalizePriceMode(mPriceMode) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
         if(item.priceMode==="perKg"){
           const kg=numberFromText(mWeightText);
-          if(kg&&kg>0)item.purchaseWeightKg=kg;
-          else delete item.purchaseWeightKg;
+          const estimated=getEstimatedProduceWeight(item);
+          if(kg&&kg>0){
+            item.purchaseWeightKg=kg;
+            item.estimatedWeightUsed=false;
+          } else if(estimated?.estimatedKg){
+            item.purchaseWeightKg=estimated.estimatedKg;
+            item.estimatedWeightUsed=true;
+            item.estimatedWeightRangeKg=[estimated.minTotalKg, estimated.maxTotalKg];
+          } else {
+            delete item.purchaseWeightKg;
+            delete item.estimatedWeightUsed;
+            delete item.estimatedWeightRangeKg;
+          }
         } else {
           delete item.purchaseWeightKg;
+          delete item.estimatedWeightUsed;
+          delete item.estimatedWeightRangeKg;
         }
       }
       item.checked=true;
@@ -9778,7 +9915,9 @@ const [lists,setLists]=useState(()=>{
         const qtyAtual=numberFromText(mQtyText) || Number(mQty||1) || 1;
         const qtyChanged=Number(qtyAtual)!==Number(qtyOriginal);
         const tempPrice=parseBRL(mPriceText);
-        const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:numberFromText(mWeightText)||item.purchaseWeightKg};
+        const estimatedProduceWeight=getEstimatedProduceWeight({...item,qty:qtyAtual});
+        const manualWeight=numberFromText(mWeightText);
+        const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
         const total=tempPrice!=null?getItemLineTotal(temp):0;
         const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço por unidade":inferredMode==="package"?"Preço por pacote":"Preço total pago";
         return(
@@ -9802,7 +9941,14 @@ const [lists,setLists]=useState(()=>{
             {inferredMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(item.unit)) && (
               <div style={{marginBottom:14}}>
                 <label style={lbl}>Peso total comprado em kg</label>
-                <input value={mWeightText} onChange={e=>setMWeightText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder="Ex: 0,700 ou 1,2" inputMode="decimal"
+                {estimatedProduceWeight && (
+                  <div style={{marginBottom:8,background:"#ECFDF5",border:"1px solid #BBF7D0",borderRadius:14,padding:"9px 11px",fontSize:12,color:"#166534",fontWeight:800,lineHeight:1.35}}>
+                    Peso estimado: {estimatedProduceWeight.estimatedKg.toFixed(2).replace(".",",")} kg
+                    <br/>Faixa provável: {estimatedProduceWeight.minTotalKg.toFixed(2).replace(".",",")} kg a {estimatedProduceWeight.maxTotalKg.toFixed(2).replace(".",",")} kg
+                    <br/><span style={{fontWeight:700}}>Ajuste manualmente se souber o peso real.</span>
+                  </div>
+                )}
+                <input value={mWeightText} onChange={e=>setMWeightText(e.target.value.replace(/[^0-9.,]/g,""))} placeholder={estimatedProduceWeight?`Estimado: ${estimatedProduceWeight.estimatedKg.toFixed(2).replace(".",",")} kg`:"Ex: 0,700 ou 1,2"} inputMode="decimal"
                   style={inp()} onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
             )}
