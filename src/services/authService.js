@@ -5,3 +5,11 @@ import {
 } from "../config/storageKeys";
 import { getStoredValue, setStoredValue, removeStoredValue } from "../utils/storageUtils";
 import { normalizeAuthName } from "../utils/formatters";
+export function isPinSessionVerified(name) {
+  const clean = String(name || "").trim().toLowerCase();
+  const verified = getStoredValue(APP_PIN_SESSION_NAME_KEY)
+    .trim()
+    .toLowerCase();
+
+  return Boolean(clean && verified && clean === verified);
+}
