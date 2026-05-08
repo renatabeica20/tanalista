@@ -6827,7 +6827,7 @@ return rebuiltHistory;
 
   useEffect(()=>{
     rebuildLocalPriceHistoryFromLists(lists);
-  },[lists,rebuildLocalPriceHistoryFromLists])};
+  },[lists,rebuildLocalPriceHistoryFromLists]);
 
   const getPriceDescription=(item)=>{
     if(!item || item.price==null)return "";
@@ -7889,6 +7889,15 @@ return rebuiltHistory;
 }}
 />    
             <PriceStatsPanel getPriceStatsSummary={getPriceStatsSummary} />
+{showPriceStatsScreen && (
+  <PriceStatsScreen
+    onBack={() => setShowPriceStatsScreen(false)}
+    lists={lists}
+   getPriceStatsSummary={getPriceStatsSummary}
+normalizeCacheKey={normalizeCacheKey}
+formatBRL={formatBRL}
+  />
+)}
             <div style={{
               display:"flex",
               alignItems:"center",
@@ -8930,3 +8939,4 @@ return rebuiltHistory;
 
        </div>
   );
+}
