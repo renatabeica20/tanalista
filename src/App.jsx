@@ -8923,4 +8923,3 @@ formatBRL={formatBRL}
 
     </div>
   );
-}
