@@ -60,14 +60,13 @@ import AppLogo from "./components/AppLogo";
 import BrandWordmark from "./components/BrandWordmark";
 import ModuleIcon from "./components/ModuleIcon";
 import ModalSheet from "./components/ModalSheet";
-import PriceStatsEntryCard from "./components/PriceStatsEntryCard";
 import AppHeader from "./components/AppHeader";
 import NotificationsScreen from "./pages/NotificationsScreen";
 import ExpandableSection from "./components/ExpandableSection";
 import StatsLineChart from "./components/StatsLineChart";
 import StatsDetailList from "./components/StatsDetailList";
 import PriceStatsScreen from "./components/PriceStatsScreen";
-import RecentLists from "./components/RecentLists";
+import ListsSection from "./components/ListsSection";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -7882,13 +7881,8 @@ return rebuiltHistory;
               })}
             </div>
 
-      <PriceStatsEntryCard
- onClick={() => {
-  rebuildLocalPriceHistoryFromLists(lists);
-  setShowPriceStatsScreen(true);
-}}
-/>    
-            <RecentLists
+            <ListsSection
+              lists={lists}
               visibleLists={visibleLists}
               recentLists={recentLists}
               historyLists={historyLists}
@@ -7912,14 +7906,10 @@ return rebuiltHistory;
               getListCardStats={getListCardStats}
               fmtR={fmtR}
               WhatsAppIcon={WhatsAppIcon}
+              rebuildLocalPriceHistoryFromLists={rebuildLocalPriceHistoryFromLists}
+              setShowPriceStatsScreen={setShowPriceStatsScreen}
+              shareAppWhatsApp={shareAppWhatsApp}
             />
-            <div style={{marginTop:28,display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={shareAppWhatsApp}
-                style={{width:"100%",padding:"15px 16px",borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 12px 28px rgba(37,211,102,0.22)"}}>
-                <WhatsAppIcon size={19} /> Compartilhe o Tá na Lista
-              </button>
-              <div style={{fontSize:12,color:"#6B7280",textAlign:"center",fontWeight:600,lineHeight:1.4}}>Convide outras pessoas para organizar listas e controlar o orçamento.</div>
-            </div>
           </div>
         </div>
      </HomeScreen>
