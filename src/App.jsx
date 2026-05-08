@@ -76,6 +76,7 @@ import LoginScreen from "./components/LoginScreen";
 import PantrySection from "./components/PantrySection";
 import BottomSheets from "./components/BottomSheets";
 import AnalyticsController from "./components/AnalyticsController";
+import AppUpdateController from "./components/AppUpdateController";
 import SearchBar from "./components/SearchBar";
 import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
@@ -4867,47 +4868,6 @@ export default function App(){
     ensureMobileViewport();
   }, []);
 
-  useEffect(() => {
-    const currentSignature = getCurrentAppAssetSignature();
-    if (!currentSignature) return;
-
-    let cancelled = false;
-
-    const checkForUpdate = async () => {
-      if (cancelled || updateNoticeShownRef.current) return;
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-
-      const freshSignature = await fetchFreshAppAssetSignature();
-      if (cancelled || updateNoticeShownRef.current) return;
-
-      if (freshSignature && freshSignature !== currentSignature) {
-        updateNoticeShownRef.current = true;
-        setUpdateNotice({ show: true, checking: false });
-        registrarEvento("app_update_available", {
-          current_signature: currentSignature,
-          fresh_signature: freshSignature,
-        });
-      }
-    };
-
-    const handleFocus = () => checkForUpdate();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") checkForUpdate();
-    };
-
-    const firstTimer = window.setTimeout(checkForUpdate, 7000);
-    const interval = window.setInterval(checkForUpdate, APP_UPDATE_CHECK_INTERVAL_MS);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(firstTimer);
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
 
   const [screen,setScreen]=useState("home");
   
@@ -4922,8 +4882,6 @@ const [lists,setLists]=useState(()=>{
   const [currentList,setCurrentList]=useState(null);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState({show:false,msg:""});
-  const [updateNotice,setUpdateNotice]=useState({show:false,checking:false});
-  const updateNoticeShownRef=useRef(false);
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
   const toastTimer=useRef(null);
@@ -7571,17 +7529,6 @@ return rebuiltHistory;
   // ── Preview do item no diálogo ────────────────────────────────────────
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
- const updateAppNow = async () => {
-  try {
-    setUpdateNotice({ show: true, checking: true });
-    registerEvento("app_update_clicked", { source: "update_notice" });
-    await clearAppCachesBeforeReload();
-  } catch (err) {
-    console.error(err);
-  } finally {
-    window.location.reload();
-  }
-};
 
   // ─────────────────────────────────────────────────────────────────────
   if(showNotificationsScreen) return (
@@ -7666,26 +7613,13 @@ return rebuiltHistory;
       {/* TOAST */}
       <ToastMessage message={toast.msg} />
 
-      {/* AVISO DE NOVA VERSÃO DISPONÍVEL */}
-      {updateNotice.show && (
-        <div style={{position:"fixed",left:14,right:14,bottom:86,zIndex:650,display:"flex",justifyContent:"center",pointerEvents:"none"}}>
-          <div style={{width:"100%",maxWidth:420,background:"#FFFFFF",border:"1px solid #DDD6FE",borderRadius:22,padding:16,boxShadow:"0 24px 60px rgba(17,24,39,0.22)",pointerEvents:"auto"}}>
-            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-              <div style={{width:44,height:44,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontSize:22,boxShadow:"0 14px 28px rgba(109,40,217,0.24)",flexShrink:0}}>✨</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:950,fontSize:16,color:"#111827",lineHeight:1.2}}>Nova atualização disponível</div>
-                <div style={{fontWeight:700,fontSize:13,color:"#6B7280",lineHeight:1.35,marginTop:4}}>Atualize para receber as melhorias mais recentes do Tá na Lista.</div>
-              </div>
-            </div>
-            <div style={{display:"flex",gap:10,marginTop:14}}>
-              <button onClick={updateAppNow} disabled={updateNotice.checking} style={{flex:1,border:"none",borderRadius:16,padding:"12px 14px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:14,cursor:updateNotice.checking?"wait":"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)",opacity:updateNotice.checking?0.75:1}}>
-                {updateNotice.checking ? "Atualizando..." : "Atualizar agora"}
-              </button>
-              <button onClick={()=>{setUpdateNotice({show:false,checking:false}); registrarEvento("app_update_later", { source: "update_notice" });}} disabled={updateNotice.checking} style={{border:"2px solid #E5E7EB",borderRadius:16,padding:"12px 14px",background:"#FFFFFF",color:"#374151",fontWeight:900,fontSize:14,cursor:updateNotice.checking?"wait":"pointer",fontFamily:"inherit"}}>Depois</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AppUpdateController
+        getCurrentAppAssetSignature={getCurrentAppAssetSignature}
+        fetchFreshAppAssetSignature={fetchFreshAppAssetSignature}
+        clearAppCachesBeforeReload={clearAppCachesBeforeReload}
+        registerEvent={registrarEvento}
+        checkIntervalMs={APP_UPDATE_CHECK_INTERVAL_MS}
+      />
 
       {/* AVISO PARA ADICIONAR À TELA INICIAL */}
       <InstallPrompt
