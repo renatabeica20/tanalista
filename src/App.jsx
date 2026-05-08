@@ -6827,7 +6827,7 @@ return rebuiltHistory;
 
   useEffect(()=>{
     rebuildLocalPriceHistoryFromLists(lists);
- },[lists,rebuildLocalPriceHistoryFromLists]);
+  },[lists,rebuildLocalPriceHistoryFromLists])};
 
   const getPriceDescription=(item)=>{
     if(!item || item.price==null)return "";
@@ -7586,7 +7586,17 @@ return rebuiltHistory;
 
   // ─────────────────────────────────────────────────────────────────────
   if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
-  if(showPriceStatsScreen) return <PriceStatsScreen lists={lists} onBack={()=>setShowPriceStatsScreen(false)} />;
+  if (showPriceStatsScreen) {
+    return (
+      <PriceStatsScreen
+        lists={lists}
+        onBack={() => setShowPriceStatsScreen(false)}
+        getPriceStatsSummary={getPriceStatsSummary}
+        normalizeCacheKey={normalizeCacheKey}
+        formatBRL={formatBRL}
+      />
+    );
+  }
 
   // Login leve e isolado: evita renderizar toda a tela principal por baixo do modal.
   // Isso deixa o campo clicável imediatamente no smartphone e elimina a sensação de tela bloqueada.
@@ -7879,15 +7889,6 @@ return rebuiltHistory;
 }}
 />    
             <PriceStatsPanel getPriceStatsSummary={getPriceStatsSummary} />
-{showPriceStatsScreen && (
-  <PriceStatsScreen
-    onBack={() => setShowPriceStatsScreen(false)}
-    lists={lists}
-   getPriceStatsSummary={getPriceStatsSummary}
-normalizeCacheKey={normalizeCacheKey}
-formatBRL={formatBRL}
-  />
-)}
             <div style={{
               display:"flex",
               alignItems:"center",
@@ -8929,4 +8930,3 @@ formatBRL={formatBRL}
 
        </div>
   );
-  }
