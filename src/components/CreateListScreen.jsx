@@ -1,4 +1,5 @@
 import AppLogo from "./AppLogo";
+import VoiceInput from "./VoiceInput";
 
 const inp = (extra = {}) => ({
   width: "100%",
@@ -234,10 +235,16 @@ export default function CreateListScreen({
           style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
           Colar lista
         </button>
-        <button onClick={()=>{voiceTargetRef.current="list";setVoiceTarget("list");startVoiceInput();}} disabled={voiceProcessing}
-          style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",cursor:voiceProcessing?"not-allowed":"pointer",opacity:voiceProcessing?0.65:1,...tourHighlightStyle(isTourStep("create_item_voice"))}}>
-          {voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}
-        </button>
+        <VoiceInput
+          target="list"
+          voiceTargetRef={voiceTargetRef}
+          setVoiceTarget={setVoiceTarget}
+          startVoiceInput={startVoiceInput}
+          voiceProcessing={voiceProcessing}
+          voiceListening={voiceListening}
+          baseStyle={createSecondaryBtn}
+          extraStyle={tourHighlightStyle(isTourStep("create_item_voice"))}
+        />
       </div>
     </div>
     {pendingItems.length>0&&(
