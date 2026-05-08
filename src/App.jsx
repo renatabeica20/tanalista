@@ -4297,7 +4297,17 @@ const [lists,setLists]=useState(()=>{
         cat = { name: "Itens Extras", items: [] };
         l.categories.push(cat);
       }
-      cat.items.push({ ...newItem, extra: true, checked: false, notFound: false });
+      const hasImmediatePrice =
+        newItem.price != null &&
+        Number(newItem.price) > 0;
+
+      cat.items.push({
+        ...newItem,
+        extra: true,
+        checked: hasImmediatePrice,
+        checkedAt: hasImmediatePrice ? new Date().toISOString() : null,
+        notFound: false
+      });
       l.categories = sanitizeCategories(l.categories);
       updateList(l);
       registrarEvento("add_extra_item", {
