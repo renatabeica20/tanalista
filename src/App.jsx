@@ -73,6 +73,7 @@ import ListScreenHeader from "./components/ListScreenHeader";
 import SharedListModal from "./components/SharedListModal";
 import LoginScreen from "./components/LoginScreen";
 import PantrySection from "./components/PantrySection";
+import BottomSheets from "./components/BottomSheets";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
