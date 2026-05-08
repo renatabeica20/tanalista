@@ -8922,7 +8922,7 @@ formatBRL={formatBRL}
 </button>
 </ModalSheet>
 )}
-        </ModalSheet>
+     
    
 
        </div>
