@@ -7580,7 +7580,7 @@ return rebuiltHistory;
     } finally {
       window.location.reload();
     }
-  };
+  }
 
   // ─────────────────────────────────────────────────────────────────────
   if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
