@@ -7572,15 +7572,17 @@ return rebuiltHistory;
   // ── Preview do item no diálogo ────────────────────────────────────────
   const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
 
-  const updateAppNow=async()=>{
-    try {
-      setUpdateNotice({show:true,checking:true});
-      registrarEvento("app_update_clicked", { source: "update_notice" });
-      await clearAppCachesBeforeReload();
-    } finally {
-      window.location.reload();
-    }
+ const updateAppNow = async () => {
+  try {
+    setUpdateNotice({ show: true, checking: true });
+    registerEvento("app_update_clicked", { source: "update_notice" });
+    await clearAppCachesBeforeReload();
+  } catch (err) {
+    console.error(err);
+  } finally {
+    window.location.reload();
   }
+};
 
   // ─────────────────────────────────────────────────────────────────────
   if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
