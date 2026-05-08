@@ -62,7 +62,7 @@ import BrandWordmark from "./components/BrandWordmark";
 import ModuleIcon from "./components/ModuleIcon";
 import ModalSheet from "./components/ModalSheet";
 import AppHeader from "./components/AppHeader";
-import NotificationsScreen from "./pages/NotificationsScreen";
+import NotificationsPanel from "./components/NotificationsPanel";
 import ExpandableSection from "./components/ExpandableSection";
 import StatsLineChart from "./components/StatsLineChart";
 import StatsDetailList from "./components/StatsDetailList";
@@ -7583,7 +7583,13 @@ return rebuiltHistory;
 };
 
   // ─────────────────────────────────────────────────────────────────────
-  if(showNotificationsScreen) return <NotificationsScreen notifications={notifications} onBack={()=>setShowNotificationsScreen(false)} onMarkAllRead={markAllNotificationsRead} />;
+  if(showNotificationsScreen) return (
+    <NotificationsPanel
+      notifications={notifications}
+      onBack={()=>setShowNotificationsScreen(false)}
+      onMarkAllRead={markAllNotificationsRead}
+    />
+  );
   if (showPriceStatsScreen) {
     return (
       <PriceStatsScreen
