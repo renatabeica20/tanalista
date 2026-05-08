@@ -71,6 +71,7 @@ import FloatingActions from "./components/FloatingActions";
 import CreateListScreen from "./components/CreateListScreen";
 import ListScreenHeader from "./components/ListScreenHeader";
 import VoiceInput from "./components/VoiceInput";
+import SharedListModal from "./components/SharedListModal";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -8627,23 +8628,13 @@ return rebuiltHistory;
       )}
 
       {/* MODAL: SHARE */}
-      {shareModal&&(
-        <ModalSheet onClose={()=>{setShareModal(false);setShareTargetList(null);}}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Envio disponível pelo WhatsApp</div>
-          <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:12}}>
-            <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome</label>
-            <input value={senderName} onChange={e=>{setSenderName(e.target.value);setUserNameInput(e.target.value);saveAppUserName(e.target.value);}} placeholder="Ex: Cadu"
-              style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"11px 12px",fontSize:14,fontWeight:700,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}/>
-            <div style={{fontSize:12,color:"#6B7280",fontStyle:"italic",marginTop:7}}>Quem receberá a lista verá seu nome</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={async()=>{const saved=getAppUserName();const clean=saveAppUserName(senderName||saved);if(!clean){showToast("⚠️ Informe seu nome antes de enviar a lista.");return;}await registerAppUser(clean);const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
-              style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
-              <WhatsAppIcon size={20} /> WhatsApp
-            </button>          </div>
-        </ModalSheet>
-      )}
+      <SharedListModal
+        open={shareModal}
+        senderName={senderName}
+        onClose={()=>{setShareModal(false);setShareTargetList(null);}}
+        onSenderNameChange={(value)=>{setSenderName(value);setUserNameInput(value);saveAppUserName(value);}}
+        onShareWhatsApp={async()=>{const saved=getAppUserName();const clean=saveAppUserName(senderName||saved);if(!clean){showToast("⚠️ Informe seu nome antes de enviar a lista.");return;}await registerAppUser(clean);const l=shareTargetList||currentList;setShareModal(false);setShareTargetList(null);shareWhatsApp(l);}}
+      />
 
 
       {checkPopup&&currentList&&(()=>{
