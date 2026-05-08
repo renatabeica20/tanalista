@@ -52,7 +52,7 @@ import {
   updateSharedListRecord,
   deleteSharedListRecord,
 } from "./services/sharedListService";
-import GuidedTourOverlay from "./components/GuidedTourOverlay";
+import GuidedTourController from "./components/GuidedTourController";
 import ToastMessage from "./components/ToastMessage";
 import InstallPrompt from "./components/InstallPrompt";
 import HomeScreen from "./pages/HomeScreen";
@@ -7694,19 +7694,18 @@ return rebuiltHistory;
 />
 
 
-      {showGuidedTour && guidedTourStep && !userNameModal && (
-        <GuidedTourOverlay
-          step={guidedTourStep}
-          index={guidedTourLocalIndex}
-          total={guidedTourLocalTotal}
-          onNext={nextGuidedTourStep}
-          onPrev={prevGuidedTourStep}
-          onClose={()=>finishGuidedTour("done")}
-          onSkip={()=>finishGuidedTour("skip")}
-          showPrev={screen !== "home"}
-          showSkip={screen !== "home" && guidedTourLocalTotal > 1}
-        />
-      )}
+      <GuidedTourController
+        show={showGuidedTour}
+        step={guidedTourStep}
+        userNameModal={userNameModal}
+        index={guidedTourLocalIndex}
+        total={guidedTourLocalTotal}
+        onNext={nextGuidedTourStep}
+        onPrev={prevGuidedTourStep}
+        onClose={() => finishGuidedTour("done")}
+        onSkip={() => finishGuidedTour("skip")}
+        screen={screen}
+      />
 
       {/* LISTA COMPARTILHADA RECEBIDA */}
       {sharedLandingRecord&&(()=>{
