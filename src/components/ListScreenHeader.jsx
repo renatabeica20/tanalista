@@ -1,3 +1,4 @@
+import BudgetProgress from './BudgetProgress';
 export default function ListScreenHeader({
   currentList,
   checkedItems,
@@ -118,50 +119,19 @@ export default function ListScreenHeader({
             </button>
           </div>
 
-          <div
-            style={{
-              background: "rgba(255,255,255,0.16)",
-              border: "1px solid rgba(255,255,255,0.22)",
-              borderRadius: 22,
-              padding: "13px 14px",
-              backdropFilter: "blur(10px)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
-              ...(tour("list_progress")
-                ? { border: "3px solid rgba(255,255,255,0.98)", background: "rgba(255,255,255,0.18)" }
-                : {}),
-              ...highlight(tour("list_progress")),
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontWeight: 800, fontSize: 15, color: "white" }}>{fmtR(fullTotal)}</span>
-              {budget > 0 && <span style={{ fontWeight: 800, fontSize: 15, color: "rgba(255,255,255,0.8)" }}>{fmtR(budget)}</span>}
-            </div>
-            <div style={{ height: 10, background: "rgba(255,255,255,0.2)", borderRadius: 5, overflow: "hidden", marginBottom: 6 }}>
-              <div
-                style={{
-                  height: "100%",
-                  background: progressColor,
-                  borderRadius: 5,
-                  width: `${pct}%`,
-                  transition: "width 0.45s ease, background 0.6s",
-                }}
-              />
-            </div>
-            <div style={{ textAlign: "center", fontSize: 13, fontWeight: 900, lineHeight: 1.35 }}>
-              {budget > 0 ? (
-                <>
-                  <div style={{ color: budgetDiff < 0 ? "#FECACA" : "#BBF7D0", fontSize: 15 }}>
-                    {budgetDiff < 0 ? `⚠️ Ultrapassado: ${fmtR(Math.abs(budgetDiff))}` : `Saldo disponível: ${fmtR(budgetDiff)}`}
-                  </div>
-                  <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, marginTop: 2 }}>{budgetPctLabel}% do orçamento utilizado</div>
-                </>
-              ) : (
-                <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>
-                  {checkedItems}/{totalItems} itens · {budgetPctLabel}% concluído
-                </span>
-              )}
-            </div>
-          </div>
+          <BudgetProgress
+            checkedItems={checkedItems}
+            totalItems={totalItems}
+            fullTotal={fullTotal}
+            budget={budget}
+            budgetDiff={budgetDiff}
+            budgetPctLabel={budgetPctLabel}
+            progressColor={progressColor}
+            pct={pct}
+            fmtR={fmtR}
+            highlighted={tour("list_progress")}
+            highlightStyle={highlight(tour("list_progress"))}
+          />
         </div>
       </div>
     </div>
