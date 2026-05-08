@@ -67,7 +67,6 @@ import ExpandableSection from "./components/ExpandableSection";
 import StatsLineChart from "./components/StatsLineChart";
 import StatsDetailList from "./components/StatsDetailList";
 import PriceStatsScreen from "./components/PriceStatsScreen";
-import PriceStatsPanel from "./components/PriceStatsPanel";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -7888,16 +7887,6 @@ return rebuiltHistory;
   setShowPriceStatsScreen(true);
 }}
 />    
-            <PriceStatsPanel getPriceStatsSummary={getPriceStatsSummary} />
-{showPriceStatsScreen && (
-  <PriceStatsScreen
-    onBack={() => setShowPriceStatsScreen(false)}
-    lists={lists}
-   getPriceStatsSummary={getPriceStatsSummary}
-normalizeCacheKey={normalizeCacheKey}
-formatBRL={formatBRL}
-  />
-)}
             <div style={{
               display:"flex",
               alignItems:"center",
