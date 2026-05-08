@@ -75,6 +75,7 @@ import SharedListModal from "./components/SharedListModal";
 import LoginScreen from "./components/LoginScreen";
 import PantrySection from "./components/PantrySection";
 import BottomSheets from "./components/BottomSheets";
+import AnalyticsController from "./components/AnalyticsController";
 import SearchBar from "./components/SearchBar";
 import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
@@ -7638,6 +7639,16 @@ return rebuiltHistory;
         onSwitchUser={handleSwitchUser}
         onNotifications={()=>setShowNotificationsScreen(true)}
         unreadCount={unreadNotificationsCount}
+      />
+
+      <AnalyticsController
+        screen={screen}
+        currentList={currentList}
+        showPriceStatsScreen={showPriceStatsScreen}
+        showNotificationsScreen={showNotificationsScreen}
+        showGuidedTour={showGuidedTour}
+        userName={getAppUserName()}
+        registerEvent={registrarEvento}
       />
 
 
