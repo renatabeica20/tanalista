@@ -70,6 +70,7 @@ import ListsSection from "./components/ListsSection";
 import FloatingActions from "./components/FloatingActions";
 import CreateListScreen from "./components/CreateListScreen";
 import ListScreenHeader from "./components/ListScreenHeader";
+import VoiceInput from "./components/VoiceInput";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -8015,7 +8016,15 @@ return rebuiltHistory;
               <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale os itens existentes em casa. Você poderá editar antes de salvar.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
                 <button onClick={()=>{setPasteTarget("pantry");setShowPasteModal(true);}} style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>Colar lista</button>
-                <button onClick={()=>{voiceTargetRef.current="pantry";setVoiceTarget("pantry");startVoiceInput();}} disabled={voiceProcessing} style={{...createSecondaryBtn,background:voiceListening?"#FEF2F2":"#F0FDF4",borderColor:voiceListening?"#FCA5A5":"#BBF7D0",color:voiceListening?"#B91C1C":"#166534",opacity:voiceProcessing?0.65:1}}>{voiceListening?"Parar fala":voiceProcessing?"Organizando...":"Falar lista"}</button>
+                <VoiceInput
+                  target="pantry"
+                  voiceTargetRef={voiceTargetRef}
+                  setVoiceTarget={setVoiceTarget}
+                  startVoiceInput={startVoiceInput}
+                  voiceProcessing={voiceProcessing}
+                  voiceListening={voiceListening}
+                  baseStyle={createSecondaryBtn}
+                />
               </div>
             </div>
             {pantryPendingItems.length>0&&(
