@@ -53,6 +53,7 @@ import {
   deleteSharedListRecord,
 } from "./services/sharedListService";
 import GuidedTourController from "./components/GuidedTourController";
+import SharedSyncController from "./components/SharedSyncController";
 import ToastMessage from "./components/ToastMessage";
 import InstallPrompt from "./components/InstallPrompt";
 import HomeScreen from "./pages/HomeScreen";
@@ -7173,19 +7174,6 @@ return rebuiltHistory;
 
 
 
-  useEffect(()=>{
-    // Atualização automática deve ocorrer somente para lista realmente compartilhada/recebida.
-    // Lista própria salva na nuvem não pode ser recarregada automaticamente ao abrir o histórico,
-    // pois uma cópia remota antiga pode desmarcar itens já finalizados.
-    if(screen!=="list" || !currentList?.sharedId || !isRealSharedList(currentList))return;
-    const lastPull=getListSyncStamp({lastSyncedAt:currentList.lastCloudSeenAt || currentList.pulledAt});
-    if(lastPull && Date.now()-lastPull<45000)return;
-    const now=Date.now();
-    if(now-(autoSyncNoticeRef.current||0)<45000)return;
-    autoSyncNoticeRef.current=now;
-    refreshSharedListFromCloud().catch(()=>null);
-  },[screen,currentList?.id,currentList?.sharedId,currentList?.isShared,currentList?.imported]);
-
   // Etapa 4: sincronização manual.
   // A lista compartilhada é atualizada pelo botão “Atualizar”, evitando
   // conflito e notificações excessivas durante a compra.
@@ -7693,6 +7681,15 @@ return rebuiltHistory;
   AppLogo={AppLogo}
 />
 
+
+      <SharedSyncController
+        screen={screen}
+        currentList={currentList}
+        isRealSharedList={isRealSharedList}
+        getListSyncStamp={getListSyncStamp}
+        autoSyncNoticeRef={autoSyncNoticeRef}
+        onRefresh={refreshSharedListFromCloud}
+      />
 
       <GuidedTourController
         show={showGuidedTour}
