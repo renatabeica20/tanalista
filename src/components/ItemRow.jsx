@@ -1,10 +1,3 @@
-# ItemRow.jsx — ETAPA 2
-
-Substitua integralmente o arquivo:
-
-`src/components/ItemRow.jsx`
-
-```jsx
 export default function ItemRow({
   item,
   ci,
@@ -39,20 +32,10 @@ export default function ItemRow({
   const totalItemPrice = hasPrice ? fmtR(getItemLineTotal(item)) : "";
   const unitPriceLabel = hasPrice ? getCompactUnitPriceLabel(item) : "";
 
-  // ─────────────────────────────────────────────────────
-  // AGORA O ITEM PODE SER EDITADO MESMO APÓS AQUISIÇÃO
-  // ─────────────────────────────────────────────────────
-
   const handleOpen = () => {
     if (item.notFound) return;
-
-    // mantém abertura para edição mesmo adquirido
     onOpenItem?.(ci, realII);
   };
-
-  // ─────────────────────────────────────────────────────
-  // MARCAR COMO ADQUIRIDO SEM JOGAR A TELA PARA O TOPO
-  // ─────────────────────────────────────────────────────
 
   const handleToggleCheck = (event) => {
     event.stopPropagation();
@@ -62,7 +45,6 @@ export default function ItemRow({
       return;
     }
 
-    // mantém posição visual do item
     const rowElement = event.currentTarget.closest("[data-item-row]");
     const scrollY = window.scrollY;
 
@@ -126,9 +108,7 @@ export default function ItemRow({
           color: "white",
           cursor: item.notFound ? "not-allowed" : "pointer",
           transition: "all 0.2s",
-          boxShadow: item.checked
-            ? `0 8px 18px ${hexToRgba(theme.border, 0.22)}`
-            : "0 3px 10px rgba(15,23,42,0.04)",
+          boxShadow: item.checked ? `0 8px 18px ${hexToRgba(theme.border, 0.22)}` : "0 3px 10px rgba(15,23,42,0.04)",
           ...checkHighlightStyle,
         }}
       >
@@ -140,11 +120,7 @@ export default function ItemRow({
           style={{
             fontWeight: 800,
             fontSize: 16,
-            color: item.checked
-              ? "#9E9E9E"
-              : item.notFound
-                ? "#92400E"
-                : "#0F172A",
+            color: item.checked ? "#9E9E9E" : item.notFound ? "#92400E" : "#0F172A",
             textDecoration: item.checked ? "line-through" : "none",
             textDecorationColor: item.checked ? "#EF4444" : "inherit",
             textDecorationThickness: "2px",
@@ -160,121 +136,41 @@ export default function ItemRow({
           {titleLine}
 
           {isExtra && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                background: "#FF7043",
-                color: "white",
-                padding: "2px 6px",
-                borderRadius: 180,
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
+            <span style={{ fontSize: 10, fontWeight: 700, background: "#FF7043", color: "white", padding: "2px 6px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
               extra
             </span>
           )}
 
           {item.qtyAdjusted && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                background: "#EEF2FF",
-                color: "#4C1D95",
-                padding: "2px 6px",
-                borderRadius: 180,
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
+            <span style={{ fontSize: 10, fontWeight: 800, background: "#EEF2FF", color: "#4C1D95", padding: "2px 6px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
               qtd. ajustada
             </span>
           )}
 
           {item.notFound && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 900,
-                background: "#DC2626",
-                color: "white",
-                padding: "2px 7px",
-                borderRadius: 180,
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
+            <span style={{ fontSize: 10, fontWeight: 900, background: "#DC2626", color: "white", padding: "2px 7px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
               em falta
             </span>
           )}
 
           {item.checked && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                background: "#DCFCE7",
-                color: "#166534",
-                padding: "2px 7px",
-                borderRadius: 180,
-                textTransform: "uppercase",
-                flexShrink: 0,
-              }}
-            >
+            <span style={{ fontSize: 10, fontWeight: 800, background: "#DCFCE7", color: "#166534", padding: "2px 7px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
               adquirido
             </span>
           )}
         </div>
 
-        <div
-          style={{
-            fontSize: 12,
-            marginTop: 5,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-          }}
-        >
+        <div style={{ fontSize: 12, marginTop: 5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           {hasPrice ? (
-            <span
-              style={{
-                fontWeight: 800,
-                fontSize: 13,
-                color: item.checked ? "#9E9E9E" : "#374151",
-              }}
-            >
-              {unitPriceLabel}
-            </span>
+            <span style={{ fontWeight: 800, fontSize: 13, color: item.checked ? "#9E9E9E" : "#374151" }}>{unitPriceLabel}</span>
           ) : (
-            <span style={{ color: "#6B7280" }}>
-              Toque para editar item
-            </span>
+            <span style={{ color: "#6B7280" }}>Toque para editar item</span>
           )}
 
           {hasPrice ? (
-            <span
-              style={{
-                fontWeight: 900,
-                fontSize: 14,
-                color: item.checked ? "#9E9E9E" : theme.header,
-                flexShrink: 0,
-              }}
-            >
-              {totalItemPrice}
-            </span>
+            <span style={{ fontWeight: 900, fontSize: 14, color: item.checked ? "#9E9E9E" : theme.header, flexShrink: 0 }}>{totalItemPrice}</span>
           ) : (
-            <span
-              style={{
-                fontSize: 12,
-                color: "#9CA3AF",
-                flexShrink: 0,
-              }}
-            >
-              editar
-            </span>
+            <span style={{ fontSize: 12, color: "#9CA3AF", flexShrink: 0 }}>editar</span>
           )}
         </div>
 
@@ -288,10 +184,7 @@ export default function ItemRow({
             compact
           />
         )}
-
-        {!hasPrice && PriceMemoryLine && (
-          <PriceMemoryLine itemName={item.name} />
-        )}
+        {!hasPrice && PriceMemoryLine && <PriceMemoryLine itemName={item.name} />}
       </div>
 
       <button
@@ -321,28 +214,3 @@ export default function ItemRow({
     </div>
   );
 }
-```
-
-## O que esta etapa corrige
-
-✅ Permite editar item mesmo após marcar como adquirido
-
-✅ Evita rolagem automática para o topo da tela
-
-✅ Mantém foco visual no item marcado
-
-✅ Melhora experiência mobile/iPhone
-
-✅ Mantém compatibilidade com estrutura atual do app
-
-## Agora faça
-
-1. Substitua o arquivo:
-
-`src/components/ItemRow.jsx`
-
-2. Commit:
-
-`Melhoria na edição de itens adquiridos`
-
-3. Aguarde o deploy verde da Vercel
