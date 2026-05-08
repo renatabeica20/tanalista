@@ -176,7 +176,7 @@ export function getPremiumSectionHeaderStyle(theme, { isExtraCat = false, allDon
   };
 }
 
-export function getProductConfig(name) {
+function getProductConfigBase(name) {
   const n = name.toLowerCase().trim();
 
   // ════════════════════════════════════════════════════
@@ -1335,3 +1335,144 @@ export function getProductConfig(name) {
     unidades: ["unidade","pacote","caixa","kg","g","L","ml","fardo","lata","garrafa","dúzia","par","peça"],
   };
 }
+
+// ── REGRAS INTELIGENTES DE PREÇO / UNIDADE ──────────────────────────────
+// Camada de segurança adicionada para evitar que produtos de pacote, fardo,
+// caixa, garrafa, lata ou unidade sejam tratados indevidamente como preço por kg.
+// A função original foi preservada como getProductConfigBase(name) e esta função
+// exportada aplica os ajustes finais usados pelo app.
+
+const KG_ALLOWED_PATTERNS = [
+  // Hortifruti vendido normalmente por peso
+  /tomate|cebola|batata|cenoura|limao|banana|maca|laranja|mamao|manga|uva|melao|abacaxi|abacate|melancia/i,
+  /chuchu|abobrinha|pimentao|jilo|berinjela|mandioca|abobora|pepino|beterraba|brocolis|couve|repolho/i,
+
+  // Carnes, aves e peixes
+  /carne|picanha|alcatra|fraldinha|contra.?file|file mignon|maminha|coxao|patinho|acem|musculo|paleta|costela|cupim/i,
+  /frango|peixe|salmao|tilapia|linguica|calabresa/i,
+
+  // Frios e embutidos que podem ser comprados por peso no balcão
+  /queijo|presunto|mortadela|salame|peito de peru/i,
+];
+
+const KG_BLOCKED_PATTERNS = [
+  // Mercearia seca / pacotes
+  /cafe|cha|arroz|feijao|macarrao|massa|acucar|farinha|sal|fuba|pipoca|aveia|granola|cereal/i,
+  /leite condensado|creme de leite|achocolatado|nescau|toddy|chocolate em po/i,
+
+  // Bebidas e líquidos alimentícios
+  /leite|oleo|azeite|vinagre|refrigerante|cerveja|vinho|vodka|whisky|whiskey|gin|rum|cachaca|suco|nectar|agua|energetico/i,
+
+  // Snacks, doces e industrializados
+  /biscoito|bolacha|chocolate|salgadinho|batata chips|doritos|ruffles|fandangos|cheetos|sorvete|nugget|empanado|pizza|lasanha/i,
+
+  // Limpeza
+  /detergente|amaciante|desinfetante|agua sanitaria|multiuso|limpa vidro|sabao em po|sabao liquido|alcool/i,
+  /esponja|palha de aco|vassoura|rodo|mop|saco de lixo/i,
+
+  // Higiene e perfumaria
+  /shampoo|condicionador|sabonete|creme dental|pasta de dente|desodorante|fio dental|escova|absorvente|fralda|lenco/i,
+  /protetor solar|filtro solar|creme para cabelo|mascara capilar/i,
+
+  // Papelaria / descartáveis / construção / elétrico
+  /papel higienico|papel toalha|guardanapo|copo descartavel|prato descartavel|talher descartavel/i,
+  /papel aluminio|papel filme|embalagem|marmita|pote descartavel|palito/i,
+  /cimento|argamassa|tinta|lampada|fio|cabo eletrico|disjuntor/i,
+];
+
+const LIQUID_PATTERNS = [
+  /leite|oleo|azeite|vinagre|refrigerante|cerveja|vinho|vodka|whisky|whiskey|gin|rum|cachaca|suco|nectar|agua|energetico/i,
+  /detergente|amaciante|desinfetante|agua sanitaria|multiuso|limpa vidro|sabao liquido|alcool|shampoo|condicionador/i,
+];
+
+const PACKAGE_HINT_PATTERNS = [
+  /cafe|cha|arroz|feijao|macarrao|massa|acucar|farinha|sal|fuba|pipoca|aveia|granola|cereal/i,
+  /biscoito|bolacha|salgadinho|batata chips|doritos|ruffles|fandangos|cheetos/i,
+  /sabao em po|papel higienico|papel toalha|guardanapo|fralda|absorvente/i,
+];
+
+function isKgAllowedByName(name) {
+  const n = normalizePlainText(name || "");
+  if (!n) return false;
+  if (KG_BLOCKED_PATTERNS.some((regex) => regex.test(n))) return false;
+  return KG_ALLOWED_PATTERNS.some((regex) => regex.test(n));
+}
+
+function isLiquidByName(name) {
+  const n = normalizePlainText(name || "");
+  return LIQUID_PATTERNS.some((regex) => regex.test(n));
+}
+
+function hasPackageHintByName(name) {
+  const n = normalizePlainText(name || "");
+  return PACKAGE_HINT_PATTERNS.some((regex) => regex.test(n));
+}
+
+function removeKgUnits(unidades = []) {
+  return (Array.isArray(unidades) ? unidades : []).filter((unit) => {
+    const clean = normalizePlainText(unit);
+    return !["kg", "quilo", "quilograma", "g", "grama", "gramas"].includes(clean);
+  });
+}
+
+function uniqueList(values = []) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const key = normalizePlainText(value);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function enhanceProductConfig(name, config = {}) {
+  const allowPriceByKg = isKgAllowedByName(name);
+  const isLiquid = isLiquidByName(name);
+  const hasPackageHint = hasPackageHintByName(name);
+
+  const safeConfig = {
+    marcas: [],
+    tipos: [],
+    pesos: [],
+    volumes: [],
+    unidades: ["unidade"],
+    ...config,
+  };
+
+  let unidades = allowPriceByKg
+    ? Array.isArray(safeConfig.unidades) ? safeConfig.unidades : ["kg", "unidade"]
+    : removeKgUnits(safeConfig.unidades);
+
+  if (!unidades.length) {
+    if (isLiquid) {
+      unidades = ["unidade", "frasco", "garrafa", "fardo"];
+    } else if (hasPackageHint) {
+      unidades = ["pacote", "caixa", "fardo", "unidade"];
+    } else {
+      unidades = ["unidade", "pacote", "caixa"];
+    }
+  }
+
+  // Para líquidos, reforça opções úteis sem permitir kg.
+  if (isLiquid && !allowPriceByKg) {
+    unidades = uniqueList([...unidades, "unidade", "garrafa", "frasco", "fardo"]);
+  }
+
+  // Para itens de pacote, reforça pacote/caixa/fardo e mantém a ordem amigável.
+  if (hasPackageHint && !allowPriceByKg) {
+    unidades = uniqueList(["pacote", ...unidades, "caixa", "fardo", "unidade"]);
+  }
+
+  return {
+    ...safeConfig,
+    unidades: uniqueList(unidades),
+    allowPriceByKg,
+    isLiquid,
+    defaultPriceMode: allowPriceByKg ? "kg" : "unit",
+  };
+}
+
+export function getProductConfig(name) {
+  return enhanceProductConfig(name, getProductConfigBase(name));
+}
+
