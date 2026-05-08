@@ -6827,7 +6827,7 @@ return rebuiltHistory;
 
   useEffect(()=>{
     rebuildLocalPriceHistoryFromLists(lists);
-  },[lists,rebuildLocalPriceHistoryFromLists])};
+ },[lists,rebuildLocalPriceHistoryFromLists]);
 
   const getPriceDescription=(item)=>{
     if(!item || item.price==null)return "";
@@ -8929,3 +8929,4 @@ formatBRL={formatBRL}
 
        </div>
   );
+  }
