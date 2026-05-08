@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
   ANTHROPIC_MODEL_CLASSIFY,
@@ -75,6 +74,7 @@ import SharedListModal from "./components/SharedListModal";
 import LoginScreen from "./components/LoginScreen";
 import PantrySection from "./components/PantrySection";
 import BottomSheets from "./components/BottomSheets";
+import SearchBar from "./components/SearchBar";
 import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
@@ -8166,17 +8166,13 @@ return rebuiltHistory;
           <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
             <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Como usar esta tela</button>
           </div>
-          <div style={{margin:"14px 20px 0",position:"relative",...tourHighlightStyle(isTourStep("list_search"))}}>
-            <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#9CA3AF"}}>🔍</span>
-            <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Buscar item na lista..."
-              style={{...inp({padding:"12px 16px 12px 42px",borderRadius:180})}}
-              onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-            {search&&(
-              <button onClick={()=>{setSearch("");searchRef.current?.focus();}}
-                style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#6B7280",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-            )}
-          </div>
+          <SearchBar
+            searchRef={searchRef}
+            search={search}
+            setSearch={setSearch}
+            inputStyle={{ ...inp({ padding: "12px 16px 12px 42px", borderRadius: 180 }) }}
+            highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
+          />
 
           {/* Categorias com cores */}
           <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
