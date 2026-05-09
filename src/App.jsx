@@ -318,128 +318,100 @@ const GUIDED_TOUR_STEPS = [
     id: "home_compras",
     screen: "home",
     icon: "🛒",
-    title: "Comece pelo módulo Compras",
-    text: "Toque em Compras quando quiser criar uma lista. Este tutorial acompanha você apenas quando você decidir continuar.",
+    title: "Comece criando sua lista",
+    text: "Toque em Compras para iniciar uma nova lista inteligente de mercado.",
     position: "bottom",
   },
-  {
-    id: "create_pantry",
-    screen: "create",
-    icon: "🏠",
-    title: "Comece pelos Itens em Casa",
-    text: "Antes de montar a compra, registre o que você já tem. Isso evita compras repetidas.",
-    position: "bottom",
-  },
-  {
-    id: "create_pantry_action",
-    screen: "create",
-    icon: "✅",
-    title: "Crie ou edite seus itens em casa",
-    text: "Use este botão para cadastrar, revisar ou atualizar os produtos que já existem em casa.",
-    position: "bottom",
-  },
+
+  // Página 2 — Montagem da lista
   {
     id: "create_budget",
     screen: "create",
     icon: "💰",
     title: "Defina o orçamento",
-    text: "Informe quanto pretende gastar para acompanhar o limite durante a compra.",
+    text: "O app acompanha os gastos em tempo real e avisa quando o limite for ultrapassado.",
     position: "bottom",
   },
   {
     id: "create_name",
     screen: "create",
     icon: "📝",
-    title: "Dê um nome para a lista",
-    text: "Use um nome fácil de identificar, como Compras da semana ou Mercado do mês.",
+    title: "Nomeie sua lista",
+    text: "Use nomes fáceis de reconhecer, como Compras da Semana ou Churrasco.",
     position: "bottom",
   },
   {
     id: "create_item_input",
     screen: "create",
     icon: "✍️",
-    title: "Digite um item",
-    text: "Use este campo para inserir os produtos um por um, como arroz, leite ou café.",
-    position: "top",
-  },
-  {
-    id: "create_item_insert",
-    screen: "create",
-    icon: "➕",
-    title: "Confirme a inclusão",
-    text: "Depois de digitar o produto, toque em Inserir para adicioná-lo à pré-lista.",
-    position: "top",
-  },
-  {
-    id: "create_item_paste",
-    screen: "create",
-    icon: "📋",
-    title: "Cole uma lista pronta",
-    text: "Use esta opção quando já tiver uma lista copiada de mensagem, bloco de notas ou outro aplicativo.",
+    title: "Digite os produtos",
+    text: "O app corrige nomes automaticamente e melhora a classificação dos itens.",
     position: "top",
   },
   {
     id: "create_item_voice",
     screen: "create",
     icon: "🎙️",
-    title: "Fale sua lista",
-    text: "Use a voz para ditar vários itens. O app transforma sua fala em itens organizáveis.",
+    title: "Use voz ou cole listas",
+    text: "Você pode ditar itens ou colar listas inteiras de WhatsApp, notas ou mensagens.",
     position: "top",
   },
   {
-    id: "create_items_preview",
+    id: "create_pantry",
     screen: "create",
-    icon: "🧾",
-    title: "Revise os itens inseridos",
-    text: "Os itens adicionados aparecem aqui. Você pode editar, remover ou limpar antes de organizar.",
+    icon: "🏠",
+    title: "Compare com Itens em Casa",
+    text: "Evite compras repetidas comparando sua lista com os produtos que já possui.",
     position: "top",
   },
   {
     id: "create_ai",
     screen: "create",
     icon: "🤖",
-    title: "Compare ou organize a lista",
-    text: "Se houver Itens em Casa ativos, compare antes. Caso contrário, organize automaticamente.",
+    title: "Organize com IA",
+    text: "A IA separa os itens por categorias para facilitar o percurso dentro do mercado.",
     position: "top",
   },
+  {
+    id: "create_swipe",
+    screen: "create",
+    icon: "↔️",
+    title: "Deslize entre as telas",
+    text: "Passe o dedo para a esquerda ou direita para avançar ou voltar rapidamente.",
+    position: "bottom",
+  },
+
+  // Página 3 — Compra
   {
     id: "list_progress",
     screen: "list",
     icon: "📊",
-    title: "Acompanhe o progresso",
-    text: "Aqui você vê itens concluídos, gasto total e situação do orçamento em tempo real.",
+    title: "Acompanhe o orçamento",
+    text: "Veja quanto já gastou, o valor restante e o progresso da compra.",
     position: "bottom",
   },
   {
-    id: "list_search",
+    id: "list_budget_alert",
     screen: "list",
-    icon: "🔎",
-    title: "Busque itens rapidamente",
-    text: "Use a busca para localizar produtos sem precisar percorrer a lista inteira.",
+    icon: "⚠️",
+    title: "Sugestões inteligentes de economia",
+    text: "Quando o orçamento for ultrapassado, o app sugere ajustes priorizando itens supérfluos e extras.",
     position: "bottom",
-  },
-  {
-    id: "list_items",
-    screen: "list",
-    icon: "🧺",
-    title: "Veja os itens por seção",
-    text: "A lista fica organizada por categorias para facilitar o percurso dentro do mercado.",
-    position: "top",
   },
   {
     id: "list_item_check",
     screen: "list",
     icon: "✔️",
-    title: "Marque o item comprado",
-    text: "Toque no círculo à esquerda do produto para indicar que ele já foi colocado no carrinho.",
+    title: "Marque os itens comprados",
+    text: "Toque no círculo para indicar que o produto já foi colocado no carrinho.",
     position: "top",
   },
   {
     id: "list_item_price",
     screen: "list",
     icon: "💲",
-    title: "Toque no produto para informar preço",
-    text: "Ao tocar no nome do produto, abre-se a janela para inserir preço, quantidade e detalhes da compra.",
+    title: "Toque no item para informar preço",
+    text: "Você pode alterar preço, quantidade, unidade e até editar o nome do produto.",
     position: "top",
   },
   {
@@ -455,23 +427,39 @@ const GUIDED_TOUR_STEPS = [
     screen: "list",
     icon: "➕",
     title: "Adicione itens extras",
-    text: "Se lembrar de algo durante a compra, use este botão para incluir o item antes de sair da lista.",
+    text: "Extras com preço entram automaticamente como comprados e identificados na lista.",
     position: "top",
+  },
+  {
+    id: "list_search",
+    screen: "list",
+    icon: "🔎",
+    title: "Busque produtos rapidamente",
+    text: "Use a busca para localizar itens sem precisar percorrer toda a lista.",
+    position: "bottom",
+  },
+  {
+    id: "list_swipe",
+    screen: "list",
+    icon: "↔️",
+    title: "Use gestos para navegar",
+    text: "Deslize lateralmente para voltar ou avançar sem usar os botões.",
+    position: "bottom",
   },
   {
     id: "list_share",
     screen: "list",
     icon: "🤝",
-    title: "Compartilhe quando precisar",
-    text: "Envie a lista para outra pessoa acompanhar ou ajudar nas compras.",
+    title: "Compartilhe a lista",
+    text: "Envie a lista para outra pessoa acompanhar ou ajudar durante as compras.",
     position: "bottom",
   },
   {
     id: "list_back_home",
     screen: "list",
     icon: "🏁",
-    title: "Finalize e volte ao início",
-    text: "Ao voltar, a lista finalizada é salva no histórico e fica protegida contra alterações.",
+    title: "Finalize a compra",
+    text: "Ao sair, a lista é salva no histórico e pode ser reutilizada futuramente.",
     position: "bottom",
   },
 ];
@@ -3398,7 +3386,7 @@ const [lists,setLists]=useState(()=>{
 
 
   // O tutorial guiado não inicia automaticamente e não muda de página sozinho.
-  // Cada tela possui seu próprio botão "Como usar o app".
+  // Cada tela possui seu próprio guia rápido contextual.
 
   const finishGuidedTour = useCallback((mode = "done") => {
     setShowGuidedTour(false);
@@ -7511,7 +7499,7 @@ return rebuiltHistory;
 
           {/* Search */}
           <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
-            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Como usar esta tela</button>
+            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
           </div>
           {/* Card integrado: orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
