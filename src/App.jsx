@@ -3427,6 +3427,57 @@ const [lists,setLists]=useState(()=>{
           ? "Compartilhada"
           : null;
 
+
+  const archivePantryAsRecentList = useCallback((pantry, data = {}) => {
+    if (!pantry) return;
+    const now = new Date().toISOString();
+    const finishedAt = data.finishedAt || data.finalizedAt || data.concludedAt || pantry.finishedAt || pantry.finalizedAt || pantry.concludedAt || now;
+    const recentId = pantry.recentListId || `pantry-recent-${pantry.sharedId || pantry.id || Date.now()}`;
+    const itemCount = pantry.itemCount || data.itemCount || countCategoryItems(pantry.categories || data.categories || []);
+
+    const archivedPantryList = {
+      id: recentId,
+      name: "Itens em Casa",
+      type: "pantry",
+      listKind: "pantry_history",
+      categories: pantry.categories || data.categories || [],
+      itemCount,
+      budget: 0,
+      createdAt: pantry.createdAt || data.createdAt || now,
+      updatedAt: data.updatedAt || now,
+      finishedAt,
+      completedAt: data.completedAt || finishedAt,
+      finalizedAt: data.finalizedAt || finishedAt,
+      status: "archived_completed",
+      archivedFinished: true,
+      isFinished: true,
+      isPantryHistory: true,
+      sharedId: pantry.sharedId || data.sharedId || null,
+      originalSharedId: pantry.sourceSharedId || pantry.originalSharedId || data.originalSharedId || null,
+      sourceSharedId: pantry.sourceSharedId || pantry.originalSharedId || data.sourceSharedId || null,
+      ownerName: pantry.ownerName || data.ownerName || getAppUserName() || "Usuário",
+      remetente: pantry.remetente || data.remetente || getAppUserName() || "Usuário",
+      sharedStatus: "concluida",
+      usedByName: data.usedByName || pantry.usedByName || null,
+      usedByListId: data.usedByListId || pantry.usedByListId || null,
+      usedByListName: data.usedByListName || pantry.usedByListName || null,
+      historyNote: data.usedByName
+        ? `Finalizada após uso por ${data.usedByName}`
+        : "Lista de Itens em Casa finalizada",
+    };
+
+    setLists((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      const exists = current.some((item) => item?.id === recentId);
+      const next = exists
+        ? current.map((item) => item?.id === recentId ? { ...item, ...archivedPantryList } : item)
+        : [archivedPantryList, ...current];
+      const safe = mergeUniqueLists(next);
+      try { localStorage.setItem("tnl_lists", JSON.stringify(safe)); } catch {}
+      return safe;
+    });
+  }, []);
+
   useEffect(() => {
     syncNotificationsFromLists(lists);
   }, [lists, syncNotificationsFromLists]);
@@ -3454,9 +3505,15 @@ const [lists,setLists]=useState(()=>{
             usedByListName: data.usedByListName || p.usedByListName || null,
             concludedAt: data.concludedAt || p.concludedAt || null,
             finalizedAt: data.finalizedAt || p.finalizedAt || null,
+            finishedAt: shouldConclude ? (data.finishedAt || data.finalizedAt || data.concludedAt || p.finishedAt || new Date().toISOString()) : p.finishedAt,
+            archivedFinished: shouldConclude ? true : p.archivedFinished,
             status: shouldConclude ? "concluida" : p.status,
           };
         }));
+
+        if (shouldConclude) {
+          archivePantryAsRecentList(activePantry, data);
+        }
       } catch (err) {
         console.warn("Não foi possível consultar status dos Itens em Casa compartilhados:", err);
       }
@@ -3468,7 +3525,7 @@ const [lists,setLists]=useState(()=>{
       cancelled = true;
       clearInterval(timer);
     };
-  }, [activePantry?.sharedId, activePantry?.id, pantryLists, savePantryLists]);
+  }, [activePantry?.sharedId, activePantry?.id, pantryLists, savePantryLists, archivePantryAsRecentList]);
 
   // Mantém o remetente sincronizado quando os Itens em Casa compartilhados
   // forem concluídos pelo destinatário. Assim a despensa enviada sai do estado
@@ -3523,8 +3580,16 @@ const [lists,setLists]=useState(()=>{
             usedByName: data.usedByName || pantry.usedByName || null,
             usedByListId: data.usedByListId || pantry.usedByListId || null,
             usedByListName: data.usedByListName || pantry.usedByListName || null,
+            recentListId: pantry.recentListId || `pantry-recent-${pantry.sharedId || pantry.id}`,
           };
         }));
+
+        (pantryLists || []).forEach((pantry) => {
+          if (!finishedById.has(pantry.id)) return;
+          const data = finishedById.get(pantry.id) || {};
+          archivePantryAsRecentList(pantry, data);
+        });
+
         setPantryCompared(false);
         setPantryComparison(null);
         setShowPantryComparisonDetails(false);
@@ -3540,7 +3605,7 @@ const [lists,setLists]=useState(()=>{
       cancelled = true;
       clearInterval(timer);
     };
-  }, [pantryLists, savePantryLists]);
+  }, [pantryLists, savePantryLists, archivePantryAsRecentList]);
 
 
   const resetPantryFlow = useCallback(() => {
