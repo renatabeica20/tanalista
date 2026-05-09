@@ -3411,7 +3411,12 @@ const [lists,setLists]=useState(()=>{
     try { localStorage.setItem(PANTRY_STORAGE_KEY, JSON.stringify(safe)); } catch {}
   }, []);
 
-  const activePantry = pantryLists.find(p => p.status === "ativa") || null;
+  const isPantryFinishedByShareStatus = (pantry) => {
+    const status = normalizePlainText(pantry?.sharedStatus || pantry?.status || "");
+    return ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed"].includes(status);
+  };
+
+  const activePantry = pantryLists.find(p => p.status === "ativa" && !isPantryFinishedByShareStatus(p)) || null;
   const pantryShareStatus = activePantry?.sharedStatus === "concluida" || activePantry?.sharedStatus === "finalizada"
     ? "Finalizada pelo destinatário"
     : activePantry?.sharedStatus === "utilizada_na_comparacao"
@@ -3464,6 +3469,78 @@ const [lists,setLists]=useState(()=>{
       clearInterval(timer);
     };
   }, [activePantry?.sharedId, activePantry?.id, pantryLists, savePantryLists]);
+
+  // Mantém o remetente sincronizado quando os Itens em Casa compartilhados
+  // forem concluídos pelo destinatário. Assim a despensa enviada sai do estado
+  // ativo, passa para concluída/finalizada e libera a criação de nova lista.
+  useEffect(() => {
+    const candidates = (pantryLists || []).filter((pantry) =>
+      pantry?.sharedId &&
+      pantry?.status === "ativa" &&
+      !isPantryFinishedByShareStatus(pantry)
+    );
+
+    if (!candidates.length) return undefined;
+
+    let cancelled = false;
+
+    const refreshCompletedSharedPantries = async () => {
+      try {
+        const results = await Promise.all(
+          candidates.map(async (pantry) => {
+            const record = await getSharedListRecord(pantry.sharedId).catch(() => null);
+            const data = record?.data || {};
+            const status = normalizePlainText(data.sharedStatus || data.status || "");
+            const finished = ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed"].includes(status);
+            return { pantry, data, finished };
+          })
+        );
+
+        if (cancelled) return;
+
+        const finishedById = new Map(
+          results
+            .filter((result) => result.finished)
+            .map((result) => [result.pantry.id, result.data || {}])
+        );
+
+        if (!finishedById.size) return;
+
+        const now = new Date().toISOString();
+        savePantryLists((pantryLists || []).map((pantry) => {
+          if (!finishedById.has(pantry.id)) return pantry;
+          const data = finishedById.get(pantry.id) || {};
+          return {
+            ...pantry,
+            status: "concluida",
+            sharedStatus: "concluida",
+            archivedFinished: true,
+            finishedAt: data.finishedAt || data.finalizedAt || data.concludedAt || pantry.finishedAt || now,
+            concludedAt: data.concludedAt || data.finalizedAt || pantry.concludedAt || now,
+            finalizedAt: data.finalizedAt || data.concludedAt || pantry.finalizedAt || now,
+            lastStatusAt: data.lastStatusAt || pantry.lastStatusAt || now,
+            updatedAt: data.updatedAt || now,
+            usedByName: data.usedByName || pantry.usedByName || null,
+            usedByListId: data.usedByListId || pantry.usedByListId || null,
+            usedByListName: data.usedByListName || pantry.usedByListName || null,
+          };
+        }));
+        setPantryCompared(false);
+        setPantryComparison(null);
+        setShowPantryComparisonDetails(false);
+      } catch (err) {
+        console.warn("Não foi possível finalizar localmente os Itens em Casa compartilhados:", err);
+      }
+    };
+
+    refreshCompletedSharedPantries();
+    const timer = setInterval(refreshCompletedSharedPantries, 12000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [pantryLists, savePantryLists]);
 
 
   const resetPantryFlow = useCallback(() => {
