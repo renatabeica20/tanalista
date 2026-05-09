@@ -2221,23 +2221,6 @@ function wasListDeletedLocally(list) {
   return getListPersistenceKeys(list).some(key => deleted.has(key));
 }
 
-function filterDeletedLocalLists(input) {
-  return (Array.isArray(input) ? input : []).filter((list) => {
-    if (!list) return false;
-    return !wasListDeletedLocally(list);
-  });
-}
-
-function saveListsToLocalStorageFiltered(input) {
-  const safe = filterDeletedLocalLists(input);
-  try {
-    localStorage.setItem("tnl_lists", JSON.stringify(safe));
-  } catch {
-    // Mantém o app funcionando se o armazenamento local falhar.
-  }
-  return safe;
-}
-
 function isSharedRecordHiddenForCurrentUser(record) {
   const data = record?.data && typeof record.data === "object" ? record.data : {};
   const deviceId = getAppDeviceId();
@@ -3116,9 +3099,7 @@ export default function App(){
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const safe = Array.isArray(stored) ? mergeUniqueLists(filterDeletedLocalLists(stored)) : [];
-      saveListsToLocalStorageFiltered(safe);
-      return safe;
+      return Array.isArray(stored)?mergeUniqueLists(stored):[];
     }catch{return[]}
   });
   const [currentList,setCurrentList]=useState(null);
@@ -3496,7 +3477,7 @@ const [lists,setLists]=useState(()=>{
         ? current.map((item) => item?.id === recentId ? { ...item, ...archivedPantryList } : item)
         : [archivedPantryList, ...current];
       const safe = mergeUniqueLists(next);
-      saveListsToLocalStorageFiltered(safe);
+      try { localStorage.setItem("tnl_lists", JSON.stringify(safe)); } catch {}
       return safe;
     });
   }, []);
@@ -3868,11 +3849,9 @@ const [lists,setLists]=useState(()=>{
   };
 
   const saveLists=(nl)=>{
-    const safe=mergeUniqueLists(
-      filterDeletedLocalLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags))
-    );
+    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
     setLists(safe);
-    saveListsToLocalStorageFiltered(safe);
+    localStorage.setItem("tnl_lists",JSON.stringify(safe));
   };
 
   const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
@@ -3895,8 +3874,8 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!restored.length)return current;
-        const merged=mergeUniqueLists(filterDeletedLocalLists([...restored,...current]));
-        saveListsToLocalStorageFiltered(merged);
+        const merged=mergeUniqueLists([...restored,...current]);
+        try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
         if(!silent)showToast(`${restored.length} lista(s) recuperada(s)`);
         return merged;
       });
@@ -3966,7 +3945,7 @@ const [lists,setLists]=useState(()=>{
       }
     }
     if(changed){
-      saveLists(filterDeletedLocalLists(updated));
+      saveLists(updated);
       showToast("☁️ Listas locais sincronizadas com sua conta",2200);
     }
   },[lists,persistListRecordToCloud,showToast]);
@@ -4576,7 +4555,7 @@ const [lists,setLists]=useState(()=>{
     const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
-    saveListsToLocalStorageFiltered(nl);
+    localStorage.setItem("tnl_lists",JSON.stringify(nl));
     setCurrentList(finalReceived);
     setScreen("list");
     setSearch("");
@@ -6023,84 +6002,90 @@ return rebuiltHistory;
   };
 
 
-  const openListForEdit=(list)=>{
-    if(!list)return;
-    if(isListFinished(list)){
-      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
-      setListMenuId(null);
-      return;
-    }
+  const openListForEdit = useCallback((list) => {
+    if (!list) return;
 
-    const items=(list.categories||[]).flatMap(cat=>(cat.items||[]).map(item=>normalizeListItem({
-      name:item.name,
-      marca:item.marca||"",
-      tipo:item.tipo||item.detail||"",
-      embalagem:item.embalagem||item.detail||"",
-      peso:item.peso||"",
-      volume:item.volume||"",
-      qty:item.qty||1,
-      unit:item.unit||"unidade",
-      price:null,
-      checked:false,
-      notFound:false,
-      extra:Boolean(item.extra || cat.name==="Itens Extras")
-    })));
+    const items = [];
+    (Array.isArray(list.categories) ? list.categories : []).forEach((cat) => {
+      (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
+        items.push({
+          ...item,
+          checked: false,
+          notFound: false,
+          checkedAt: null,
+          price: null,
+          total: null,
+        });
+      });
+    });
 
-    setEditingListId(list.id);
-    setCurrentList(list);
-    setListName(list.name||"Minha lista");
-    setListType(list.type||"mercado");
-    setBudgetText(Number(list.budget||0)>0?fmtBRL(Number(list.budget||0)):"");
-    setBudgetEnabled(Number(list.budget||0)>0);
-    setBudgetConfirmed(Boolean(Number(list.budget||0)>0));
-    setListNameConfirmed(Boolean(list.name));
-    setPendingItems(items);
-    setCurrentInput("");
-    setEditPendingIdx(null);
-    setScreen("create");
+    setPendingItems(items.map(normalizeListItem));
+    setListName((list.name || "").replace(/\s*\(cópia\)$/i, ""));
+    setBudget(list.budget || "");
+    setType(list.type || "mercado");
+    setCurrentList(null);
     setSearch("");
     setCollapsedCats({});
     setListMenuId(null);
-    showToast("✏️ Lista aberta para edição");
-  };
+    setPantryCompared(false);
+    setPantryComparison(null);
+    setShowPantryComparisonDetails(false);
+    setScreen("create");
+    showToast("✏️ Cópia aberta para edição.", 2200);
+  }, [setPendingItems, setListName, setBudget, setType, setCurrentList, setSearch, setCollapsedCats, setListMenuId, setPantryCompared, setPantryComparison, setShowPantryComparisonDetails, setScreen, showToast]);
 
-  const duplicateList=(list)=>{
-    if(!list)return;
-    const copy={
-      ...JSON.parse(JSON.stringify(list)),
-      id:Date.now().toString(),
-      name:(list.name||"Lista")+" (cópia)",
-      sharedId:null,
-      sharedAt:null,
-      imported:false,
-      importedFrom:null,
-      restoredFromCloud:false,
-      createdAt:new Date().toISOString(),
-      updatedAt:new Date().toISOString(),
-      finishedAt:null,
-      completedAt:null,
-      finalizedAt:null,
-      finished:false,
-      completed:false,
-      finalizada:false,
-      finalized:false,
-      isFinished:false,
-      isReadOnly:false,
-      readOnly:false,
-      locked:false,
-      history:false,
-      copiedFromListId:list.id || null,
-      status:"open",
-      total:0,
-      categories:(list.categories||[]).map(cat=>({
-        ...cat,
-        items:(cat.items||[]).map(item=>({...item,checked:false,notFound:false,price:null}))
-      }))
+  const duplicateList = useCallback((list) => {
+    if (!list) return;
+
+    const now = new Date().toISOString();
+    const sourceCategories = Array.isArray(list.categories) ? list.categories : [];
+
+    const copiedCategories = sourceCategories.map((cat) => ({
+      ...cat,
+      items: (Array.isArray(cat.items) ? cat.items : []).map((item) => ({
+        ...item,
+        checked: false,
+        notFound: false,
+        checkedAt: null,
+        price: null,
+        total: null,
+      })),
+    }));
+
+    const copy = {
+      ...list,
+      id: `copy-${Date.now()}`,
+      sharedId: null,
+      isShared: false,
+      sharedAt: null,
+      sharedUrl: null,
+      sharedEvents: [],
+      cloudPersisted: false,
+      lastSyncedAt: null,
+      name: `${list.name || "Lista"} (cópia)`,
+      categories: copiedCategories,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      finishedAt: null,
+      finalizedAt: null,
+      archivedAt: null,
+      archivedFinished: false,
+      finished: false,
+      completed: false,
+      isFinished: false,
+      status: "draft",
+      isCopy: true,
+      editableCopy: true,
+      copiedFrom: list.id || list.sharedId || null,
+      copiedFromId: list.id || null,
+      copiedFromName: list.name || "",
     };
-    saveLists([copy,...lists]);
+
+    saveLists([copy, ...lists]);
     setListMenuId(null);
-    showToast("📄 Cópia criada");
-  };
+    showToast("📄 Cópia criada. Você já pode editar a lista.", 2600);
+  }, [lists, saveLists, setListMenuId, showToast]);
 
   const stopListSharing=async(list)=>{
     if(!list?.sharedId)return;
@@ -6168,7 +6153,7 @@ return rebuiltHistory;
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
       setLists(prev=>{
         const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===synced.id || (sharedId&&l.sharedId===sharedId)?{...l,...synced}:l);
-        try{saveListsToLocalStorageFiltered(next);}catch{}
+        try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
         return next;
       });
       setSharedUpdateNotice({type:"ok",msg:"Lista sincronizada agora"});
@@ -6214,7 +6199,7 @@ return rebuiltHistory;
         ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
         : [refreshed,...existing];
       setLists(nl);
-      saveListsToLocalStorageFiltered(nl);
+      localStorage.setItem("tnl_lists",JSON.stringify(nl));
       setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
       showToast("🔄 Lista atualizada");
     }catch(err){
@@ -6511,9 +6496,8 @@ return rebuiltHistory;
       (target.sharedId && l.sharedId===target.sharedId) ||
       getListPersistenceKeys(l).some(key=>targetKeys.has(key))
     );
-    const nl=filterDeletedLocalLists(lists.filter(l=>!sameList(l)));
+    const nl=lists.filter(l=>!sameList(l));
     saveLists(nl);
-    saveListsToLocalStorageFiltered(nl);
     setConfirmDelete(null);
     setListMenuId(null);
 
