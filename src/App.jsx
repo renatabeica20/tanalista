@@ -3382,6 +3382,15 @@ const [lists,setLists]=useState(()=>{
     toastTimer.current=setTimeout(()=>setToast({show:false,msg:""}),duration);
   },[]);
 
+  const hasValidLocalSession=useCallback(()=>{
+    const name=getAppUserName();
+    return Boolean(name && isPinSessionVerified(name));
+  },[]);
+
+  const clearSharedUrlFromAddressBar=useCallback(()=>{
+    try { window.history.replaceState({}, document.title, "/"); } catch {}
+  },[]);
+
 
 
 
@@ -4175,6 +4184,12 @@ const [lists,setLists]=useState(()=>{
         auth_mode: pinResult.mode || "login",
       });
 
+      if(sharedLandingRecord){
+        showToast("Acesso validado. Importando lista recebida...",1800);
+        await importSharedRecordToApp(sharedLandingRecord);
+        return;
+      }
+
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
       showToast(err?.message || "Não foi possível validar seu acesso.",5200);
@@ -4718,19 +4733,46 @@ const [lists,setLists]=useState(()=>{
     const embedded=extractEmbeddedListFromUrl();
     const sharedId=extractSharedIdFromUrl();
     if(!sharedId&&!embedded)return;
+
+    const validSession=hasValidLocalSession();
+
     setLoading(true);
     try{
       if(embedded){
-        await importSharedRecordToApp(null, embedded);
+        if(validSession){
+          await importSharedRecordToApp(null, embedded);
+          clearSharedUrlFromAddressBar();
+          return;
+        }
+
+        setSharedPreviewExpanded(false);
+        setSharedLandingRecord({
+          id: embedded.sharedId || embedded.originalSharedId || `embedded-${Date.now()}`,
+          data: embedded,
+          remetente: embedded.remetente || embedded.ownerName || embedded.sharedOwner || "Não informado",
+          embedded:true,
+        });
+        setUserNameInput(getAppUserName() || "");
+        setUserNameModal(true);
         return;
       }
+
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
+
+      if(validSession){
+        await importSharedRecordToApp(record);
+        clearSharedUrlFromAddressBar();
+        return;
+      }
+
       setSharedPreviewExpanded(false);
       setSharedLandingRecord(record);
-      if(!getAppUserName()){
-        setUserNameModal(true);
-      }
+
+      // Só abre login quando não há sessão PIN válida neste aparelho.
+      setUserNameInput(getAppUserName() || "");
+      setUserNameModal(true);
+
       // Mantém o link em formato de query string para evitar 404 em hospedagens SPA/Vercel sem rewrite.
       try { window.history.replaceState({}, document.title, "/?lista=" + encodeURIComponent(sharedId)); } catch {}
     }catch(err){
@@ -4738,7 +4780,7 @@ const [lists,setLists]=useState(()=>{
     }finally{
       setLoading(false);
     }
-  },[showToast,importSharedRecordToApp]);
+  },[showToast,importSharedRecordToApp,hasValidLocalSession,clearSharedUrlFromAddressBar]);
 
   useEffect(()=>{loadSharedListFromUrl();},[loadSharedListFromUrl]);
 
