@@ -1176,43 +1176,6 @@ function normalizeListItem(item) {
   };
 }
 
-
-function mergePendingItemsWithPantryForFinalList(pendingItemsInput, pantryCategoriesInput) {
-  const normalizeKey = (value) => normalizePlainText(value || "").replace(/\s+/g, " ").trim();
-  const map = new Map();
-
-  (Array.isArray(pendingItemsInput) ? pendingItemsInput : []).forEach((item) => {
-    const normalized = normalizeListItem(item);
-    const key = normalizeKey(normalized.name);
-    if (!key) return;
-    map.set(key, {
-      ...normalized,
-      checked: Boolean(normalized.checked),
-      notFound: Boolean(normalized.notFound),
-    });
-  });
-
-  (Array.isArray(pantryCategoriesInput) ? pantryCategoriesInput : []).forEach((cat) => {
-    (Array.isArray(cat?.items) ? cat.items : []).forEach((item) => {
-      const normalized = normalizeListItem(item);
-      const key = normalizeKey(normalized.name);
-      if (!key || map.has(key)) return;
-      map.set(key, {
-        ...normalized,
-        checked: false,
-        notFound: false,
-        fromPantry: true,
-        pantryImported: true,
-      });
-    });
-  });
-
-  return Array.from(map.values()).sort((a, b) =>
-    normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")
-  );
-}
-
-
 function sanitizeCategories(categories) {
   return (Array.isArray(categories) ? categories : [])
     .map((cat) => {
@@ -3082,75 +3045,105 @@ function findMatchingPantryItem(item, pantryItems) {
   }) || null;
 }
 
-function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
-  const pantryItems = flattenCategoryItems(pantryCategories).map(normalizeListItem);
-  const removed = [];
-  const adjusted = [];
-  const kept = [];
-  const matchedPantryKeys = new Set();
+function comparePendingItemsWithPantry(items, pantryCategories = []) {
+  const normalizeKey = (value) => normalizePlainText(value || "").replace(/\s+/g, " ").trim();
 
-  const nextItems = (Array.isArray(pendingItems) ? pendingItems : []).flatMap(original => {
-    const item = normalizeListItem(original);
-    const match = findMatchingPantryItem(item, pantryItems);
-    if (!match) {
-      kept.push(item);
-      return [item];
-    }
+  const toNumber = (value, fallback = 0) => {
+    const n = Number(String(value ?? "").replace(",", "."));
+    return Number.isFinite(n) ? n : fallback;
+  };
 
-    const matchKey = pantryItemKey(match);
-    if (matchKey) matchedPantryKeys.add(matchKey);
+  const sameUnit = (a, b) => normalizeUnitValue(a || "unidade") === normalizeUnitValue(b || "unidade");
 
-    const sameUnit = normalizeUnitValue(item.unit) === normalizeUnitValue(match.unit);
-    const itemQty = Number(item.qty || 1);
-    const pantryQty = Number(match.qty || 1);
-    const pantryNote = `Já tem na Itens em Casa: ${formatQtyUnit(match.qty, match.unit)}`;
+  const pantryMap = new Map();
 
-    if (sameUnit && Number.isFinite(itemQty) && Number.isFinite(pantryQty)) {
-      if (pantryQty >= itemQty) {
-        const pantryOnly = normalizeListItem({
-          ...match,
-          checked: true,
-          notFound: false,
-          pantryCompared: true,
-          pantryOnly: true,
-          pantryNote,
-          detail: [match.detail, "Item em casa"].filter(Boolean).join(" · "),
-        });
-        removed.push({ item, pantry: match, reason: pantryNote });
-        return [pantryOnly];
+  (Array.isArray(pantryCategories) ? pantryCategories : []).forEach((cat) => {
+    (Array.isArray(cat?.items) ? cat.items : []).forEach((rawItem) => {
+      const item = normalizeListItem(rawItem);
+      const key = normalizeKey(item.name);
+      if (!key) return;
+
+      const qty = Math.max(0, toNumber(item.qty, 1));
+      const unit = normalizeUnitValue(item.unit || "unidade");
+      const current = pantryMap.get(key);
+
+      if (!current) {
+        pantryMap.set(key, { ...item, qty, unit });
+        return;
       }
-      const newQty = Number((itemQty - pantryQty).toFixed(2));
-      const changed = { ...item, qty: newQty, pantryCompared: true, pantryNote: `${pantryNote}. Comprar complemento: ${formatQtyUnit(newQty, item.unit)}` };
-      adjusted.push({ before: item, after: changed, pantry: match });
-      return [changed];
-    }
 
-    const marked = { ...item, pantryCompared: true, pantryNote };
-    adjusted.push({ before: item, after: marked, pantry: match });
-    return [marked];
+      // Só soma automaticamente quando a unidade é a mesma.
+      // Ex.: 2 pacotes + 1 pacote = 3 pacotes.
+      if (sameUnit(current.unit, unit)) {
+        pantryMap.set(key, { ...current, qty: toNumber(current.qty, 0) + qty });
+      }
+    });
   });
 
-  const pantryOnlyItems = pantryItems
-    .filter((pantryItem) => {
-      const key = pantryItemKey(pantryItem);
-      if (!key || matchedPantryKeys.has(key)) return false;
-      const alreadyInList = nextItems.some((item) => {
-        const itemKey = pantryItemKey(item);
-        return itemKey && (itemKey === key || itemKey.includes(key) || key.includes(itemKey));
-      });
-      return !alreadyInList;
-    })
-    .map((pantryItem) => normalizeListItem({
-      ...pantryItem,
-      checked: true,
-      notFound: false,
-      pantryCompared: true,
-      pantryOnly: true,
-      pantryNote: `Item existente nos Itens em Casa: ${formatQtyUnit(pantryItem.qty, pantryItem.unit)}`,
-      detail: [pantryItem.detail, "Item em casa"].filter(Boolean).join(" · "),
-    }));
+  const kept = [];
+  const removed = [];
+  const adjusted = [];
+  const unchanged = [];
 
-  return { items: [...nextItems, ...pantryOnlyItems], removed, adjusted, kept, pantryOnly: pantryOnlyItems };
+  (Array.isArray(items) ? items : []).forEach((rawItem) => {
+    const item = normalizeListItem(rawItem);
+    const key = normalizeKey(item.name);
+    const desiredQty = Math.max(0, toNumber(item.qty, 1));
+    const pantryItem = pantryMap.get(key);
+
+    if (!key || !pantryItem) {
+      kept.push(item);
+      unchanged.push(item);
+      return;
+    }
+
+    const pantryQty = Math.max(0, toNumber(pantryItem.qty, 0));
+
+    // Só faz abatimento automático se a unidade for compatível.
+    // Se não for compatível, mantém o item para evitar erro de cálculo.
+    if (!sameUnit(item.unit, pantryItem.unit)) {
+      kept.push(item);
+      unchanged.push(item);
+      return;
+    }
+
+    const remainingQty = Number((desiredQty - pantryQty).toFixed(3));
+
+    if (remainingQty <= 0) {
+      removed.push({
+        ...item,
+        removedReason: "Já existe quantidade suficiente nos Itens em Casa",
+        pantryQty,
+        originalQty: desiredQty,
+      });
+      return;
+    }
+
+    if (remainingQty < desiredQty) {
+      const updated = {
+        ...item,
+        qty: remainingQty,
+        qtyAdjusted: true,
+        originalQty: desiredQty,
+        pantryQty,
+        adjustmentReason: `Abatido ${formatQtyUnit(pantryQty, pantryItem.unit)} dos Itens em Casa`,
+      };
+      kept.push(updated);
+      adjusted.push(updated);
+      return;
+    }
+
+    kept.push(item);
+    unchanged.push(item);
+  });
+
+  return {
+    items: kept,
+    removed,
+    adjusted,
+    unchanged,
+    pantryItems: Array.from(pantryMap.values()),
+  };
 }
 
 function formatPantryDate(value) {
@@ -3510,14 +3503,7 @@ const [lists,setLists]=useState(()=>{
       name: "Itens em Casa",
       type: "pantry",
       listKind: "pantry_history",
-      categories: (pantry.categories || data.categories || []).map(cat => ({
-        ...cat,
-        items: (cat.items || []).map(item => ({
-          ...item,
-          checked: true,
-          notFound: Boolean(item.notFound),
-        })),
-      })),
+      categories: pantry.categories || data.categories || [],
       itemCount,
       budget: 0,
       createdAt: pantry.createdAt || data.createdAt || now,
@@ -3526,6 +3512,7 @@ const [lists,setLists]=useState(()=>{
       completedAt: data.completedAt || finishedAt,
       finalizedAt: data.finalizedAt || finishedAt,
       status: "completed",
+      sharedStatus: "concluida",
       archivedStatus: "archived_completed",
       archivedFinished: true,
       finished: true,
@@ -3537,7 +3524,6 @@ const [lists,setLists]=useState(()=>{
       sourceSharedId: pantry.sourceSharedId || pantry.originalSharedId || data.sourceSharedId || null,
       ownerName: pantry.ownerName || data.ownerName || getAppUserName() || "Usuário",
       remetente: pantry.remetente || data.remetente || getAppUserName() || "Usuário",
-      sharedStatus: "concluida",
       usedByName: data.usedByName || pantry.usedByName || null,
       usedByListId: data.usedByListId || pantry.usedByListId || null,
       usedByListName: data.usedByListName || pantry.usedByListName || null,
@@ -3675,7 +3661,24 @@ const [lists,setLists]=useState(()=>{
         (pantryLists || []).forEach((pantry) => {
           if (!finishedById.has(pantry.id)) return;
           const data = finishedById.get(pantry.id) || {};
-          archivePantryAsRecentList(pantry, data);
+          const finishedAt = data.finishedAt || data.finalizedAt || data.concludedAt || now;
+          archivePantryAsRecentList({
+            ...pantry,
+            status: "completed",
+            sharedStatus: "concluida",
+            archivedStatus: "archived_completed",
+            archivedFinished: true,
+            finished: true,
+            completed: true,
+            isFinished: true,
+            finishedAt,
+            completedAt: data.completedAt || finishedAt,
+            finalizedAt: data.finalizedAt || finishedAt,
+            concludedAt: data.concludedAt || finishedAt,
+            usedByName: data.usedByName || pantry.usedByName || null,
+            usedByListId: data.usedByListId || pantry.usedByListId || null,
+            usedByListName: data.usedByListName || pantry.usedByListName || null,
+          }, data);
         });
 
         setPantryCompared(false);
@@ -4910,7 +4913,7 @@ const [lists,setLists]=useState(()=>{
     const targetListName = listName || "Nova lista";
     const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
 
-    setPendingItems(mergePendingItemsWithPantryForFinalList(pendingItems, activePantry.categories));
+    setPendingItems(result.items);
     setPantryComparison(result);
     setPantryCompared(true);
     setShowPantryComparisonDetails(false);
