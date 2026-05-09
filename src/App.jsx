@@ -6030,7 +6030,6 @@ return rebuiltHistory;
     })));
 
     if(editableCopy){
-      setEditingListId(null);
       setCurrentList(null);
       setPendingItems(items);
       setListName(String(list.name || "").replace(/\s*\(cópia\)$/i,""));
@@ -6041,10 +6040,10 @@ return rebuiltHistory;
       setPantryCompared(false);
       setPantryComparison(null);
       setShowPantryComparisonDetails(false);
-      setScreen("create");
+      setListMenuId(null);
       setSearch("");
       setCollapsedCats({});
-      setListMenuId(null);
+      setScreen("create");
       showToast("✏️ Cópia aberta como nova pré-lista. Agora organize novamente.");
       return;
     }
@@ -6055,7 +6054,7 @@ return rebuiltHistory;
       return;
     }
 
-    setEditingListId(list.id);
+    setCurrentList(null);
     setPendingItems(items);
     setListName(list.name||"");
     setBudget(list.budget?String(list.budget):"");
