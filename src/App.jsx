@@ -3381,15 +3381,41 @@ const [lists,setLists]=useState(()=>{
   };
 
   const activePantry = pantryLists.find(p => p.status === "ativa" && !isPantryFinishedByShareStatus(p)) || null;
-  const pantryShareStatus = activePantry?.sharedStatus === "concluida" || activePantry?.sharedStatus === "finalizada"
-    ? "Finalizada pelo destinatário"
-    : activePantry?.sharedStatus === "utilizada_na_comparacao"
-      ? "Utilizada na comparação"
-      : activePantry?.sharedStatus === "importada"
-        ? "Recebida"
-        : activePantry?.sharedAt
-          ? "Compartilhada"
-          : null;
+  const pantryShareStatus = (() => {
+    if (!activePantry) return null;
+
+    const receiverName =
+      activePantry.importedByName ||
+      activePantry.sharedWithName ||
+      activePantry.usedByName ||
+      "";
+
+    const senderName =
+      activePantry.receivedFromName ||
+      activePantry.importedFrom ||
+      activePantry.sharedOwner ||
+      activePantry.remetente ||
+      activePantry.ownerName ||
+      "";
+
+    if (activePantry.sharedStatus === "concluida" || activePantry.sharedStatus === "finalizada") {
+      return receiverName ? `Finalizada por ${receiverName}` : "Finalizada pelo destinatário";
+    }
+
+    if (activePantry.sharedStatus === "utilizada_na_comparacao") {
+      return receiverName ? `Comparada por ${receiverName}` : "Utilizada na comparação";
+    }
+
+    if (activePantry.sharedStatus === "importada") {
+      return senderName ? `Recebida de ${senderName}` : "Recebida";
+    }
+
+    if (activePantry.sharedAt) {
+      return receiverName ? `Compartilhada com ${receiverName}` : "Compartilhada";
+    }
+
+    return null;
+  })();
 
 
   const archivePantryAsRecentList = useCallback((pantry, data = {}) => {
@@ -3404,6 +3430,13 @@ const [lists,setLists]=useState(()=>{
       name: "Itens em Casa",
       type: "pantry",
       listKind: "pantry_history",
+      listType: "pantry",
+      icon: "🏠",
+      emoji: "🏠",
+      listIcon: "🏠",
+      displayIcon: "🏠",
+      moduleIcon: "home",
+      iconType: "home",
       categories: pantry.categories || data.categories || [],
       itemCount,
       budget: 0,
@@ -3425,7 +3458,10 @@ const [lists,setLists]=useState(()=>{
       sourceSharedId: pantry.sourceSharedId || pantry.originalSharedId || data.sourceSharedId || null,
       ownerName: pantry.ownerName || data.ownerName || getAppUserName() || "Usuário",
       remetente: pantry.remetente || data.remetente || getAppUserName() || "Usuário",
-      usedByName: data.usedByName || pantry.usedByName || null,
+      importedByName: data.importedByName || pantry.importedByName || null,
+      importedAt: data.importedAt || pantry.importedAt || null,
+      sharedWithName: data.importedByName || data.sharedWithName || pantry.sharedWithName || null,
+      usedByName: data.usedByName || data.importedByName || pantry.usedByName || null,
       usedByListId: data.usedByListId || pantry.usedByListId || null,
       usedByListName: data.usedByListName || pantry.usedByListName || null,
       historyNote: data.usedByName
@@ -3467,8 +3503,11 @@ const [lists,setLists]=useState(()=>{
           return {
             ...p,
             sharedStatus: nextStatus,
+            importedByName: data.importedByName || p.importedByName || null,
+            importedAt: data.importedAt || p.importedAt || null,
+            sharedWithName: data.importedByName || data.sharedWithName || p.sharedWithName || null,
             usedForComparisonAt: data.usedForComparisonAt || p.usedForComparisonAt || null,
-            usedByName: data.usedByName || p.usedByName || null,
+            usedByName: data.usedByName || data.importedByName || p.usedByName || null,
             usedByListName: data.usedByListName || p.usedByListName || null,
             concludedAt: data.concludedAt || p.concludedAt || null,
             finalizedAt: data.finalizedAt || p.finalizedAt || null,
@@ -3483,7 +3522,26 @@ const [lists,setLists]=useState(()=>{
         }));
 
         if (shouldConclude) {
-          archivePantryAsRecentList(activePantry, data);
+          const finishedAt = data.finishedAt || data.finalizedAt || data.concludedAt || new Date().toISOString();
+          archivePantryAsRecentList({
+            ...activePantry,
+            status: "completed",
+            sharedStatus: "concluida",
+            archivedStatus: "archived_completed",
+            archivedFinished: true,
+            finished: true,
+            completed: true,
+            isFinished: true,
+            finishedAt,
+            completedAt: data.completedAt || finishedAt,
+            finalizedAt: data.finalizedAt || finishedAt,
+            concludedAt: data.concludedAt || finishedAt,
+            importedByName: data.importedByName || activePantry.importedByName || null,
+            sharedWithName: data.importedByName || data.sharedWithName || activePantry.sharedWithName || null,
+            usedByName: data.usedByName || data.importedByName || activePantry.usedByName || null,
+            usedByListId: data.usedByListId || activePantry.usedByListId || null,
+            usedByListName: data.usedByListName || activePantry.usedByListName || null,
+          }, data);
         }
       } catch (err) {
         console.warn("Não foi possível consultar status dos Itens em Casa compartilhados:", err);
@@ -4335,8 +4393,16 @@ const [lists,setLists]=useState(()=>{
         lastStatusAt:now,
         ...extra,
       };
+      if(status === "importada"){
+        payload.sharedStatus="importada";
+        payload.importedAt=extra.importedAt || now;
+        payload.importedByName=extra.importedByName || extra.sharedWithName || payload.importedByName || null;
+        payload.sharedWithName=extra.sharedWithName || extra.importedByName || payload.sharedWithName || null;
+      }
       if(status === "utilizada_na_comparacao"){
         payload.usedForComparisonAt=extra.usedForComparisonAt || now;
+        payload.importedByName=extra.importedByName || payload.importedByName || null;
+        payload.sharedWithName=extra.sharedWithName || payload.importedByName || payload.sharedWithName || null;
       }
       if(status === "concluida" || status === "finalizada"){
         payload.sharedStatus="concluida";
@@ -4380,6 +4446,9 @@ const [lists,setLists]=useState(()=>{
         imported:true,
         importedFrom: sender,
         sharedOwner: sender,
+        receivedFromName: sender,
+        importedByName: currentUserName || "Usuário",
+        importedAt: now,
         originalSharedId: sourceSharedId || baseData.sharedId || null,
         sourceSharedId: sourceSharedId || baseData.sharedId || null,
         sharedStatus:"importada",
@@ -4399,6 +4468,12 @@ const [lists,setLists]=useState(()=>{
           listName:"Itens em Casa",
           pantryId:importedPantry.id,
           message:`${currentUserName || "Usuário"} importou os Itens em Casa compartilhados.`,
+        });
+
+        await updateSharedPantryOriginStatus(sourceSharedId, "importada", {
+          importedByName: currentUserName || "Usuário",
+          sharedWithName: currentUserName || "Usuário",
+          importedAt: now,
         });
       }
       await registrarEvento("shared_pantry_imported", {
@@ -5006,6 +5081,8 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       updateSharedPantryOriginStatus(pantrySourceSharedId, "utilizada_na_comparacao", {
         usedForComparisonAt: now,
         usedByName: actorName,
+        sharedWithName: actorName,
+        importedByName: activePantry.importedByName || actorName,
         usedByListName: targetListName,
         usedByPantryId: activePantry.id,
       });
@@ -5058,7 +5135,11 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       updateSharedPantryOriginStatus(pantrySourceSharedId, "concluida", {
         concludedAt: now,
         finalizedAt: now,
+        finishedAt: now,
+        completedAt: now,
         usedByName: actorName,
+        sharedWithName: actorName,
+        importedByName: active.importedByName || actorName,
         usedByListId: sourceList?.id || active.usedByListId || null,
         usedByListName: sourceList?.name || active.usedByListName || null,
       });
@@ -5816,6 +5897,11 @@ return rebuiltHistory;
           : [archivedList,...(lists||[])];
 
         saveLists(nextLists);
+
+        // Se a compra usou Itens em Casa compartilhados/importados,
+        // finalizar a compra também finaliza essa lista na origem.
+        markActivePantryAsCompleted(archivedList);
+
         setCurrentList(null);
 
         // Sincroniza em segundo plano quando houver registro na nuvem.
