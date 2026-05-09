@@ -3130,6 +3130,7 @@ const [lists,setLists]=useState(()=>{
   const [showPantryComparisonDetails,setShowPantryComparisonDetails]=useState(false);
   const [currentInput,setCurrentInput]=useState("");
   const [editingListId,setEditingListId]=useState(null);
+  const [editingDraftCopyId,setEditingDraftCopyId]=useState(null);
 
   // Product dialog
   const [itemDialog,setItemDialog]=useState(null);
@@ -5208,19 +5209,18 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
-      const editingEditableCopy=Boolean(
-        editingOriginal?.editableCopy===true ||
-        editingOriginal?.isCopy===true ||
-        editingOriginal?.copyMode==="prelist" ||
-        editingOriginal?.status==="draft"
-      );
-      if(editingOriginal && !editingEditableCopy){
+      const editingDraftCopy=!editingOriginal && editingDraftCopyId ? lists.find(l=>l.id===editingDraftCopyId) : null;
+      const baseEditingList=editingOriginal || editingDraftCopy;
+      const isEditingDraftCopy=Boolean(editingDraftCopy);
+
+      if(editingOriginal){
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
-      let newList=editingOriginal
+
+      let newList=baseEditingList
         ? {
-            ...editingOriginal,
-            name:listName.trim()||editingOriginal.name||"Minha lista",
+            ...baseEditingList,
+            name:listName.trim()||baseEditingList.name||"Minha lista",
             type:listType,
             budget:parseBRL(budgetText)||0,
             categories,
@@ -5228,11 +5228,11 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
             updatedAt:now,
             lastSyncedAt:now,
             total:0,
-            isShared:editingOriginal.isShared===true,
-            status: editingEditableCopy ? "active" : editingOriginal.status,
-            editableCopy:false,
-            isCopy:false,
-            copyMode:null,
+            isShared:baseEditingList.isShared===true,
+            status:isEditingDraftCopy ? "active" : baseEditingList.status,
+            editableCopy:isEditingDraftCopy ? false : baseEditingList.editableCopy,
+            isCopy:isEditingDraftCopy ? false : baseEditingList.isCopy,
+            copyMode:isEditingDraftCopy ? null : baseEditingList.copyMode,
             archivedFinished:false,
             finishedAt:null,
             completedAt:null,
@@ -5257,7 +5257,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
   console.warn("Falha ao salvar lista na nuvem. Mantendo lista local:", err);
   showToast("⚠️ Lista salva apenas neste aparelho. Nuvem indisponível.", 3600);
 }
-      await registrarEvento(editingOriginal ? "update_list" : "create_list", {
+      await registrarEvento(baseEditingList ? "update_list" : "create_list", {
         list_id: newList.id || null,
         shared_id: newList.sharedId || null,
         list_name: newList.name || "",
@@ -5266,13 +5266,13 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         item_count: countCategoryItems(newList.categories || []),
       });
 
-      const nl=editingOriginal
-        ? lists.map(l=>l.id===editingOriginal.id?newList:l)
+      const nl=baseEditingList
+        ? lists.map(l=>l.id===baseEditingList.id?newList:l)
         : [newList,...lists];
       saveLists(nl);
-      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
+      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);setEditingDraftCopyId(null);
       setSearch("");setCollapsedCats({});
-      if(editingOriginal && !editingEditableCopy){
+      if(editingOriginal){
         setCurrentList(null);
         archiveFinishedListsBeforeHome();
       }else{
@@ -5280,7 +5280,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         setScreen("list");
       }
      showToast(
-  editingOriginal && !editingEditableCopy
+  editingOriginal
     ? "✅ Alterações salvas. Voltando para o início."
     : "✅ Lista organizada!"
 );
@@ -5316,20 +5316,18 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
-      const editingEditableCopy=Boolean(
-        editingOriginal?.editableCopy===true ||
-        editingOriginal?.isCopy===true ||
-        editingOriginal?.copyMode==="prelist" ||
-        editingOriginal?.status==="draft"
-      );
-      if(editingOriginal && !editingEditableCopy){
+      const editingDraftCopy=!editingOriginal && editingDraftCopyId ? lists.find(l=>l.id===editingDraftCopyId) : null;
+      const baseEditingList=editingOriginal || editingDraftCopy;
+      const isEditingDraftCopy=Boolean(editingDraftCopy);
+
+      if(editingOriginal){
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
 
-      let newList=editingOriginal
+      let newList=baseEditingList
         ? {
-            ...editingOriginal,
-            name:listName.trim()||editingOriginal.name||"Minha lista",
+            ...baseEditingList,
+            name:listName.trim()||baseEditingList.name||"Minha lista",
             type:listType,
             budget:parseBRL(budgetText)||0,
             categories,
@@ -5337,12 +5335,12 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
             updatedAt:now,
             lastSyncedAt:now,
             total:0,
-            isShared:editingOriginal.isShared===true,
+            isShared:baseEditingList.isShared===true,
             organizationMode:"manual_order",
-            status: editingEditableCopy ? "active" : editingOriginal.status,
-            editableCopy:false,
-            isCopy:false,
-            copyMode:null,
+            status:isEditingDraftCopy ? "active" : baseEditingList.status,
+            editableCopy:isEditingDraftCopy ? false : baseEditingList.editableCopy,
+            isCopy:isEditingDraftCopy ? false : baseEditingList.isCopy,
+            copyMode:isEditingDraftCopy ? null : baseEditingList.copyMode,
             archivedFinished:false,
             finishedAt:null,
             completedAt:null,
@@ -5366,7 +5364,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         showToast("⚠️ Lista salva apenas neste aparelho. Nuvem indisponível.",3600);
       }
 
-      await registrarEvento(editingOriginal ? "update_list" : "create_list",{
+      await registrarEvento(baseEditingList ? "update_list" : "create_list",{
         list_id:newList.id||null,
         shared_id:newList.sharedId||null,
         list_name:newList.name||"",
@@ -5376,21 +5374,21 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         item_count:countCategoryItems(newList.categories||[]),
       });
 
-      const nl=editingOriginal
-        ? lists.map(l=>l.id===editingOriginal.id?newList:l)
+      const nl=baseEditingList
+        ? lists.map(l=>l.id===baseEditingList.id?newList:l)
         : [newList,...lists];
 
       saveLists(nl);
-      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
+      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);setEditingDraftCopyId(null);
       setSearch("");setCollapsedCats({});
-      if(editingOriginal && !editingEditableCopy){
+      if(editingOriginal){
         setCurrentList(null);
         archiveFinishedListsBeforeHome();
       }else{
         setCurrentList(newList);
         setScreen("list");
       }
-      showToast(editingOriginal && !editingEditableCopy ? "✅ Alterações salvas. Voltando para o início." : "✅ Lista criada na sua ordem!");
+      showToast(editingOriginal?"✅ Alterações salvas. Voltando para o início.":"✅ Lista criada na sua ordem!");
     }catch(err){
       console.error("Erro ao criar lista na ordem do usuário:",err);
       showToast("❌ Erro ao criar lista: "+(err?.message||String(err)),6000);
@@ -6118,7 +6116,8 @@ return rebuiltHistory;
     })));
 
     // Cópia de lista finalizada vira nova pré-lista, não edição da lista original.
-    setEditingListId(list.id);
+    setEditingListId(editableCopy ? null : list.id);
+    setEditingDraftCopyId(editableCopy ? list.id : null);
     setCurrentList(null);
     setPendingItems(items);
     setListName(String(list.name || "").replace(/\s*\(c[oó]pia\)$/i,""));
@@ -6963,7 +6962,7 @@ return rebuiltHistory;
                 return (
                   <div
                     key={m.name}
-                    onClick={()=>{if(m.active){setEditingListId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
+                    onClick={()=>{if(m.active){setEditingListId(null);setEditingDraftCopyId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
                     aria-disabled={inactive}
                     title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
                     style={{
