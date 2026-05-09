@@ -115,6 +115,7 @@ import SearchBar from "./components/SearchBar";
 import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
+import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -3234,6 +3235,7 @@ const [lists,setLists]=useState(()=>{
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState({show:false,msg:""});
   const [confirmDelete,setConfirmDelete]=useState(null);
+  const [confirmDeleteAction,setConfirmDeleteAction]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
@@ -7355,48 +7357,25 @@ return rebuiltHistory;
 )}
 
       {/* CONFIRM DELETE */}
-      {confirmDelete&&(
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={()=>setConfirmDelete(null)}
-          style={{
-            position:"fixed",
-            inset:0,
-            zIndex:900,
-            background:"rgba(17,24,39,0.46)",
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            padding:22,
-            backdropFilter:"blur(4px)"
-          }}
-        >
-          <div
-            onClick={(e)=>e.stopPropagation()}
-            style={{
-              width:"100%",
-              maxWidth:360,
-              background:"#FFFFFF",
-              borderRadius:28,
-              padding:24,
-              boxShadow:"0 28px 80px rgba(17,24,39,0.28)",
-              border:"1px solid #FEE2E2",
-              transform:"translateY(-10px)"
-            }}
-          >
-            <div style={{textAlign:"center",marginBottom:22}}>
-              <div style={{width:58,height:58,borderRadius:"50%",margin:"0 auto 12px",background:"#FEF2F2",color:"#DC2626",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,border:"1px solid #FECACA"}}>🗑️</div>
-              <div style={{fontWeight:950,fontSize:20,color:"#111827",marginBottom:8}}>Excluir lista?</div>
-              <div style={{fontSize:14,color:"#6B7280",lineHeight:1.45}}>Essa ação remove a lista deste aparelho e não pode ser desfeita.</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <button onClick={()=>setConfirmDelete(null)} style={{...btnGr,minHeight:50,borderRadius:18}}>Cancelar</button>
-              <button onClick={()=>deleteList(confirmDelete)} style={{minHeight:50,padding:14,borderRadius:18,background:"linear-gradient(135deg,#DC2626,#EF4444)",border:"none",color:"white",fontWeight:900,fontSize:15,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 12px 24px rgba(220,38,38,0.22)"}}>Excluir</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDeleteModal
+        open={Boolean(confirmDelete)}
+        title="Excluir lista?"
+        message="Essa ação remove a lista deste aparelho e não pode ser desfeita."
+        onCancel={()=>setConfirmDelete(null)}
+        onConfirm={()=>deleteList(confirmDelete)}
+      />
+
+      <ConfirmDeleteModal
+        open={Boolean(confirmDeleteAction)}
+        title={confirmDeleteAction?.title || "Excluir?"}
+        message={confirmDeleteAction?.message || "Essa ação não pode ser desfeita."}
+        onCancel={()=>setConfirmDeleteAction(null)}
+        onConfirm={()=>{
+          const action=confirmDeleteAction?.onConfirm;
+          setConfirmDeleteAction(null);
+          if(typeof action==="function") action();
+        }}
+      />
 
       {/* ════════════════════════════════════
           CREATE
@@ -8012,7 +7991,14 @@ return rebuiltHistory;
             </div>
 
             <div style={{display:"flex",gap:10}}>
-              <button onClick={removeItem} style={{padding:"14px 18px",borderRadius:18,background:"#FEE2E2",border:"none",color:"#B91C1C",fontWeight:800,fontSize:16,cursor:"pointer"}}>🗑</button>
+              <button onClick={()=>{
+                const itemName = item?.name || "item";
+                setConfirmDeleteAction({
+                  title:"Excluir item?",
+                  message:`Deseja excluir "${itemName}" da lista? Essa ação não pode ser desfeita.`,
+                  onConfirm: removeItem,
+                });
+              }} style={{padding:"14px 18px",borderRadius:18,background:"#FEE2E2",border:"none",color:"#B91C1C",fontWeight:800,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
                 disabled={!mPriceText.trim()}
                 style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mPriceText.trim())?0.5:1,cursor:(!mPriceText.trim())?"not-allowed":"pointer"}}>
