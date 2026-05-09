@@ -3045,131 +3045,7 @@ function findMatchingPantryItem(item, pantryItems) {
   }) || null;
 }
 
-function comparePendingItemsWithPantry(items, pantryCategories = []) {
-  const toNumber = (value, fallback = 0) => {
-    const n = Number(String(value ?? "").replace(",", "."));
-    return Number.isFinite(n) ? n : fallback;
-  };
 
-  const keyOf = (item) => {
-    return normalizeTextForCategory([
-      item?.name,
-      item?.detail,
-      item?.tipo,
-      item?.marca,
-      item?.embalagem,
-      item?.peso,
-      item?.volume,
-    ].filter(Boolean).join(" "))
-      .replace(/\b(de|da|do|das|dos|com|para)\b/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  };
-
-  const sameProduct = (a, b) => {
-    if (!a || !b) return false;
-    if (a === b) return true;
-    const aw = a.split(/\s+/).filter(w => w.length > 2);
-    const bw = b.split(/\s+/).filter(w => w.length > 2);
-    if (!aw.length || !bw.length) return false;
-    return aw.some(w => bw.includes(w)) || bw.some(w => aw.includes(w));
-  };
-
-  const compatibleUnit = (a, b) => {
-    const ua = normalizePlainText(normalizeUnitValue(a || "unidade"));
-    const ub = normalizePlainText(normalizeUnitValue(b || "unidade"));
-    if (ua === ub) return true;
-    if (["unidade", "un", "unid", "und"].includes(ua)) return true;
-    if (["unidade", "un", "unid", "und"].includes(ub)) return true;
-    return false;
-  };
-
-  const pantryItems = [];
-  (Array.isArray(pantryCategories) ? pantryCategories : []).forEach((cat) => {
-    (Array.isArray(cat?.items) ? cat.items : []).forEach((raw) => {
-      const item = normalizeListItem(raw);
-      const key = keyOf(item);
-      if (!key) return;
-      pantryItems.push({
-        ...item,
-        key,
-        qty: Math.max(0, toNumber(item.qty, 1)),
-        unit: normalizeUnitValue(item.unit || "unidade"),
-      });
-    });
-  });
-
-  const removed = [];
-  const adjusted = [];
-  const kept = [];
-  const usedPantry = new Map();
-
-  const finalItems = (Array.isArray(items) ? items : []).map((raw) => {
-    const item = normalizeListItem(raw);
-    const shoppingKey = keyOf(item);
-    const shoppingQty = Math.max(0, toNumber(item.qty, 1));
-    let remaining = shoppingQty;
-    let abated = 0;
-
-    pantryItems.forEach((pantryItem, pantryIndex) => {
-      if (remaining <= 0) return;
-      if (!sameProduct(shoppingKey, pantryItem.key)) return;
-      if (!compatibleUnit(item.unit, pantryItem.unit)) return;
-
-      const alreadyUsed = toNumber(usedPantry.get(pantryIndex), 0);
-      const available = Math.max(0, pantryItem.qty - alreadyUsed);
-      if (available <= 0) return;
-
-      const discount = Math.min(remaining, available);
-      remaining = Number((remaining - discount).toFixed(3));
-      abated = Number((abated + discount).toFixed(3));
-      usedPantry.set(pantryIndex, Number((alreadyUsed + discount).toFixed(3)));
-    });
-
-    if (abated <= 0) {
-      kept.push(item);
-      return item;
-    }
-
-    if (remaining <= 0) {
-      removed.push({
-        item,
-        reason: `Removido: já havia ${formatQtyUnit(abated, item.unit)} nos Itens em Casa.`,
-        originalQty: shoppingQty,
-        pantryQty: abated,
-      });
-      return null;
-    }
-
-    const updated = {
-      ...item,
-      qty: remaining,
-      qtyAdjusted: true,
-      originalQty: shoppingQty,
-      pantryQty: abated,
-      pantryNote: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
-      adjustmentReason: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
-    };
-
-    adjusted.push({
-      before: item,
-      after: updated,
-      reason: updated.adjustmentReason,
-    });
-
-    kept.push(updated);
-    return updated;
-  }).filter(Boolean);
-
-  return {
-    items: finalItems,
-    kept,
-    removed,
-    adjusted,
-    unchanged: kept.filter((item) => !item.qtyAdjusted),
-    pantryItems,
-  };
-}
 
 function formatPantryDate(value) {
   try {
@@ -4875,6 +4751,14 @@ const [lists,setLists]=useState(()=>{
     showToast("🗑️ Item removido dos Itens em Casa");
   };
 
+
+  const proceedAfterPantryComparison = useCallback(() => {
+    const resultItems = Array.isArray(pantryComparison?.items) ? pantryComparison.items : [];
+    setPendingItems(resultItems);
+    setScreen("create");
+    showToast("✅ Pré-lista atualizada. Agora toque em Organizar lista.");
+  }, [pantryComparison, setPendingItems, setScreen, showToast]);
+
   const organizePantry = async () => {
     if (pantryPendingItems.length === 0) { showToast("⚠️ Adicione itens em casa"); return; }
     setLoading(true);
@@ -4930,8 +4814,15 @@ const [lists,setLists]=useState(()=>{
   };
 
 
+
+
+
+
+
+
+
 function getComparableProductKey(item) {
-  const raw = [
+  const text = [
     item?.name,
     item?.nome,
     item?.detail,
@@ -4942,43 +4833,46 @@ function getComparableProductKey(item) {
     item?.volume,
   ].filter(Boolean).join(" ");
 
-  const clean = normalizePlainText(raw)
-    .replace(/\b(pacote|pacotes|pct|pcte|unidade|unidades|un|und|caixa|caixas|cx|fardo|fardos|lata|latas|garrafa|garrafas|kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml)\b/g, " ")
+  const cleaned = normalizePlainText(text)
+    .replace(/\b(pacote|pacotes|pct|pcte|unidade|unidades|un|und|unid|caixa|caixas|cx|fardo|fardos|lata|latas|garrafa|garrafas|kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml)\b/g, " ")
     .replace(/\b(de|da|do|das|dos|com|para|e)\b/g, " ")
     .replace(/\d+[,.]?\d*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  const knownProducts = [
+  const known = [
     "feijao", "arroz", "macarrao", "cafe", "leite", "oleo", "acucar", "farinha", "sal",
     "detergente", "sabonete", "shampoo", "condicionador", "papel higienico",
     "tomate", "cebola", "batata", "cenoura", "banana", "maca", "laranja",
     "carne", "frango", "queijo", "presunto", "cerveja", "refrigerante", "agua"
   ];
 
-  const found = knownProducts.find((product) => clean.split(/\s+/).includes(product));
-  return found || clean;
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const found = known.find((product) => words.includes(product));
+  return found || cleaned;
 }
 
-function unitIsCompatibleForPantryCompare(a, b) {
+function areUnitsComparableForPantry(a, b) {
   const ua = normalizePlainText(normalizeUnitValue(a || "unidade"));
   const ub = normalizePlainText(normalizeUnitValue(b || "unidade"));
   if (ua === ub) return true;
   return ["unidade", "un", "und", "unid"].includes(ua) || ["unidade", "un", "und", "unid"].includes(ub);
 }
 
-function comparePendingItemsWithPantryDirect(items, pantryCategories = []) {
+function comparePendingItemsWithPantry(items, pantryCategories = []) {
   const toNumber = (value, fallback = 1) => {
     const n = Number(String(value ?? "").replace(",", "."));
     return Number.isFinite(n) && n > 0 ? n : fallback;
   };
 
   const pantryItems = [];
+
   (Array.isArray(pantryCategories) ? pantryCategories : []).forEach((cat) => {
-    (Array.isArray(cat?.items) ? cat.items : []).forEach((raw) => {
-      const item = normalizeListItem(raw);
+    (Array.isArray(cat?.items) ? cat.items : []).forEach((rawItem) => {
+      const item = normalizeListItem(rawItem);
       const key = getComparableProductKey(item);
       if (!key) return;
+
       pantryItems.push({
         ...item,
         key,
@@ -4988,66 +4882,69 @@ function comparePendingItemsWithPantryDirect(items, pantryCategories = []) {
     });
   });
 
-  const used = new Map();
+  const usedPantry = new Map();
   const finalItems = [];
   const removed = [];
   const adjusted = [];
+  const unchanged = [];
 
-  (Array.isArray(items) ? items : []).forEach((raw) => {
-    const item = normalizeListItem(raw);
-    const key = getComparableProductKey(item);
+  (Array.isArray(items) ? items : []).forEach((rawItem) => {
+    const item = normalizeListItem(rawItem);
+    const itemKey = getComparableProductKey(item);
     const originalQty = toNumber(item.qty, 1);
-    let remaining = originalQty;
-    let abated = 0;
+    let remainingQty = originalQty;
+    let abatedQty = 0;
 
-    pantryItems.forEach((pantryItem, index) => {
-      if (remaining <= 0) return;
-      if (!key || key !== pantryItem.key) return;
-      if (!unitIsCompatibleForPantryCompare(item.unit, pantryItem.unit)) return;
+    pantryItems.forEach((pantryItem, pantryIndex) => {
+      if (remainingQty <= 0) return;
+      if (!itemKey || itemKey !== pantryItem.key) return;
+      if (!areUnitsComparableForPantry(item.unit, pantryItem.unit)) return;
 
-      const alreadyUsed = Number(used.get(index) || 0);
-      const available = Math.max(0, Number(pantryItem.qty || 0) - alreadyUsed);
-      if (available <= 0) return;
+      const alreadyUsed = Number(usedPantry.get(pantryIndex) || 0);
+      const availableQty = Math.max(0, Number(pantryItem.qty || 0) - alreadyUsed);
+      if (availableQty <= 0) return;
 
-      const discount = Math.min(remaining, available);
-      remaining = Number((remaining - discount).toFixed(3));
-      abated = Number((abated + discount).toFixed(3));
-      used.set(index, Number((alreadyUsed + discount).toFixed(3)));
+      const discountQty = Math.min(remainingQty, availableQty);
+      remainingQty = Number((remainingQty - discountQty).toFixed(3));
+      abatedQty = Number((abatedQty + discountQty).toFixed(3));
+      usedPantry.set(pantryIndex, Number((alreadyUsed + discountQty).toFixed(3)));
     });
 
-    if (abated <= 0) {
+    if (abatedQty <= 0) {
       finalItems.push(item);
+      unchanged.push(item);
       return;
     }
 
-    if (remaining <= 0) {
+    if (remainingQty <= 0) {
       removed.push({
         ...item,
         originalQty,
-        pantryQty: abated,
-        removedReason: `Removido porque já havia ${formatQtyUnit(abated, item.unit)} nos Itens em Casa.`,
+        pantryQty: abatedQty,
+        removedReason: `Removido porque já havia ${formatQtyUnit(abatedQty, item.unit)} nos Itens em Casa.`,
       });
       return;
     }
 
-    const updated = {
+    const adjustedItem = {
       ...item,
-      qty: remaining,
+      qty: remainingQty,
       qtyAdjusted: true,
       originalQty,
-      pantryQty: abated,
-      pantryNote: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
-      adjustmentReason: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
+      pantryQty: abatedQty,
+      pantryNote: `Abatido ${formatQtyUnit(abatedQty, item.unit)} dos Itens em Casa`,
+      adjustmentReason: `Abatido ${formatQtyUnit(abatedQty, item.unit)} dos Itens em Casa`,
     };
 
-    adjusted.push(updated);
-    finalItems.push(updated);
+    adjusted.push(adjustedItem);
+    finalItems.push(adjustedItem);
   });
 
   return {
     items: finalItems,
     removed,
     adjusted,
+    unchanged,
     pantryItems,
   };
 }
@@ -5063,13 +4960,12 @@ function comparePendingItemsWithPantryDirect(items, pantryCategories = []) {
       return;
     }
 
-    const result = comparePendingItemsWithPantryDirect(pendingItems, activePantry.categories);
+    const result = comparePendingItemsWithPantry(pendingItems, activePantry.categories);
     const now = new Date().toISOString();
     const actorName = getAppUserName() || "Usuário";
     const targetListName = listName || "Nova lista";
     const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
 
-    setPendingItems(result.items);
     setPantryComparison(result);
     setPantryCompared(true);
     setShowPantryComparisonDetails(false);
@@ -5099,21 +4995,7 @@ function comparePendingItemsWithPantryDirect(items, pantryCategories = []) {
       usedByListName: targetListName,
     } : p));
 
-    const totalChanges = Number(result.adjusted.length || 0) + Number(result.removed.length || 0);
-
-    if (totalChanges > 0) {
-      showToast(
-        `✅ Comparação aplicada: ${result.adjusted.length} ajustado(s) e ${result.removed.length} removido(s). Agora organize a lista.`,
-        6000
-      );
-    } else {
-      showToast(
-        `ℹ️ Comparação feita, mas nenhum item da lista principal coincidiu com os Itens em Casa.`,
-        6500
-      );
-    }
-
-    setScreen("create");
+    setScreen("pantry_compare_result");
   };
 
   const markActivePantryAsCompleted = useCallback((sourceList=null) => {
@@ -6965,6 +6847,7 @@ return rebuiltHistory;
         pendingItems={pendingItems}
         showPantryComparisonDetails={showPantryComparisonDetails}
         setShowPantryComparisonDetails={setShowPantryComparisonDetails}
+        proceedAfterPantryComparison={proceedAfterPantryComparison}
       />
 
       <ProductEditorModal
