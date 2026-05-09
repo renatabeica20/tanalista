@@ -243,7 +243,7 @@ export default function PantrySection({
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
           <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#B91C1C",fontSize:18}}>{pantryComparison?.removed?.length||0}</div><div style={{fontSize:11,color:"#7F1D1D",fontWeight:800}}>removidos</div></div>
           <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#B45309",fontSize:18}}>{pantryComparison?.adjusted?.length||0}</div><div style={{fontSize:11,color:"#92400E",fontWeight:800}}>ajustados</div></div>
-          <div style={{background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#4338CA",fontSize:18}}>{pendingItems.length}</div><div style={{fontSize:11,color:"#3730A3",fontWeight:800}}>na lista</div></div>
+          <div style={{background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:16,padding:10}}><div style={{fontWeight:900,color:"#4338CA",fontSize:18}}>{pantryComparison?.items?.length ?? pendingItems.length}</div><div style={{fontSize:11,color:"#3730A3",fontWeight:800}}>na nova pré-lista</div></div>
         </div>
       </div>
       <button onClick={()=>setShowPantryComparisonDetails(v=>!v)} style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
@@ -253,11 +253,11 @@ export default function PantrySection({
         <label style={lbl}>Detalhes da comparação</label>
         {(pantryComparison.removed||[]).length>0&&(<div style={{marginBottom:12}}>
           <div style={{fontWeight:900,color:"#B91C1C",fontSize:13,marginBottom:6}}>Itens removidos porque já estavam na Itens em Casa</div>
-          {pantryComparison.removed.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.item?.name} — {r.reason}</div>)}
+          {pantryComparison.removed.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.item?.name || r.name} — {r.reason || r.removedReason}</div>)}
         </div>)}
         {(pantryComparison.adjusted||[]).length>0&&(<div style={{marginBottom:12}}>
           <div style={{fontWeight:900,color:"#B45309",fontSize:13,marginBottom:6}}>Itens ajustados ou sinalizados</div>
-          {pantryComparison.adjusted.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.before?.name} — {r.after?.pantryNote || "ajustado pela Itens em Casa"}</div>)}
+          {pantryComparison.adjusted.map((r,i)=><div key={i} style={{fontSize:13,color:"#374151",fontWeight:700,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>• {r.before?.name || r.name} — {r.after?.pantryNote || r.reason || "ajustado pelos Itens em Casa"}</div>)}
         </div>)}
         {(pantryComparison.kept||[]).length>0&&(<div>
           <div style={{fontWeight:900,color:"#166534",fontSize:13,marginBottom:6}}>Itens mantidos na lista</div>
