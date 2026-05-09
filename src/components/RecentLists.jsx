@@ -25,6 +25,12 @@ export default function RecentLists({
   fmtR,
   WhatsAppIcon,
 }) {
+  const safeRecentLists = Array.isArray(recentLists) ? recentLists.slice(0,3) : [];
+  const safeHistoryLists = [
+    ...(Array.isArray(recentLists) ? recentLists.slice(3) : []),
+    ...(Array.isArray(historyLists) ? historyLists : []),
+  ];
+
   const listCardProps = {
     listMenuId,
     setListMenuId,
@@ -75,20 +81,20 @@ export default function RecentLists({
         </div>
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {recentLists.map(list=>(
+          {safeRecentLists.map(list=>(
             <ListCard key={list.id} list={list} variant="recent" {...listCardProps} />
           ))}
         </div>
       )}
 
-      {historyLists.length>0&&(
+      {safeHistoryLists.length>0&&(
         <div style={{marginTop:18}}>
           <button onClick={()=>setShowHistory(v=>!v)} style={{width:"100%",padding:"14px 16px",borderRadius:18,background:"#FFFFFF",border:"1px solid #E5E7EB",color:"#111827",fontWeight:900,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 10px 24px rgba(17,24,39,0.05)"}}>
-            <span>Histórico</span><span style={{color:"#6D28D9"}}>{showHistory?"Ocultar histórico":"Ver histórico"} ({historyLists.length})</span>
+            <span>Histórico</span><span style={{color:"#6D28D9"}}>{showHistory?"Ocultar histórico":"Ver histórico"} ({safeHistoryLists.length})</span>
           </button>
           {showHistory&&(
             <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:12}}>
-              {historyLists.map(list=>(
+              {safeHistoryLists.map(list=>(
                 <ListCard key={list.id} list={list} variant="history" {...listCardProps} />
               ))}
             </div>
