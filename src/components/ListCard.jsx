@@ -36,8 +36,10 @@ export default function ListCard({
   const editableCopy = Boolean(
     list?.editableCopy === true ||
     list?.isCopy === true ||
+    list?.copyMode === "prelist" ||
     list?.copiedFrom ||
     list?.copiedFromId ||
+    list?.copiedFromListId ||
     list?.status === "draft"
   );
   const finished = editableCopy ? false : isListFinished(list);
