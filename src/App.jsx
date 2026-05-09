@@ -43,6 +43,7 @@ import {
   hashUserPin,
   verifyOrCreateUserPin,
   resetUserAuthPin,
+  findUserAuthProfile,
   
 } from "./services/authService";
 import {
@@ -3994,7 +3995,7 @@ const [lists,setLists]=useState(()=>{
       }catch{
         if(!cancelled){
           setAuthCheckedName(clean);
-          setIsFirstAccessMode(false);
+          setIsFirstAccessMode(true);
         }
       }finally{
         if(!cancelled)setAuthCheckingName(false);
@@ -4019,6 +4020,13 @@ const [lists,setLists]=useState(()=>{
       setLoading(true);
       const pinResult=await verifyOrCreateUserPin(clean,userPinInput,userPinConfirmInput);
       if(!pinResult.ok){
+        const msg = String(pinResult.message || "");
+        if (/primeiro acesso|confirme o pin|confirmar pin/i.test(msg)) {
+          setAuthCheckedName(clean);
+          setIsFirstAccessMode(true);
+          showToast(pinResult.message,3600);
+          return;
+        }
         showToast(pinResult.message,3600);
         return;
       }
