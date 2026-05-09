@@ -3241,6 +3241,7 @@ const [lists,setLists]=useState(()=>{
   const searchRef=useRef(null);
   const listRef=useRef(null);
   const swipeStartRef=useRef({x:0,y:0,t:0,active:false});
+  const priceInputRef=useRef(null);
 
   // Create
   const [listName,setListName]=useState("");
@@ -3858,8 +3859,6 @@ const [lists,setLists]=useState(()=>{
 
   const removeActivePantry = useCallback(() => {
     if (!activePantry) return;
-    const ok = window.confirm("Tem certeza que deseja excluir os Itens em Casa?");
-    if (!ok) return;
     const now = new Date().toISOString();
     savePantryLists(pantryLists.map(p => p.id === activePantry.id ? { ...p, status:"excluida", deletedAt: now } : p));
     setPantryCompared(false);
@@ -6647,6 +6646,27 @@ return rebuiltHistory;
     setMNotFound(false);
   };
 
+  useEffect(()=>{
+    if(!itemModal)return;
+    const timers=[
+      setTimeout(()=>{
+        try{
+          priceInputRef.current?.focus?.();
+          const len=String(priceInputRef.current?.value || "").length;
+          priceInputRef.current?.setSelectionRange?.(len,len);
+        }catch{}
+      },80),
+      setTimeout(()=>{
+        try{
+          priceInputRef.current?.focus?.();
+          const len=String(priceInputRef.current?.value || "").length;
+          priceInputRef.current?.setSelectionRange?.(len,len);
+        }catch{}
+      },260),
+    ];
+    return()=>timers.forEach(clearTimeout);
+  },[itemModal]);
+
   const confirmItem=()=>{
     if(isReadOnlyFinishedList(currentList)){ setItemModal(null); return blockFinishedListEdit(); }
     const l=JSON.parse(JSON.stringify(currentList));
@@ -7889,11 +7909,6 @@ return rebuiltHistory;
         const temp={...effectiveItem,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
         const total=tempPrice!=null?getItemLineTotal(temp):0;
         const unitLabel=getPriceLabelForModeAndUnit(inferredMode,effectiveItem.unit);
-        const focusPriceInput=(node)=>{
-          if(!node)return;
-          setTimeout(()=>{try{node.focus();node.setSelectionRange?.(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}},0);
-        };
-
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
             <div style={{textAlign:"center",marginBottom:14}}>
@@ -7978,7 +7993,7 @@ return rebuiltHistory;
               <label style={lbl}>{unitLabel}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-                <input ref={focusPriceInput} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
+                <input ref={priceInputRef} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
                   placeholder="0,00" inputMode="numeric" autoFocus
                   style={inp({paddingLeft:44,fontWeight:900,fontSize:18,textAlign:"left",caretColor:theme.header})}
                   onFocus={e=>{e.target.style.borderColor=theme.border;try{e.target.setSelectionRange(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}}} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
