@@ -74,8 +74,6 @@ const createPrimaryBtn = {
 };
 
 function HelpIcon({ text = "" }) {
-  const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
-
   return (
     <span
       title={text}
@@ -154,6 +152,8 @@ export default function CreateListScreen({
   isTourStep,
   tourHighlightStyle,
 }) {
+  const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
+
   return (
 <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
   <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
