@@ -3250,6 +3250,7 @@ const [lists,setLists]=useState(()=>{
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
+  const swipeStartRef=useRef({x:0,y:0,t:0,active:false});
 
   // Create
   const [listName,setListName]=useState("");
@@ -6966,8 +6967,84 @@ return rebuiltHistory;
   const recentLists = visibleLists.slice(0,1);
   const historyLists = visibleLists.slice(1);
 
+  const shouldIgnoreSwipeTarget=(target)=>{
+    try{
+      const el=target;
+      if(!el || !el.closest)return false;
+      return Boolean(el.closest("input, textarea, select, button, [role='button'], a"));
+    }catch{return false;}
+  };
+
+  const goBackBySwipe=()=>{
+    if(itemDialog || extraModal || confirmDelete || shareModal || showFinished || showGuidedTour)return false;
+    if(screen==="list"){
+      archiveFinishedListsBeforeHome();
+      showToast("↩️ Voltando para o início", 1200);
+      return true;
+    }
+    if(screen==="create"){
+      archiveFinishedListsBeforeHome();
+      showToast("↩️ Voltando para o início", 1200);
+      return true;
+    }
+    if(screen==="pantry_create" || screen==="pantry_review"){
+      setScreen("create");
+      showToast("↩️ Voltando para a lista", 1200);
+      return true;
+    }
+    return false;
+  };
+
+  const goForwardBySwipe=()=>{
+    if(itemDialog || extraModal || confirmDelete || shareModal || showFinished || showGuidedTour)return false;
+    if(screen==="home"){
+      setScreen("create");
+      showToast("🛒 Nova lista", 1200);
+      return true;
+    }
+    if(screen==="create"){
+      if(pendingItems.length>0){
+        organizeList();
+        return true;
+      }
+      showToast("Adicione itens antes de avançar", 1500);
+      return false;
+    }
+    return false;
+  };
+
+  const handleSwipeStart=(e)=>{
+    if(shouldIgnoreSwipeTarget(e.target))return;
+    const touch=e.touches?.[0];
+    if(!touch)return;
+    swipeStartRef.current={x:touch.clientX,y:touch.clientY,t:Date.now(),active:true};
+  };
+
+  const handleSwipeEnd=(e)=>{
+    const start=swipeStartRef.current;
+    if(!start?.active)return;
+    swipeStartRef.current={x:0,y:0,t:0,active:false};
+    const touch=e.changedTouches?.[0];
+    if(!touch)return;
+    const dx=touch.clientX-start.x;
+    const dy=touch.clientY-start.y;
+    const absX=Math.abs(dx);
+    const absY=Math.abs(dy);
+    const elapsed=Date.now()-start.t;
+
+    // Só reconhece gesto horizontal claro; ignora rolagem vertical e diagonais.
+    if(absX<90 || absX<absY*1.55 || elapsed>900)return;
+
+    if(dx>0)goBackBySwipe();
+    else goForwardBySwipe();
+  };
+
   return(
-    <div style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",isolation:"isolate"}}>
+    <div
+      onTouchStart={handleSwipeStart}
+      onTouchEnd={handleSwipeEnd}
+      style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",isolation:"isolate",touchAction:"pan-y"}}
+    >
       <AppHeader
         userName={getAppUserName()}
         onSwitchUser={handleSwitchUser}
