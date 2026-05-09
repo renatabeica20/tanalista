@@ -1754,6 +1754,16 @@ function enforceKnownCategoryRules(categories) {
   return sanitizeCategories(Object.entries(buckets).map(([name, items]) => ({ name, items })));
 }
 
+
+function getCategoryForExtraItem(item) {
+  const preferred = inferPreferredCategoryForItem(item);
+  if (preferred && normalizePlainText(preferred) !== normalizePlainText("Outros")) {
+    return preferred;
+  }
+  return "Itens Extras";
+}
+
+
 function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
   const map = [
@@ -4855,27 +4865,39 @@ const [lists,setLists]=useState(()=>{
     }
     if (itemDialogMode === "extra" && currentList) {
       const l = JSON.parse(JSON.stringify(currentList));
-      let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText("Itens Extras"));
+      const extraItem = {
+        ...newItem,
+        extra: true,
+        addedDuringPurchase: true,
+        checked: false,
+        notFound: false,
+        addedAt: new Date().toISOString(),
+      };
+
+      const targetCategoryName = getCategoryForExtraItem(extraItem);
+      let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText(targetCategoryName));
       if (!cat) {
-        cat = { name: "Itens Extras", items: [] };
+        cat = { name: targetCategoryName, items: [] };
         l.categories.push(cat);
       }
-      cat.items.push({ ...newItem, extra: true, checked: false, notFound: false });
-      l.categories = sanitizeCategories(l.categories);
+
+      cat.items.push(extraItem);
+      l.categories = enforceKnownCategoryRules(l.categories);
       updateList(l);
       registrarEvento("add_extra_item", {
         list_id: l.id || null,
         shared_id: l.sharedId || null,
         list_name: l.name || "",
-        item_name: newItem.name || "",
-        item_qty: Number(newItem.qty || 1),
-        item_unit: newItem.unit || "unidade",
+        item_name: extraItem.name || "",
+        item_qty: Number(extraItem.qty || 1),
+        item_unit: extraItem.unit || "unidade",
+        category: targetCategoryName,
       });
       setItemDialog(null);
       setItemDialogMode("pending");
       setCurrentInput("");
       setExName(""); setExQty(1); setExUnit("unidade"); setExPrice("");
-      showToast("⭐ Item extra adicionado em seção própria!");
+      showToast(`⭐ Item extra adicionado em ${targetCategoryName}!`);
       return;
     }
     if (editPendingIdx != null) {
@@ -7580,27 +7602,46 @@ return rebuiltHistory;
       })()}
 
       {/* MODAL: EXTRA */}
-      {extraModal&&(
+      {extraModal&&(()=>{
+        const correctedExtraName = smartNormalizeProductName(exName);
+        const showCorrection = exName.trim() && correctedExtraName && normalizePlainText(correctedExtraName) !== normalizePlainText(exName);
+        const startExtraFlow = () => {
+          const name = (showCorrection ? correctedExtraName : exName).trim();
+          if (!name) return;
+          openProductDialog(name, null, {mode:"extra"});
+          setExtraModal(false);
+        };
+        return (
         <ModalSheet onClose={()=>setExtraModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Adicionar item extra</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Informe o item para detalhar quantidade, unidade e preço na próxima tela.</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Digite o item lembrado durante a compra. O app corrige o nome e tenta inserir na categoria certa.</div>
           <div style={{marginBottom:16}}>
             <label style={lbl}>Item</label>
             <input value={exName} onChange={e=>setExName(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
+              onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){startExtraFlow();}}}
               placeholder="Ex: cenoura, arroz, detergente..."
               style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+            {showCorrection&&(
+              <button
+                type="button"
+                onClick={()=>setExName(correctedExtraName)}
+                style={{marginTop:10,width:"100%",border:"1px solid #FED7AA",background:"#FFF7ED",color:"#C2410C",borderRadius:14,padding:"10px 12px",fontWeight:900,fontSize:13,fontFamily:"inherit",cursor:"pointer",textAlign:"left"}}
+              >
+                Você quis dizer: {correctedExtraName}?
+              </button>
+            )}
           </div>
           <div style={{display:"flex",gap:10}}>
             <button onClick={()=>setExtraModal(false)} style={{...btnGr,flex:1}}>Cancelar</button>
-            <button onClick={()=>{if(exName.trim()){openProductDialog(exName.trim(), null, {mode:"extra"});setExtraModal(false);}}}
+            <button onClick={startExtraFlow}
               disabled={!exName.trim()}
               style={{flex:1.4,padding:14,borderRadius:18,background:exName.trim()?"linear-gradient(135deg,#F97316,#EA580C)":"#F0F2F5",border:"none",color:exName.trim()?"white":"#6B7280",fontSize:15,fontWeight:800,cursor:exName.trim()?"pointer":"default",fontFamily:"inherit"}}>
               Inserir
             </button>
           </div>
         </ModalSheet>
-      )}
+        );
+      })()}
 
       {/* MODAL: CADASTRO LEVE DE USUÁRIO */}
       {userNameModal&&(
