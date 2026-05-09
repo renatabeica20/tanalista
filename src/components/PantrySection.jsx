@@ -58,6 +58,7 @@ export default function PantrySection({
   pantryReviewCategories,
   getCatTheme,
   editPantryReviewItem,
+  handleAddPantryReviewItem,
   removePantryReviewItem,
   savePantryFromReview,
   pantryEditingId,
@@ -134,12 +135,65 @@ export default function PantrySection({
     <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
       <button onClick={leavePantryReview} style={{width:40,height:40,borderRadius:"50%",background:"#EEF2FF",border:"1px solid #C7D2FE",cursor:"pointer",fontSize:20,color:"#4C1D95",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 18px rgba(76,29,149,0.12)"}}>←</button>
       <div style={{flex:1,textAlign:"center"}}>
-        <div style={{fontWeight:900,fontSize:18,color:"#111827",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>Itens em Casa <HelpIcon text={pantryReviewReadOnly ? "Visualização dos seus itens em casa. Esta tela não altera a lista." : "Edite seus itens em casa e salve antes de voltar."} /></div>
+        <div style={{fontWeight:900,fontSize:18,color:"#111827",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>Itens em Casa <HelpIcon text={pantryReviewReadOnly ? "Visualização dos seus itens em casa. Esta tela não altera a lista." : "Edite, acrescente novos itens e salve antes de voltar."} /></div>
         <div style={{fontSize:12,color:"#6B7280",fontWeight:700}}>Lista organizada por seções, sem preços</div>
       </div>
       <div style={{width:36}} />
     </div>
     <div style={{padding:20,paddingBottom:42,display:"flex",flexDirection:"column",gap:14}}>
+      {!pantryReviewReadOnly&&(
+        <div style={createCard}>
+          <label style={lbl}>Acrescentar novos itens</label>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            <input
+              value={pantryInput}
+              onChange={e=>setPantryInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&handleAddPantryReviewItem()}
+              placeholder="Digite um novo item para os Itens em Casa"
+              style={inp({height:56})}
+            />
+            <button
+              onClick={handleAddPantryReviewItem}
+              disabled={!pantryInput.trim()}
+              style={{
+                padding:"0 18px",
+                height:56,
+                borderRadius:18,
+                background:pantryInput.trim()?"linear-gradient(135deg,#6D28D9,#8B5CF6)":"#F0F2F5",
+                border:"none",
+                color:pantryInput.trim()?"white":"#6B7280",
+                fontSize:15,
+                fontWeight:900,
+                cursor:pantryInput.trim()?"pointer":"not-allowed",
+                fontFamily:"inherit",
+                whiteSpace:"nowrap",
+                boxShadow:pantryInput.trim()?"0 10px 22px rgba(109,40,217,0.22)":"none"
+              }}
+            >
+              Inserir
+            </button>
+          </div>
+          <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Use este campo para acrescentar itens que foram esquecidos. Também é possível colar ou falar vários itens de uma vez.</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+            <button
+              onClick={()=>{setPasteTarget("pantryReview");setShowPasteModal(true);}}
+              style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}
+            >
+              Colar lista
+            </button>
+            <VoiceInput
+              target="pantryReview"
+              voiceTargetRef={voiceTargetRef}
+              setVoiceTarget={setVoiceTarget}
+              startVoiceInput={startVoiceInput}
+              voiceProcessing={voiceProcessing}
+              voiceListening={voiceListening}
+              baseStyle={createSecondaryBtn}
+            />
+          </div>
+        </div>
+      )}
+
       {(pantryReviewCategories||[]).map((cat,ci)=>{const th=getCatTheme(cat.name);return(
         <div key={cat.name+ci} style={{border:`2px solid ${th.border}`,borderRadius:22,overflow:"hidden",background:"#FFFFFF",boxShadow:"0 12px 28px rgba(17,24,39,0.06)"}}>
           <div style={{background:th.bg,padding:"13px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${th.border}33`}}>
