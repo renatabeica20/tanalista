@@ -3046,40 +3046,93 @@ function findMatchingPantryItem(item, pantryItems) {
 }
 
 function comparePendingItemsWithPantry(items, pantryCategories = []) {
-  const normalizeKey = (value) => normalizePlainText(value || "").replace(/\s+/g, " ").trim();
-
   const toNumber = (value, fallback = 0) => {
     const n = Number(String(value ?? "").replace(",", "."));
     return Number.isFinite(n) ? n : fallback;
   };
 
-  const sameUnit = (a, b) => normalizeUnitValue(a || "unidade") === normalizeUnitValue(b || "unidade");
+  const cleanKey = (value) => normalizeTextForCategory(value || "")
+    .replace(/\b(de|da|do|das|dos|com|para)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const pantryMap = new Map();
+  const buildItemKey = (item) => {
+    const nameKey = cleanKey(item?.name || "");
+    if (nameKey) return nameKey;
+
+    const combined = [
+      item?.marca,
+      item?.tipo,
+      item?.detail,
+      item?.embalagem,
+      item?.peso,
+      item?.volume,
+    ].filter(Boolean).join(" ");
+
+    return cleanKey(combined);
+  };
+
+  const isGenericUnit = (unit) => {
+    const u = normalizeUnitValue(unit || "unidade");
+    return ["unidade", "un", "unid", "und"].includes(normalizePlainText(u));
+  };
+
+  const unitsCompatible = (shoppingUnit, pantryUnit) => {
+    const a = normalizeUnitValue(shoppingUnit || "unidade");
+    const b = normalizeUnitValue(pantryUnit || "unidade");
+    if (a === b) return true;
+
+    // Quando a fala/cola não identificou corretamente "pacote", "caixa" etc.,
+    // o item pode chegar como "unidade". Neste caso, permite abatimento pelo nome.
+    if (isGenericUnit(a) || isGenericUnit(b)) return true;
+
+    return false;
+  };
+
+  const chooseFinalUnit = (shoppingUnit, pantryUnit) => {
+    const a = normalizeUnitValue(shoppingUnit || "unidade");
+    const b = normalizeUnitValue(pantryUnit || "unidade");
+    if (isGenericUnit(a) && !isGenericUnit(b)) return b;
+    return a;
+  };
+
+  const isSameProduct = (shoppingKey, pantryKey) => {
+    if (!shoppingKey || !pantryKey) return false;
+    if (shoppingKey === pantryKey) return true;
+
+    const a = ` ${shoppingKey} `;
+    const b = ` ${pantryKey} `;
+
+    // Ex.: "feijao carioca" e "feijao"; "pacotes feijao" já vira "feijao".
+    if (a.includes(` ${pantryKey} `) || b.includes(` ${shoppingKey} `)) return true;
+
+    const shoppingWords = shoppingKey.split(/\s+/).filter(w => w.length > 2);
+    const pantryWords = pantryKey.split(/\s+/).filter(w => w.length > 2);
+
+    if (!shoppingWords.length || !pantryWords.length) return false;
+
+    const common = shoppingWords.filter(w => pantryWords.includes(w));
+    return common.length >= Math.min(shoppingWords.length, pantryWords.length);
+  };
+
+  const pantryItems = [];
 
   (Array.isArray(pantryCategories) ? pantryCategories : []).forEach((cat) => {
     (Array.isArray(cat?.items) ? cat.items : []).forEach((rawItem) => {
       const item = normalizeListItem(rawItem);
-      const key = normalizeKey(item.name);
+      const key = buildItemKey(item);
       if (!key) return;
 
-      const qty = Math.max(0, toNumber(item.qty, 1));
-      const unit = normalizeUnitValue(item.unit || "unidade");
-      const current = pantryMap.get(key);
-
-      if (!current) {
-        pantryMap.set(key, { ...item, qty, unit });
-        return;
-      }
-
-      // Só soma automaticamente quando a unidade é a mesma.
-      // Ex.: 2 pacotes + 1 pacote = 3 pacotes.
-      if (sameUnit(current.unit, unit)) {
-        pantryMap.set(key, { ...current, qty: toNumber(current.qty, 0) + qty });
-      }
+      pantryItems.push({
+        ...item,
+        key,
+        qty: Math.max(0, toNumber(item.qty, 1)),
+        unit: normalizeUnitValue(item.unit || "unidade"),
+      });
     });
   });
 
+  const consumedPantry = new Map();
   const kept = [];
   const removed = [];
   const adjusted = [];
@@ -3087,46 +3140,60 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
 
   (Array.isArray(items) ? items : []).forEach((rawItem) => {
     const item = normalizeListItem(rawItem);
-    const key = normalizeKey(item.name);
+    const shoppingKey = buildItemKey(item);
     const desiredQty = Math.max(0, toNumber(item.qty, 1));
-    const pantryItem = pantryMap.get(key);
 
-    if (!key || !pantryItem) {
+    const matches = pantryItems.filter((pantryItem, index) => {
+      if (!isSameProduct(shoppingKey, pantryItem.key)) return false;
+      if (!unitsCompatible(item.unit, pantryItem.unit)) return false;
+      const alreadyConsumed = toNumber(consumedPantry.get(index), 0);
+      return pantryItem.qty - alreadyConsumed > 0;
+    });
+
+    if (!matches.length) {
       kept.push(item);
       unchanged.push(item);
       return;
     }
 
-    const pantryQty = Math.max(0, toNumber(pantryItem.qty, 0));
+    let remaining = desiredQty;
+    let totalAbated = 0;
+    let finalUnit = normalizeUnitValue(item.unit || "unidade");
 
-    // Só faz abatimento automático se a unidade for compatível.
-    // Se não for compatível, mantém o item para evitar erro de cálculo.
-    if (!sameUnit(item.unit, pantryItem.unit)) {
-      kept.push(item);
-      unchanged.push(item);
-      return;
-    }
+    matches.forEach((pantryItem) => {
+      if (remaining <= 0) return;
+      const pantryIndex = pantryItems.indexOf(pantryItem);
+      const alreadyConsumed = toNumber(consumedPantry.get(pantryIndex), 0);
+      const available = Math.max(0, pantryItem.qty - alreadyConsumed);
+      if (available <= 0) return;
 
-    const remainingQty = Number((desiredQty - pantryQty).toFixed(3));
+      const abate = Math.min(remaining, available);
+      remaining = Number((remaining - abate).toFixed(3));
+      totalAbated = Number((totalAbated + abate).toFixed(3));
+      consumedPantry.set(pantryIndex, Number((alreadyConsumed + abate).toFixed(3)));
+      finalUnit = chooseFinalUnit(item.unit, pantryItem.unit);
+    });
 
-    if (remainingQty <= 0) {
+    if (remaining <= 0) {
       removed.push({
         ...item,
+        unit: finalUnit,
         removedReason: "Já existe quantidade suficiente nos Itens em Casa",
-        pantryQty,
+        pantryQty: totalAbated,
         originalQty: desiredQty,
       });
       return;
     }
 
-    if (remainingQty < desiredQty) {
+    if (remaining < desiredQty) {
       const updated = {
         ...item,
-        qty: remainingQty,
+        unit: finalUnit,
+        qty: remaining,
         qtyAdjusted: true,
         originalQty: desiredQty,
-        pantryQty,
-        adjustmentReason: `Abatido ${formatQtyUnit(pantryQty, pantryItem.unit)} dos Itens em Casa`,
+        pantryQty: totalAbated,
+        adjustmentReason: `Abatido ${formatQtyUnit(totalAbated, finalUnit)} dos Itens em Casa`,
       };
       kept.push(updated);
       adjusted.push(updated);
@@ -3142,7 +3209,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
     removed,
     adjusted,
     unchanged,
-    pantryItems: Array.from(pantryMap.values()),
+    pantryItems,
   };
 }
 
