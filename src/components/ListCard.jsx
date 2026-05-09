@@ -33,15 +33,15 @@ export default function ListCard({
 
   const originMeta = getListOriginMeta(list);
   const shared = list.isShared === true;
-  const finished = isListFinished(list);
   const editableCopy = Boolean(
-    list?.editableCopy ||
-    list?.status === "draft" ||
-    list?.isCopy ||
+    list?.editableCopy === true ||
+    list?.isCopy === true ||
     list?.copiedFrom ||
-    list?.copiedFromId
+    list?.copiedFromId ||
+    list?.status === "draft"
   );
-  const canEditList = !finished || editableCopy;
+  const finished = editableCopy ? false : isListFinished(list);
+  const canEditList = editableCopy || !finished;
   const stats = variant === "history" ? getListCardStats(list) : null;
   const isHistory = variant === "history";
 
@@ -221,7 +221,7 @@ export default function ListCard({
           </button>
           {listMenuId === list.id && (
             <div style={{ position: "absolute", right: 0, top: 42, background: "#FFFFFF", borderRadius: 20, boxShadow: "0 18px 42px rgba(17,24,39,0.16)", border: "1px solid #E5E7EB", zIndex: 500, minWidth: 230, overflow: "hidden" }}>
-              {canEditList && <button onClick={(e) => { e.stopPropagation(); openListForEdit(list); }} style={menuItemStyle()}>✏️ Editar lista</button>}
+              {canEditList && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setListMenuId(null); openListForEdit(list); }} style={menuItemStyle()}>✏️ Editar lista</button>}
               <button onClick={openShare} style={menuItemStyle("#25D366")}><WhatsAppIcon size={18} /> Enviar lista</button>
               <button onClick={() => duplicateList(list)} style={menuItemStyle()}>📄 Fazer cópia</button>
               {shared && <button onClick={() => stopListSharing(list)} style={menuItemStyle("#6D28D9")}>🔒 Encerrar compartilhamento</button>}
