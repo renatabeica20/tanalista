@@ -5931,6 +5931,17 @@ return rebuiltHistory;
 
   const isListFinished=(list)=>{
     if (!list) return false;
+
+    // Cópia de lista finalizada deve se comportar como nova pré-lista editável.
+    const editableCopy = Boolean(
+      list?.editableCopy === true ||
+      list?.isCopy === true ||
+      list?.copiedFrom ||
+      list?.copiedFromId ||
+      normalizePlainText(list?.status || "") === "draft"
+    );
+    if (editableCopy) return false;
+
     const explicitFinished = Boolean(
       list.archivedFinished === true ||
       list.finished === true ||
@@ -6008,12 +6019,18 @@ return rebuiltHistory;
     if(!list)return;
 
     const editableCopy = Boolean(
-      list?.isCopy ||
-      list?.editableCopy ||
+      list?.isCopy === true ||
+      list?.editableCopy === true ||
       list?.copiedFrom ||
       list?.copiedFromId ||
-      list?.status === "draft"
+      normalizePlainText(list?.status || "") === "draft"
     );
+
+    if(isListFinished(list) && !editableCopy){
+      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
+      setListMenuId(null);
+      return;
+    }
 
     const items=(list.categories||[]).flatMap(cat=>(cat.items||[]).map(item=>normalizeListItem({
       name:item.name,
@@ -6029,51 +6046,64 @@ return rebuiltHistory;
       notFound:false,
     })));
 
-    if(editableCopy){
-      setCurrentList(null);
-      setPendingItems(items);
-      setListName(String(list.name || "").replace(/\s*\(cópia\)$/i,""));
-      setBudget(list.budget ? String(list.budget) : "");
-      setType(list.type || "mercado");
-      setCurrentInput("");
-      setEditPendingIdx(null);
-      setPantryCompared(false);
-      setPantryComparison(null);
-      setShowPantryComparisonDetails(false);
-      setListMenuId(null);
-      setSearch("");
-      setCollapsedCats({});
-      setScreen("create");
-      showToast("✏️ Cópia aberta como nova pré-lista. Agora organize novamente.");
-      return;
-    }
-
-    if(isListFinished(list)){
-      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
-      setListMenuId(null);
-      return;
-    }
-
     setCurrentList(null);
     setPendingItems(items);
-    setListName(list.name||"");
-    setBudget(list.budget?String(list.budget):"");
-    setType(list.type||"mercado");
+    setListName(String(list.name || "").replace(/\s*\(cópia\)$/i, ""));
+    setBudget(list.budget ? String(list.budget) : "");
+    setType(list.type || "mercado");
     setCurrentInput("");
     setEditPendingIdx(null);
-    setScreen("create");
+    setPantryCompared(false);
+    setPantryComparison(null);
+    setShowPantryComparisonDetails(false);
+    setListMenuId(null);
     setSearch("");
     setCollapsedCats({});
-    setListMenuId(null);
-    showToast("✏️ Lista aberta para edição");
+    setScreen("create");
+    showToast(editableCopy ? "✏️ Cópia aberta para editar e organizar." : "✏️ Lista aberta para edição");
   };
 
   const duplicateList=(list)=>{
     if(!list)return;
-    const copiedSource = JSON.parse(JSON.stringify(list));
+
+    const now = new Date().toISOString();
     const copy={
-      ...copiedSource,
-      categories:(Array.isArray(copiedSource.categories)?copiedSource.categories:[]).map(cat=>({
+      ...JSON.parse(JSON.stringify(list)),
+      id:Date.now().toString(),
+      name:(list.name||"Lista")+" (cópia)",
+      type:list.type || "mercado",
+      budget:list.budget || "",
+      status:"draft",
+      isCopy:true,
+      editableCopy:true,
+      copiedFrom:list.id || list.sharedId || null,
+      copiedFromId:list.id || null,
+      copiedFromListId:list.id || null,
+      sharedId:null,
+      isShared:false,
+      sharedAt:null,
+      sharedUrl:null,
+      sharedEvents:[],
+      imported:false,
+      importedFrom:null,
+      restoredFromCloud:false,
+      createdAt:now,
+      updatedAt:now,
+      finishedAt:null,
+      completedAt:null,
+      finalizedAt:null,
+      archivedFinished:false,
+      finished:false,
+      completed:false,
+      isFinished:false,
+      finalizada:false,
+      finalized:false,
+      isReadOnly:false,
+      readOnly:false,
+      locked:false,
+      history:false,
+      total:0,
+      categories:(Array.isArray(list.categories)?list.categories:[]).map(cat=>({
         ...cat,
         items:(Array.isArray(cat.items)?cat.items:[]).map(item=>({
           ...item,
@@ -6083,48 +6113,12 @@ return rebuiltHistory;
           price:null,
           total:null,
         }))
-      })),
-      id:Date.now().toString(),
-      name:(list.name||"Lista")+" (cópia)",
-      status:"draft",
-      isCopy:true,
-      editableCopy:true,
-      copiedFrom:list.id || list.sharedId || null,
-      copiedFromId:list.id || null,
-      sharedId:null,
-      isShared:false,
-      sharedAt:null,
-      sharedUrl:null,
-      sharedEvents:[],
-      imported:false,
-      importedFrom:null,
-      restoredFromCloud:false,
-      createdAt:new Date().toISOString(),
-      updatedAt:new Date().toISOString(),
-      finishedAt:null,
-      completedAt:null,
-      finalizedAt:null,
-      finished:false,
-      completed:false,
-      isFinished:false,
-      finalizada:false,
-      finalized:false,
-      isFinished:false,
-      isReadOnly:false,
-      readOnly:false,
-      locked:false,
-      history:false,
-      copiedFromListId:list.id || null,
-      status:"open",
-      total:0,
-      categories:(list.categories||[]).map(cat=>({
-        ...cat,
-        items:(cat.items||[]).map(item=>({...item,checked:false,notFound:false,price:null}))
       }))
     };
+
     saveLists([copy,...lists]);
     setListMenuId(null);
-    showToast("📄 Cópia criada");
+    showToast("📄 Cópia criada. Toque em Editar lista para ajustar.");
   };
 
   const stopListSharing=async(list)=>{
