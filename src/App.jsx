@@ -4821,42 +4821,49 @@ const [lists,setLists]=useState(()=>{
 
 
 
-function getComparableProductKey(item) {
-  const text = [
-    item?.name,
-    item?.nome,
-    item?.detail,
-    item?.tipo,
-    item?.marca,
-    item?.embalagem,
-    item?.peso,
-    item?.volume,
-  ].filter(Boolean).join(" ");
 
-  const cleaned = normalizePlainText(text)
+
+
+
+
+
+
+function getComparableProductKey(item) {
+  const rawName = String(item?.name || item?.nome || "").trim();
+  const rawDetail = String(item?.detail || item?.tipo || item?.marca || item?.embalagem || item?.peso || item?.volume || "").trim();
+
+  const clean = (value) => normalizePlainText(value)
     .replace(/\b(pacote|pacotes|pct|pcte|unidade|unidades|un|und|unid|caixa|caixas|cx|fardo|fardos|lata|latas|garrafa|garrafas|kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml)\b/g, " ")
     .replace(/\b(de|da|do|das|dos|com|para|e)\b/g, " ")
     .replace(/\d+[,.]?\d*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  const known = [
+  const text = clean(`${rawName} ${rawDetail}`);
+
+  const knownProducts = [
     "feijao", "arroz", "macarrao", "cafe", "leite", "oleo", "acucar", "farinha", "sal",
     "detergente", "sabonete", "shampoo", "condicionador", "papel higienico",
     "tomate", "cebola", "batata", "cenoura", "banana", "maca", "laranja",
-    "carne", "frango", "queijo", "presunto", "cerveja", "refrigerante", "agua"
+    "carne", "frango", "queijo", "presunto", "cerveja", "refrigerante", "agua",
+    "ovo", "ovos", "manteiga", "margarina", "iogurte", "bolacha", "biscoito"
   ];
 
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  const found = known.find((product) => words.includes(product));
-  return found || cleaned;
+  const words = text.split(/\s+/).filter(Boolean);
+  const found = knownProducts.find((product) => words.includes(product));
+  if (found === "ovos") return "ovo";
+  return found || words.slice(0, 2).join(" ") || text;
 }
 
-function areUnitsComparableForPantry(a, b) {
-  const ua = normalizePlainText(normalizeUnitValue(a || "unidade"));
-  const ub = normalizePlainText(normalizeUnitValue(b || "unidade"));
-  if (ua === ub) return true;
-  return ["unidade", "un", "und", "unid"].includes(ua) || ["unidade", "un", "und", "unid"].includes(ub);
+function areUnitsComparableForPantry(shoppingUnit, pantryUnit) {
+  const a = normalizePlainText(normalizeUnitValue(shoppingUnit || "unidade"));
+  const b = normalizePlainText(normalizeUnitValue(pantryUnit || "unidade"));
+  if (a === b) return true;
+
+  const generic = ["unidade", "un", "und", "unid"];
+  if (generic.includes(a) || generic.includes(b)) return true;
+
+  return false;
 }
 
 function comparePendingItemsWithPantry(items, pantryCategories = []) {
@@ -4883,21 +4890,22 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
   });
 
   const usedPantry = new Map();
-  const finalItems = [];
+  const resultItems = [];
   const removed = [];
   const adjusted = [];
-  const unchanged = [];
+  const kept = [];
 
   (Array.isArray(items) ? items : []).forEach((rawItem) => {
     const item = normalizeListItem(rawItem);
-    const itemKey = getComparableProductKey(item);
+    const key = getComparableProductKey(item);
     const originalQty = toNumber(item.qty, 1);
     let remainingQty = originalQty;
     let abatedQty = 0;
+    let matchedPantryName = "";
 
     pantryItems.forEach((pantryItem, pantryIndex) => {
       if (remainingQty <= 0) return;
-      if (!itemKey || itemKey !== pantryItem.key) return;
+      if (!key || key !== pantryItem.key) return;
       if (!areUnitsComparableForPantry(item.unit, pantryItem.unit)) return;
 
       const alreadyUsed = Number(usedPantry.get(pantryIndex) || 0);
@@ -4905,46 +4913,62 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       if (availableQty <= 0) return;
 
       const discountQty = Math.min(remainingQty, availableQty);
+
       remainingQty = Number((remainingQty - discountQty).toFixed(3));
       abatedQty = Number((abatedQty + discountQty).toFixed(3));
       usedPantry.set(pantryIndex, Number((alreadyUsed + discountQty).toFixed(3)));
+      matchedPantryName = pantryItem.name || pantryItem.nome || matchedPantryName;
     });
 
     if (abatedQty <= 0) {
-      finalItems.push(item);
-      unchanged.push(item);
+      resultItems.push(item);
+      kept.push(item);
       return;
     }
 
     if (remainingQty <= 0) {
-      removed.push({
-        ...item,
+      const removedEntry = {
+        item,
+        name: item.name,
         originalQty,
         pantryQty: abatedQty,
+        matchedPantryName,
+        reason: `Removido porque já havia ${formatQtyUnit(abatedQty, item.unit)} nos Itens em Casa.`,
         removedReason: `Removido porque já havia ${formatQtyUnit(abatedQty, item.unit)} nos Itens em Casa.`,
-      });
+      };
+      removed.push(removedEntry);
       return;
     }
 
-    const adjustedItem = {
+    const updated = {
       ...item,
       qty: remainingQty,
       qtyAdjusted: true,
       originalQty,
       pantryQty: abatedQty,
+      matchedPantryName,
       pantryNote: `Abatido ${formatQtyUnit(abatedQty, item.unit)} dos Itens em Casa`,
       adjustmentReason: `Abatido ${formatQtyUnit(abatedQty, item.unit)} dos Itens em Casa`,
     };
 
-    adjusted.push(adjustedItem);
-    finalItems.push(adjustedItem);
+    adjusted.push({
+      before: item,
+      after: updated,
+      name: item.name,
+      originalQty,
+      pantryQty: abatedQty,
+      reason: updated.adjustmentReason,
+    });
+
+    resultItems.push(updated);
   });
 
   return {
-    items: finalItems,
+    items: resultItems,
+    kept,
     removed,
     adjusted,
-    unchanged,
+    unchanged: kept,
     pantryItems,
   };
 }
