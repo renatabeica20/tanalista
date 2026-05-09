@@ -727,7 +727,7 @@ function getProductClassificationCache(name) {
       tipos: Array.isArray(parsed.tipos) ? parsed.tipos : [],
       pesos: Array.isArray(parsed.pesos) ? parsed.pesos : [],
       volumes: Array.isArray(parsed.volumes) ? parsed.volumes : [],
-      unidades: Array.isArray(parsed.unidades) && parsed.unidades.length ? parsed.unidades : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
+      unidades: Array.isArray(parsed.unidades) && parsed.unidades.length ? parsed.unidades : ["unidade", "pacote", "kg"],
     };
   } catch {
     return null;
@@ -743,7 +743,7 @@ function setProductClassificationCache(name, cfg) {
       tipos: Array.isArray(cfg?.tipos) ? cfg.tipos.slice(0, 12) : [],
       pesos: Array.isArray(cfg?.pesos) ? cfg.pesos.slice(0, 12) : [],
       volumes: Array.isArray(cfg?.volumes) ? cfg.volumes.slice(0, 12) : [],
-      unidades: Array.isArray(cfg?.unidades) && cfg.unidades.length ? cfg.unidades.slice(0, 12) : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
+      unidades: Array.isArray(cfg?.unidades) && cfg.unidades.length ? cfg.unidades.slice(0, 12) : ["unidade", "pacote", "kg"],
       cachedAt: Date.now(),
     };
     window.localStorage.setItem(PRODUCT_CLASSIFICATION_CACHE_PREFIX + key, JSON.stringify(safe));
@@ -775,14 +775,14 @@ async function classifyProduct(name) {
     "Classifique o produto para lista de compras: " + name,
     "",
     "Retorne APENAS JSON válido, sem markdown, sem explicação e sem texto antes ou depois:",
-    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":[],"volumes":[],"unidades":["unidade","pacote","kg","litro","caixa","fardo","saco"]}',
+    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":["500g","1kg"],"volumes":["500ml","1L"],"unidades":["unidade","pacote","kg"]}',
     "",
     "Regras:",
     "- marcas: 4 a 8 marcas brasileiras comuns;",
     "- tipos: 3 a 7 variações comuns;",
-    "- pesos: retorne sempre []; o app não usa mais unidade de medida na inclusão;",
-    "- volumes: retorne sempre []; o app não usa mais unidade de medida na inclusão;",
-    "- unidades: use apenas unidade, pacote, kg, litro, caixa, fardo ou saco.",
+    "- pesos: tamanhos em g/kg se for sólido, senão [];",
+    "- volumes: tamanhos em ml/L se for líquido, senão [];",
+    "- unidades: formas de contagem, como pacote, kg, fardo, lata, garrafa e unidade.",
   ].join("\n");
 
   try {
@@ -797,7 +797,7 @@ async function classifyProduct(name) {
       tipos: Array.isArray(p.tipos) ? p.tipos : [],
       pesos: Array.isArray(p.pesos) ? p.pesos : [],
       volumes: Array.isArray(p.volumes) ? p.volumes : [],
-      unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
+      unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
     };
 
     setProductClassificationCache(name, cfg);
@@ -898,8 +898,8 @@ const TYPE_NAMES = {
 // Cada entrada: { marcas[], tipos[], pesos[], volumes[], unidades[] }
 // marcas  = principais marcas do Atacadão para o produto
 // tipos   = variações / sabores / versões do produto
-// pesos   = unidades em gramas/kg (produtos sólidos — embalagem pacote/saco/lata)
-// volumes = unidades em ml/L (produtos líquidos — garrafa/frasco/caixinha)
+// pesos   = tamanhos em gramas/kg (produtos sólidos — embalagem pacote/saco/lata)
+// volumes = tamanhos em ml/L (produtos líquidos — garrafa/frasco/caixinha)
 // unidades= como o produto é contado na compra
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -964,7 +964,7 @@ async function aiOrganize(items, type) {
     .join("\n");
 
   const prompt = `Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
-{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e unidade","qty":1,"unit":"un","price":null,"checked":false}]}]}
+{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}
 
 ITENS:
 ${list}
@@ -1170,19 +1170,9 @@ function normalizeUnitValue(unit) {
   if (/^caixa/.test(raw)) return "caixa";
   if (/^fardo/.test(raw)) return "fardo";
   if (/^saco/.test(raw)) return "saco";
-  if (/^quilo|^kg$/.test(raw)) return "kg";
-  if (/^litro|^l$/.test(raw)) return "litro";
-  if (/^unidade|^un$/.test(raw)) return "unidade";
-
-  // Compatibilidade com listas antigas:
-  if (/^lata/.test(raw)) return "unidade";
-  if (/^garrafa/.test(raw)) return "litro";
-  if (/^grama|^g$/.test(raw)) return "kg";
-  if (/^mililitro|^ml$/.test(raw)) return "litro";
-  if (/^duzia/.test(raw)) return "unidade";
-  if (/^peca|^peça/.test(raw)) return "unidade";
-  if (/^par/.test(raw)) return "unidade";
-
+  if (/^quilo|^kg$|^grama|^g$/.test(raw)) return "kg";
+  if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
+  if (/^unidade|^un$|^lata|^garrafa|^duzia|^peca|^peça|^par/.test(raw)) return "unidade";
   return "unidade";
 }
 
@@ -1202,7 +1192,7 @@ function formatUnitForQuantity(qty, unit) {
     "peça":"peças",
     "par":"pares"
   };
-  if (["kg"].includes(u)) return u;
+  if (u === "kg") return "kg";
   return n > 1 ? (plural[u] || u) : u;
 }
 
@@ -1210,36 +1200,6 @@ function formatQtyUnit(qty, unit) {
   const n = Number(qty || 1);
   return `${Number.isInteger(n) ? n : String(n).replace(".", ",")} ${formatUnitForQuantity(n, unit)}`;
 }
-
-function getPriceLabelForUnit(unit, categoryName = "", itemName = "") {
-  const u = normalizeUnitValue(unit);
-  const category = normalizePlainText(categoryName);
-  const name = normalizePlainText(itemName);
-  const isProduce =
-    category.includes("hortifruti") ||
-    ["abobora", "abobrinha", "rucula", "caqui", "mamao", "manga", "pera", "banana", "tomate", "alface", "cebola", "batata", "cenoura"].some((p) => name.includes(p));
-
-  if (isProduce && u === "unidade") return "Preço por kg";
-  if (u === "kg") return "Preço por kg";
-  if (u === "litro") return "Preço por litro";
-  if (u === "caixa") return "Preço por caixa";
-  if (u === "fardo") return "Preço por fardo";
-  if (u === "saco") return "Preço por saco";
-  if (u === "pacote") return "Preço por pacote";
-  return "Preço correspondente";
-}
-
-function shouldUseApproxWeight(item, categoryName = "") {
-  const u = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
-  const category = normalizePlainText(categoryName || item?.category || item?.categoryName || "");
-  const name = normalizePlainText(item?.name || item?.nome || "");
-  const isProduce =
-    category.includes("hortifruti") ||
-    ["abobora", "abobrinha", "rucula", "caqui", "mamao", "manga", "pera", "banana", "tomate", "alface", "cebola", "batata", "cenoura"].some((p) => name.includes(p));
-
-  return isProduce && u === "unidade";
-}
-
 
 const CATEGORY_CORRIDOR_ORDER = [
   "Hortifruti",
@@ -1286,7 +1246,7 @@ function normalizeListItem(item) {
     name,
     qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
     unit,
-    detail: String(item?.detail || item?.tipo || "").trim(),
+    detail: String(item?.detail || item?.tipo || item?.embalagem || item?.peso || item?.volume || "").trim(),
     price: item?.price ?? null,
     checked: Boolean(item?.checked),
     notFound: Boolean(item?.notFound),
@@ -1518,7 +1478,7 @@ function splitContinuousVoiceIntoChunks(text) {
     .map(v => v.replace(/§DEC§/g, ",").replace(/§JOIN§/g, " ").trim())
     .filter(v => v.length > 1);
 
-  // Correção crítica: o transcritor às vezes separa o unidade de medida
+  // Correção crítica: o transcritor às vezes separa o tamanho da embalagem
   // como se fosse um item próprio. Ex.: "1 pacote arroz, 5 kg".
   // Esses fragmentos de medida devem ser anexados ao item anterior.
   const merged = [];
@@ -1665,9 +1625,9 @@ async function aiParseShoppingText(text, type = "mercado") {
     "- Mamão, manga, pera, maçã, banana, tomate, uva, melão, abacaxi e similares são Hortifruti quando a lista for organizada por categoria;",
     "- name deve conter apenas o produto principal, sem quantidade, sem unidade e sem peso/volume;",
     "- unit deve representar a quantidade comprada: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
-    "- peso use apenas g/kg quando houver unidade/peso da embalagem;",
-    "- volume use apenas ml/L quando houver unidade/volume da embalagem;",
-    "- embalagem pode combinar forma e unidade, como 'pacote 5kg', 'lata 350ml' ou apenas '5kg';",
+    "- peso use apenas g/kg quando houver tamanho/peso da embalagem;",
+    "- volume use apenas ml/L quando houver tamanho/volume da embalagem;",
+    "- embalagem pode combinar forma e tamanho, como 'pacote 5kg', 'lata 350ml' ou apenas '5kg';",
     "- marca e tipo só devem ser preenchidos quando forem expressamente citados pelo usuário;",
     "- Não invente itens não mencionados.",
     "",
@@ -3866,12 +3826,10 @@ const [lists,setLists]=useState(()=>{
   }, [pantryReviewReadOnly, pantryReviewDirty, resetPantryFlow, showToast]);
 
   const getManualDialogUnits = useCallback(() => {
-    const base = ["unidade", "pacote", "kg", "L", "caixa", "fardo"];
-    const fromConfig = Array.isArray(dlgConfig?.unidades) ? dlgConfig.unidades.map(normalizeUnitValue) : [];
-    return Array.from(new Set([...base, ...fromConfig])).filter(Boolean).slice(0, 8);
-  }, [dlgConfig]);
+    return ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"];
+  }, []);
 
-  const isDecimalManualUnit = useCallback((unit) => ["kg", "g", "L", "ml"].includes(normalizeUnitValue(unit)), []);
+  const isDecimalManualUnit = useCallback((unit) => ["kg", "litro"].includes(normalizeUnitValue(unit)), []);
 
   const getManualQtyStep = useCallback((unit = dlgUnit) => isDecimalManualUnit(unit) ? 0.5 : 1, [dlgUnit, isDecimalManualUnit]);
 
@@ -3945,11 +3903,8 @@ const [lists,setLists]=useState(()=>{
   }, [isDecimalManualUnit]);
 
   const getManualSizeOptions = useCallback(() => {
-    if (!dlgConfig || isDecimalManualUnit(dlgUnit)) return [];
-    const sizes = [...(Array.isArray(dlgConfig.pesos) ? dlgConfig.pesos : []), ...(Array.isArray(dlgConfig.volumes) ? dlgConfig.volumes : [])]
-      .filter(Boolean);
-    return Array.from(new Set(sizes)).slice(0, 10);
-  }, [dlgConfig, dlgUnit, isDecimalManualUnit]);
+    return [];
+  }, []);
 
   const setManualSize = useCallback((size) => {
     const value = String(size || "").trim();
@@ -3965,10 +3920,9 @@ const [lists,setLists]=useState(()=>{
   const buildManualPreview = useCallback(() => {
     const qty = Number(String(dlgQty || 1).replace(",", "."));
     const unit = normalizeUnitValue(dlgUnit || "unidade");
-    const name = normalizeProductName(itemDialog?.name || "");
-    const size = isDecimalManualUnit(unit) ? "" : String(dlgPeso || dlgVolume || "").trim();
-    return `${formatQtyUnit(Number.isFinite(qty) && qty > 0 ? qty : 1, unit)} · ${[name, size].filter(Boolean).join(" ")}`;
-  }, [dlgQty, dlgUnit, itemDialog, dlgPeso, dlgVolume, isDecimalManualUnit]);
+    const name = smartNormalizeProductName(itemDialog?.name || "");
+    return `${formatQtyUnit(Number.isFinite(qty) && qty > 0 ? qty : 1, unit)} · ${name}`;
+  }, [dlgQty, dlgUnit, itemDialog]);
 
   const normalizeListOwnershipFlags=(list)=>{
     if(!list)return list;
@@ -4769,8 +4723,8 @@ const [lists,setLists]=useState(()=>{
       setDlgConfig(cfg);
       setDlgMarca("");
       setDlgTipo("");
-      setDlgPeso(existing.peso||"");
-      setDlgVolume(existing.volume||"");
+      setDlgPeso("");
+      setDlgVolume("");
       setDlgQty(existing.qty||1);
       setDlgUnit(existing.unit||cfg.unidades?.[0]||"unidade");
       setItemDialogMode(mode);
@@ -4785,8 +4739,8 @@ const [lists,setLists]=useState(()=>{
     const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || "unidade");
     setDlgUnit(normalizeUnitValue(preferredUnit));
     setDlgQty(1);
-    setDlgPeso(cfg.pesos?.[0] || "");
-    setDlgVolume(!cfg.pesos?.length ? (cfg.volumes?.[0] || "") : "");
+    setDlgPeso("");
+    setDlgVolume("");
     setItemDialogMode(mode);
     setItemDialog({name});
   };
@@ -4841,15 +4795,14 @@ const [lists,setLists]=useState(()=>{
     if (!editedName) { showToast("⚠️ Informe o nome do item"); return; }
     const unit = normalizeUnitValue(dlgUnit || "unidade");
     const qtyNumber = Number(String(dlgQty || 1).replace(",", "."));
-    const decimalUnit = ["kg", "g", "L", "ml"].includes(unit);
-    const embalagem = decimalUnit ? "" : (dlgPeso || dlgVolume || "");
     const newItem = normalizeListItem({
       name: editedName,
       marca: "",
       tipo: "",
-      embalagem,
-      peso: !decimalUnit && /(g|kg)/i.test(embalagem) ? embalagem : "",
-      volume: !decimalUnit && /(ml|l)/i.test(embalagem) ? embalagem : "",
+      embalagem: "",
+      peso: "",
+      volume: "",
+      detail: "",
       qty: Number.isFinite(qtyNumber) && qtyNumber > 0 ? qtyNumber : 1,
       unit,
       price: null,
@@ -4860,7 +4813,7 @@ const [lists,setLists]=useState(()=>{
       const memory = loadUserItemMemory();
       const key = normalizePlainText(newItem.name);
       if (key) {
-        memory[key] = { name: newItem.name, unit: newItem.unit, detail: newItem.detail || newItem.embalagem || "", updatedAt: new Date().toISOString() };
+        memory[key] = { name: newItem.name, unit: newItem.unit, detail: "", updatedAt: new Date().toISOString() };
         localStorage.setItem("tnl_item_memory", JSON.stringify(memory));
       }
     } catch {}
@@ -6073,7 +6026,7 @@ return rebuiltHistory;
     if(mode==="perKg")return `Preço por kg: ${fmtR(item.price)}`;
     if(mode==="perLiter")return `Preço por litro: ${fmtR(item.price)}`;
     if(mode==="package")return `Preço por pacote: ${fmtR(item.price)}`;
-    return `Preço correspondente: ${fmtR(item.price)}`;
+    return `Preço unitário: ${fmtR(item.price)}`;
   };
 
   const getCompactUnitPriceLabel=(item)=>{
@@ -6864,7 +6817,7 @@ return rebuiltHistory;
   const progressColor=budget>0?(rawBudgetPct<=75?"#34D399":rawBudgetPct<=100?"#FBBF24":"#F87171"):(pct<50?"#34D399":pct<80?"#FBBF24":"#F87171");
 
   // ── Preview do item no diálogo ────────────────────────────────────────
-  const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name,dlgPeso||dlgVolume].filter(Boolean).join(" · "):"";
+  const dlgPreview=itemDialog?[dlgQty+" "+dlgUnit,dlgTipo,itemDialog.name].filter(Boolean).join(" · "):"";
 
 
   // ─────────────────────────────────────────────────────────────────────
@@ -7564,7 +7517,7 @@ return rebuiltHistory;
         const manualWeight=numberFromText(mWeightText);
         const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
         const total=tempPrice!=null?getItemLineTotal(temp):0;
-        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço correspondente":inferredMode==="package"?"Preço por pacote":"Preço total pago";
+        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço por unidade":inferredMode==="package"?"Preço por pacote":"Preço total pago";
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
             <div style={{textAlign:"center",marginBottom:16}}>
@@ -7630,7 +7583,7 @@ return rebuiltHistory;
       {extraModal&&(
         <ModalSheet onClose={()=>setExtraModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Adicionar item extra</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Informe o item para detalhar quantidade, unidade, embalagem e preço na próxima tela.</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Informe o item para detalhar quantidade, unidade e preço na próxima tela.</div>
           <div style={{marginBottom:16}}>
             <label style={lbl}>Item</label>
             <input value={exName} onChange={e=>setExName(e.target.value)}
