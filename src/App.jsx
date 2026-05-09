@@ -969,7 +969,12 @@ async function aiOrganize(items, type) {
 ITENS:
 ${list}
 
-Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior.`;
+Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior;
+- itens como abóbora, rúcula, caqui, flores comestíveis/verduras e legumes devem ficar em Hortifruti;
+- álcool, lustra móvel, brilho alumínio, limpa alumínio, sapólio, bucha/esponja e produtos de limpeza devem ficar em Limpeza;
+- coxão mole, fígado, bucho, acém, músculo e cortes/miúdos devem ficar em Carnes e Aves;
+- bombom, amendoim, castanhas e doces devem ficar em Snacks e Doces;
+- lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -1624,18 +1629,28 @@ function inferPreferredCategoryForItem(item) {
   if (/\blencos?\s+umedecid/.test(n) || /\bumedecid/.test(n) || has("lenço umedecido", "lenco umedecido", "lenços umedecidos", "lencos umedecidos", "umedecido", "umedecidos", "fralda", "pomada bebê", "pomada bebe", "talco bebê", "talco bebe")) return "Bebês";
   if (has("papel toalha", "guardanapo", "copo descartável", "copo descartavel", "prato descartável", "prato descartavel", "talher descartável", "talher descartavel", "papel alumínio", "papel aluminio", "papel filme", "saco freezer", "saco plástico", "saco plastico")) return "Descartáveis e Embalagens";
   if (has("pilha", "bateria", "lâmpada", "lampada", "tomada", "interruptor", "extensão", "extensao", "cabo elétrico", "cabo eletrico", "fio elétrico", "fio eletrico", "disjuntor")) return "Elétrica";
-  if (has("bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
+  if (has("alcool", "álcool", "lustra movel", "lustra móvel", "brilho aluminio", "brilho alumínio", "limpa aluminio", "limpa alumínio", "bucho limpeza", "sapolio", "sapólio", "veja", "desengordurante", "limpa vidro", "limpa vidros", "bombril", "palha de aço", "palha de aco", "coala", "omo", "lava roupa", "lava roupas", "sabão em pó", "sabao em po", "sabão líquido", "sabao liquido", "detergente", "desinfetante", "amaciante", "água sanitária", "agua sanitaria", "limpador", "multiuso", "alvejante", "cloro", "esponja", "vassoura", "rodo", "saco de lixo")) return "Limpeza";
   if (has("pasta de dente", "creme dental", "sabonete", "shampoo", "condicionador", "desodorante", "escova de dente", "fio dental", "papel higiênico", "papel higienico", "absorvente", "barbeador", "aparelho de barbear")) return "Higiene e Perfumaria";
+
+
+  // Refinamento forte de classificação: itens comuns não devem cair em "Outros".
+  // Essas regras vêm antes das regras genéricas e corrigem falhas recorrentes da IA.
+  if (hasWord("abobora", "abóbora", "abobrinha", "rucula", "rúcula", "caqui", "flor", "flor bambu", "couve", "hortela", "hortelã", "coentro", "agrião", "agriao", "quiabo", "jiló", "jilo", "vagem", "inhame", "cará", "cara")) return "Hortifruti";
+  if (hasWord("coxao mole", "coxão mole", "coxao duro", "coxão duro", "figado", "fígado", "bucho", "miudo", "miúdo", "musculo", "músculo", "acém", "acem", "cupim", "contra file", "contra filé", "file mignon", "filé mignon", "paleta", "lagarto")) return "Carnes e Aves";
+  if (hasWord("alcool", "álcool", "lustra movel", "lustra móvel", "brilho aluminio", "brilho alumínio", "limpa aluminio", "limpa alumínio", "sapolio", "sapólio", "veja", "desengordurante", "limpa vidro", "limpa vidros", "limpa piso", "limpa pisos", "desodorizador", "odorizador", "aromatizador", "borrifador", "bucha limpeza")) return "Limpeza";
+  if (hasWord("papel aluminio", "papel alumínio", "brilho aluminio", "brilho alumínio", "filme pvc", "papel manteiga", "saco zip", "saco ziploc", "embalagem aluminio", "embalagem alumínio")) return "Descartáveis e Embalagens";
+  if (hasWord("amendoim", "castanha", "castanha de caju", "castanha do para", "castanha-do-pará", "nozes", "pistache", "bombom", "bala", "chiclete", "doce", "paçoca", "pacoca", "barra de cereal")) return "Snacks e Doces";
+  if (hasWord("lapis de cor", "lápis de cor", "giz de cera", "canetinha", "hidrocor", "cola escolar", "tesoura escolar", "regua", "régua", "estojo", "cartolina", "eva", "papel sulfite")) return "Material de Escrita";
 
   const rules = [
     { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","aveia","granola","cereal matinal","leite condensado","creme de leite"] },
     { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
     { cat: "Cafés e Chás", keys: ["cafe","café","cha","chá","achocolatado","nescau","toddy"] },
     { cat: "Frios e Laticínios", keys: ["ovo","ovos","leite","queijo","iogurte","manteiga","margarina","requeijao","requeijão","presunto","mortadela","salame","peito de peru"] },
-    { cat: "Carnes e Aves", keys: ["carne","frango","coxinha da asa","asa de frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
+    { cat: "Carnes e Aves", keys: ["carne","coxao mole","coxão mole","coxao duro","coxão duro","figado","fígado","bucho","miudo","miúdo","musculo","músculo","acem","acém","cupim","paleta","lagarto","frango","coxinha da asa","asa de frango","peixe","linguica","linguiça","picanha","costela","bife","file","filé","patinho","alcatra","maminha","fraldinha","salsicha","hamburguer","hambúrguer","bacon"] },
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
     { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
-    { cat: "Material de Escrita", keys: ["lapis","lápis","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
+    { cat: "Material de Escrita", keys: ["lapis de cor","lápis de cor","lapis","lápis","canetinha","hidrocor","giz de cera","cola escolar","tesoura escolar","regua","régua","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
     { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","vitamina","xarope","soro fisiologico","soro fisiológico"] },
     { cat: "Hidráulica", keys: ["cano","tubo","conexao","conexão","registro","torneira","chuveiro","ralo","sifao","sifão"] },
     { cat: "Ferramentas", keys: ["martelo","chave de fenda","alicate","furadeira","parafusadeira"] },
@@ -1645,7 +1660,7 @@ function inferPreferredCategoryForItem(item) {
     if (rule.keys.some(k => n.includes(normalizeTextForCategory(k)))) return rule.cat;
   }
 
-  if (hasWord("mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta")) return "Hortifruti";
+  if (hasWord("abobora","abóbora","rucula","rúcula","caqui","flor","flor bambu","mamao","mamão","manga","pera","pêra","maca","maçã","banana","laranja","limao","limão","uva","melão","melao","abacaxi","abacate","melancia","morango","kiwi","goiaba","maracuja","maracujá","tomate","alface","cebola","alho","batata","cenoura","mandioca","aipim","macaxeira","cheiro verde","cheiro-verde","salsinha","cebolinha","chuchu","brocolis","brócolis","abobrinha","beterraba","pepino","repolho","couve","couve flor","couve-flor","berinjela","pimentao","pimentão","verdura","legume","fruta")) return "Hortifruti";
   return "";
 }
 
@@ -1665,6 +1680,12 @@ function enforceKnownCategoryRules(categories) {
 function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
   const map = [
+
+    [["abóbora","abobora","rúcula","rucula","caqui","flor bambu","flor","hortelã","hortela","coentro","agrião","agriao","quiabo","jiló","jilo","vagem","inhame"],"Hortifruti"],
+    [["coxão mole","coxao mole","coxão duro","coxao duro","fígado","figado","bucho","miúdo","miudo","músculo","musculo","acém","acem","cupim","paleta","lagarto"],"Carnes e Aves"],
+    [["álcool","alcool","lustra móvel","lustra movel","brilho alumínio","brilho aluminio","limpa alumínio","limpa aluminio","sapólio","sapolio","veja","desengordurante","limpa vidro","limpa vidros"],"Limpeza"],
+    [["amendoim","castanha","nozes","pistache","bombom","bala","chiclete","paçoca","pacoca"],"Snacks e Doces"],
+    [["lápis de cor","lapis de cor","canetinha","hidrocor","giz de cera","cola escolar","tesoura escolar","régua","regua","cartolina","papel sulfite"],"Material de Escrita"],
     [["molho de tomate","extrato de tomate","polpa de tomate","tomate pelado"],"Mercearia"],
     [["bolacha","biscoito","cookie","oreo","chocolate","salgadinho","snack","chips","barra","pipoca"],"Snacks e Doces"],
     [["colorau","paprica","páprica","tempero","orégano","oregano","cominho","sazon"],"Temperos e Condimentos"],
@@ -1674,7 +1695,7 @@ function demoOrganize(items) {
     [["bombril","palha","coala","detergente","sabão","sabao","desinfetante","vassoura","esponja","limpador","água sanitária","agua sanitaria","amaciante","lava roupa","omo","multiuso","rodo","saco de lixo"],"Limpeza"],
     [["pasta de dente","creme dental","shampoo","sabonete","escova","fio dental","desodorante","condicionador","absorvente","papel higiênico","papel higienico"],"Higiene e Perfumaria"],
     [["arroz","feijão","feijao","macarrão","macarrao","farinha","açúcar","acucar","sal","azeite","óleo","oleo","vinagre","milho","linhaça","chia","atum","sardinha"],"Mercearia"],
-    [["carne","frango","coxinha da asa","asa de frango","peixe","linguiça","linguica","bacon","costela","picanha","bife","filé","file","salsicha","hambúrguer","hamburguer"],"Carnes e Aves"],
+    [["carne","coxao mole","coxão mole","coxao duro","coxão duro","figado","fígado","bucho","miudo","miúdo","musculo","músculo","acem","acém","cupim","paleta","lagarto","frango","coxinha da asa","asa de frango","peixe","linguiça","linguica","bacon","costela","picanha","bife","filé","file","salsicha","hambúrguer","hamburguer"],"Carnes e Aves"],
     [["leite","iogurte","queijo","manteiga","requeijão","requeijao","creme de leite","nata","margarina","presunto","mortadela","salame","peito de peru","ovo","ovos"],"Frios e Laticínios"],
     [["alface","tomate","cebola","alho","batata","cenoura","mandioca","aipim","cheiro verde","cheiro-verde","limão","limao","banana","maçã","maca","laranja","fruta","legume","verdura","melancia","abacate","brócolis","brocolis","mamão","mamao","manga","uva","melão","melao","abacaxi","abobrinha","beterraba","pepino","repolho","couve","berinjela","pera","pêra"],"Hortifruti"],
     [["pão de queijo","lasanha","pizza","sorvete","batata frita"],"Congelados"],
