@@ -4235,6 +4235,45 @@ const [lists,setLists]=useState(()=>{
     await openProductDialog(name);
   };
 
+
+  const addItemsToPantryReview = useCallback((items = []) => {
+    const normalizedItems = applyUserMemoryToItems(Array.isArray(items) ? items : [])
+      .map(normalizeListItem)
+      .filter((item) => item && item.name);
+
+    if (!normalizedItems.length) return 0;
+
+    setPantryReviewDirty(true);
+    setPantryReviewCategories((prev) => {
+      const next = JSON.parse(JSON.stringify(Array.isArray(prev) ? prev : []));
+      const organized = enforceKnownCategoryRules(demoOrganize(normalizedItems));
+
+      (organized || []).forEach((cat) => {
+        const catName = cat?.name || "Outros";
+        let target = next.find((existing) => normalizePlainText(existing.name) === normalizePlainText(catName));
+
+        if (!target) {
+          target = { name: catName, items: [] };
+          next.push(target);
+        }
+
+        target.items = [
+          ...(Array.isArray(target.items) ? target.items : []),
+          ...(Array.isArray(cat.items) ? cat.items : []).map((item) => ({
+            ...normalizeListItem(item),
+            checked: false,
+            notFound: false,
+            price: null,
+          })),
+        ];
+      });
+
+      return sanitizeCategories(enforceKnownCategoryRules(next));
+    });
+
+    return normalizedItems.length;
+  }, []);
+
   const confirmDialog = () => {
     const editedName = String(itemDialog?.name || "").trim();
     if (!editedName) { showToast("⚠️ Informe o nome do item"); return; }
@@ -4277,6 +4316,15 @@ const [lists,setLists]=useState(()=>{
       showToast("✏️ Item dos Itens em Casa atualizado");
       return;
     }
+    if (itemDialogMode === "pantryReviewAdd") {
+      addItemsToPantryReview([newItem]);
+      setPantryReviewEdit(null);
+      setItemDialog(null);
+      setItemDialogMode("pending");
+      setPantryInput("");
+      showToast("✅ Item adicionado aos Itens em Casa");
+      return;
+    }
     if (itemDialogMode === "pantry") {
       if (editPendingIdx != null) {
         setPantryPendingItems(prev=>prev.map((it,i)=>i===editPendingIdx?newItem:it));
@@ -4297,17 +4345,7 @@ const [lists,setLists]=useState(()=>{
         cat = { name: "Itens Extras", items: [] };
         l.categories.push(cat);
       }
-      const hasImmediatePrice =
-        newItem.price != null &&
-        Number(newItem.price) > 0;
-
-      cat.items.push({
-        ...newItem,
-        extra: true,
-        checked: hasImmediatePrice,
-        checkedAt: hasImmediatePrice ? new Date().toISOString() : null,
-        notFound: false
-      });
+      cat.items.push({ ...newItem, extra: true, checked: false, notFound: false });
       l.categories = sanitizeCategories(l.categories);
       updateList(l);
       registrarEvento("add_extra_item", {
@@ -4358,6 +4396,16 @@ const [lists,setLists]=useState(()=>{
     if (!item) return;
     setPantryReviewEdit({ catIndex, itemIndex });
     openProductDialog(item.name, item, { mode: "pantryReview" });
+  };
+
+  const handleAddPantryReviewItem = async () => {
+    const name = pantryInput.trim();
+    if (!name) {
+      showToast("⚠️ Informe o item que deseja acrescentar");
+      return;
+    }
+    setPantryReviewEdit(null);
+    await openProductDialog(name, null, { mode: "pantryReviewAdd" });
   };
 
   const removePantryReviewItem = (catIndex, itemIndex) => {
@@ -4695,8 +4743,14 @@ const [lists,setLists]=useState(()=>{
       items=applyUserMemoryToItems(items).map(normalizeListItem);
       if(!items.length){showToast("⚠️ Nenhum item encontrado");return;}
       const target = source === "voz" ? voiceTargetRef.current : pasteTarget;
-      if (target === "pantry") setPantryPendingItems(prev=>[...prev,...items]);
-      else setPendingItems(prev=>[...prev,...items]);
+      if (target === "pantry") {
+        setPantryPendingItems(prev=>[...prev,...items]);
+      } else if (target === "pantryReview") {
+        addItemsToPantryReview(items);
+        setPantryInput("");
+      } else {
+        setPendingItems(prev=>[...prev,...items]);
+      }
       if(closePaste){setPasteText("");setShowPasteModal(false);setPasteTarget("list");}
       showToast(source==="voz" ? `🎤 ${items.length} item(ns) adicionados por voz` : `✅ ${items.length} item(ns) interpretados pela IA`,2800);
     }finally{
@@ -4714,8 +4768,14 @@ const [lists,setLists]=useState(()=>{
     const hasListShape=/\n|;|\||^[\s•\-*\d.)]+/m.test(clean);
     if(hasListShape && localItems.length>=2){
       const normalizedItems=applyUserMemoryToItems(localItems).map(normalizeListItem);
-      if (pasteTarget === "pantry") setPantryPendingItems(prev=>[...prev,...normalizedItems]);
-      else setPendingItems(prev=>[...prev,...normalizedItems]);
+      if (pasteTarget === "pantry") {
+        setPantryPendingItems(prev=>[...prev,...normalizedItems]);
+      } else if (pasteTarget === "pantryReview") {
+        addItemsToPantryReview(normalizedItems);
+        setPantryInput("");
+      } else {
+        setPendingItems(prev=>[...prev,...normalizedItems]);
+      }
       setPasteText("");
       setShowPasteModal(false);
       setPasteTarget("list");
@@ -6219,6 +6279,7 @@ return rebuiltHistory;
         pantryReviewCategories={pantryReviewCategories}
         getCatTheme={getCatTheme}
         editPantryReviewItem={editPantryReviewItem}
+        handleAddPantryReviewItem={handleAddPantryReviewItem}
         removePantryReviewItem={removePantryReviewItem}
         savePantryFromReview={savePantryFromReview}
         pantryEditingId={pantryEditingId}
