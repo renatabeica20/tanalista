@@ -1764,6 +1764,34 @@ function getCategoryForExtraItem(item) {
 }
 
 
+function inferExtraPriceMode(item, categoryName = "") {
+  const unit = normalizeUnitValue(item?.unit || "unidade");
+  const category = normalizePlainText(categoryName);
+  const name = normalizePlainText(item?.name || "");
+  const isProduce =
+    category.includes("hortifruti") ||
+    ["abobora", "abobrinha", "rucula", "caqui", "mamao", "manga", "pera", "banana", "tomate", "alface", "cebola", "batata", "cenoura"].some((p) => name.includes(p));
+
+  if (unit === "kg") return "perKg";
+  if (unit === "litro" || unit === "L") return "perLiter";
+  if (unit === "pacote") return "package";
+  if (isProduce && unit === "unidade") return "perKg";
+  return "unit";
+}
+
+function getExtraPriceInputLabel(item, categoryName = "") {
+  const mode = inferExtraPriceMode(item, categoryName);
+  if (mode === "perKg") return "Preço por kg";
+  if (mode === "perLiter") return "Preço por litro";
+  if (mode === "package") return "Preço por pacote";
+  if (normalizeUnitValue(item?.unit) === "caixa") return "Preço por caixa";
+  if (normalizeUnitValue(item?.unit) === "fardo") return "Preço por fardo";
+  if (normalizeUnitValue(item?.unit) === "saco") return "Preço por saco";
+  return "Preço por unidade";
+}
+
+
+
 function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
   const map = [
@@ -4865,16 +4893,27 @@ const [lists,setLists]=useState(()=>{
     }
     if (itemDialogMode === "extra" && currentList) {
       const l = JSON.parse(JSON.stringify(currentList));
+      const targetCategoryName = getCategoryForExtraItem(newItem);
+      const enteredPrice = parseBRL(exPrice);
+      const hasExtraPrice = enteredPrice != null && enteredPrice > 0;
+      const extraPriceMode = inferExtraPriceMode(newItem, targetCategoryName);
+
       const extraItem = {
         ...newItem,
+        detail: newItem.detail || "➕ EXTRA",
         extra: true,
+        extraLabel: "➕ EXTRA",
         addedDuringPurchase: true,
-        checked: false,
-        notFound: false,
         addedAt: new Date().toISOString(),
+        checked: hasExtraPrice,
+        notFound: false,
+        price: hasExtraPrice ? enteredPrice : null,
+        priceMode: hasExtraPrice ? extraPriceMode : undefined,
+        priceRecordedAt: hasExtraPrice ? new Date().toISOString() : undefined,
+        purchasedAsExtra: hasExtraPrice,
+        pendingExtraPrice: !hasExtraPrice,
       };
 
-      const targetCategoryName = getCategoryForExtraItem(extraItem);
       let cat = l.categories.find(c => normalizePlainText(c.name) === normalizePlainText(targetCategoryName));
       if (!cat) {
         cat = { name: targetCategoryName, items: [] };
@@ -4884,6 +4923,25 @@ const [lists,setLists]=useState(()=>{
       cat.items.push(extraItem);
       l.categories = enforceKnownCategoryRules(l.categories);
       updateList(l);
+
+      if (hasExtraPrice) {
+        try {
+          const totalForHistory = getItemLineTotal(extraItem);
+          addPriceHistoryEntry({
+            itemName: extraItem.name,
+            unitPrice: Number(extraItem.price || 0),
+            totalPrice: Number(totalForHistory || extraItem.price || 0),
+            quantity: Number(extraItem.qty || 1),
+            unit: extraItem.unit || "unidade",
+            listType: currentList?.type || listType,
+            listName: currentList?.name || listName,
+            listId: currentList?.id || "",
+            itemId: extraItem.id || extraItem.name || "",
+            recordedAt: extraItem.priceRecordedAt || new Date().toISOString()
+          });
+        } catch {}
+      }
+
       registrarEvento("add_extra_item", {
         list_id: l.id || null,
         shared_id: l.sharedId || null,
@@ -4891,13 +4949,15 @@ const [lists,setLists]=useState(()=>{
         item_name: extraItem.name || "",
         item_qty: Number(extraItem.qty || 1),
         item_unit: extraItem.unit || "unidade",
+        item_price: hasExtraPrice ? Number(enteredPrice || 0) : 0,
         category: targetCategoryName,
+        purchased_now: hasExtraPrice,
       });
       setItemDialog(null);
       setItemDialogMode("pending");
       setCurrentInput("");
       setExName(""); setExQty(1); setExUnit("unidade"); setExPrice("");
-      showToast(`⭐ Item extra adicionado em ${targetCategoryName}!`);
+      showToast(hasExtraPrice ? `⭐ Extra comprado em ${targetCategoryName}!` : `⭐ Item extra adicionado em ${targetCategoryName}!`);
       return;
     }
     if (editPendingIdx != null) {
@@ -6696,23 +6756,9 @@ return rebuiltHistory;
   const addExtra=()=>{
     if(isReadOnlyFinishedList(currentList)){ setExtraModal(false); return blockFinishedListEdit(); }
     if(!exName.trim()){showToast("⚠️ Digite o nome");return;}
-    const l=JSON.parse(JSON.stringify(currentList));
-    let cat=l.categories.find(c=>c.name==="Itens Extras");
-    if(!cat){cat={name:"Itens Extras",items:[]};l.categories.push(cat);}
-    cat.items.push({name:exName.trim(),detail:"",qty:exQty,originalQty:exQty,unit:exUnit,price:parseBRL(exPrice),priceMode:parseBRL(exPrice)!=null?"total":undefined,checked:false,notFound:false,extra:true});
-    l.categories = sanitizeCategories(l.categories);
-    updateList(l);setExtraModal(false);
-    registrarEvento("add_extra_item", {
-      list_id: l.id || null,
-      shared_id: l.sharedId || null,
-      list_name: l.name || "",
-      item_name: exName.trim(),
-      item_qty: Number(exQty || 1),
-      item_unit: exUnit || "unidade",
-      item_price: Number(parseBRL(exPrice) || 0),
-    });
-    setExName("");setExQty(1);setExUnit("unidade");setExPrice("");
-    showToast("⭐ Item extra adicionado!");
+    const normalizedName = smartNormalizeProductName(exName.trim());
+    openProductDialog(normalizedName, null, { mode: "extra" });
+    setExtraModal(false);
   };
 
   const deleteList=async(id)=>{
@@ -7311,6 +7357,12 @@ return rebuiltHistory;
         buildManualPreview={buildManualPreview}
         btnGr={btnGr}
         confirmDialog={confirmDialog}
+        exPrice={exPrice}
+        setExPrice={setExPrice}
+        formatMoneyInput={formatMoneyInput}
+        parseBRL={parseBRL}
+        getExtraPriceInputLabel={getExtraPriceInputLabel}
+        getCategoryForExtraItem={getCategoryForExtraItem}
       />
 
       {/* ════════════════════════════════════
@@ -7608,13 +7660,14 @@ return rebuiltHistory;
         const startExtraFlow = () => {
           const name = (showCorrection ? correctedExtraName : exName).trim();
           if (!name) return;
+          setExPrice("");
           openProductDialog(name, null, {mode:"extra"});
           setExtraModal(false);
         };
         return (
         <ModalSheet onClose={()=>setExtraModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Adicionar item extra</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Digite o item lembrado durante a compra. O app corrige o nome e tenta inserir na categoria certa.</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:18,textAlign:"center"}}>Digite o item extra. Se ele já foi comprado, informe o preço na próxima etapa para entrar marcado como adquirido.</div>
           <div style={{marginBottom:16}}>
             <label style={lbl}>Item</label>
             <input value={exName} onChange={e=>setExName(e.target.value)}
