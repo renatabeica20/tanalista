@@ -25,11 +25,12 @@ export default function RecentLists({
   fmtR,
   WhatsAppIcon,
 }) {
-  const safeRecentLists = Array.isArray(recentLists) ? recentLists.slice(0,3) : [];
+  const baseVisibleLists = Array.isArray(visibleLists) ? visibleLists : [];
+  const safeRecentLists = baseVisibleLists.slice(0, 3);
   const safeHistoryLists = [
-    ...(Array.isArray(recentLists) ? recentLists.slice(3) : []),
+    ...baseVisibleLists.slice(3),
     ...(Array.isArray(historyLists) ? historyLists : []),
-  ];
+  ].filter((list, index, arr) => list?.id && arr.findIndex(item => item?.id === list.id) === index);
 
   const listCardProps = {
     listMenuId,
@@ -67,14 +68,14 @@ export default function RecentLists({
         <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>
           Listas recentes
         </div>
-        {visibleLists.length>0&&(
+        {baseVisibleLists.length>0&&(
           <div style={{fontSize:12,color:"#6B7280",fontWeight:800,flexShrink:0}}>
-            {visibleLists.length} {visibleLists.length===1?"lista salva":"listas salvas"}
+            {baseVisibleLists.length} {baseVisibleLists.length===1?"lista salva":"listas salvas"}
           </div>
         )}
       </div>
 
-      {visibleLists.length===0?(
+      {baseVisibleLists.length===0?(
         <div style={{textAlign:"center",padding:"28px 20px",color:"#6B7280",background:"#FFFFFF",border:"1px dashed #D1D5DB",borderRadius:24,boxShadow:"0 12px 28px rgba(17,24,39,0.04)"}}>
           <p style={{fontSize:15,lineHeight:1.6,fontWeight:900,margin:"0 0 6px",color:"#111827"}}>Nenhuma lista ainda</p>
           <p style={{fontSize:13,lineHeight:1.5,fontWeight:600,margin:0}}>Entre em Compras para criar sua primeira lista.</p>
