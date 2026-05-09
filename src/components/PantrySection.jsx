@@ -66,6 +66,7 @@ export default function PantrySection({
   pendingItems,
   showPantryComparisonDetails,
   setShowPantryComparisonDetails,
+  proceedAfterPantryComparison,
 }) {
   return (
     <>
@@ -264,7 +265,7 @@ export default function PantrySection({
         </div>)}
         <div style={{marginTop:10,fontSize:12,color:"#6B7280",fontWeight:700}}>Visualização apenas informativa. Para alterar, volte à pré-lista.</div>
       </div>)}
-      <button onClick={()=>setScreen("create")} style={createPrimaryBtn}>Continuar e organizar lista</button>
+      <button onClick={proceedAfterPantryComparison || (()=>setScreen("create"))} style={createPrimaryBtn}>Prosseguir para pré-lista</button>
     </div>
   </div>
 )}
