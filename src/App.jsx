@@ -5932,15 +5932,15 @@ return rebuiltHistory;
   const isListFinished=(list)=>{
     if (!list) return false;
 
-    // Cópia de lista finalizada deve se comportar como nova pré-lista editável.
-    const editableCopy = Boolean(
-      list?.editableCopy === true ||
-      list?.isCopy === true ||
-      list?.copiedFrom ||
-      list?.copiedFromId ||
-      normalizePlainText(list?.status || "") === "draft"
-    );
-    if (editableCopy) return false;
+    // Cópias editáveis e rascunhos nunca podem ser tratados como lista finalizada.
+    if (
+      list.editableCopy === true ||
+      list.isCopy === true ||
+      list.copyMode === "prelist" ||
+      list.status === "draft"
+    ) {
+      return false;
+    }
 
     const explicitFinished = Boolean(
       list.archivedFinished === true ||
@@ -6021,9 +6021,11 @@ return rebuiltHistory;
     const editableCopy = Boolean(
       list?.isCopy === true ||
       list?.editableCopy === true ||
+      list?.copyMode === "prelist" ||
       list?.copiedFrom ||
       list?.copiedFromId ||
-      normalizePlainText(list?.status || "") === "draft"
+      list?.copiedFromListId ||
+      list?.status === "draft"
     );
 
     if(isListFinished(list) && !editableCopy){
@@ -6046,11 +6048,16 @@ return rebuiltHistory;
       notFound:false,
     })));
 
+    // Cópia de lista finalizada vira nova pré-lista, não edição da lista original.
+    setEditingListId(editableCopy ? null : list.id);
     setCurrentList(null);
     setPendingItems(items);
-    setListName(String(list.name || "").replace(/\s*\(cópia\)$/i, ""));
-    setBudget(list.budget ? String(list.budget) : "");
-    setType(list.type || "mercado");
+    setListName(String(list.name || "").replace(/\s*\(c[oó]pia\)$/i,""));
+    setBudgetText(list.budget>0 ? fmtBRL(list.budget) : "");
+    setBudgetEnabled(Number(list.budget||0)>0);
+    setBudgetConfirmed(Number(list.budget||0)>0);
+    setListNameConfirmed(Boolean(list.name));
+    setListType(list.type||"mercado");
     setCurrentInput("");
     setEditPendingIdx(null);
     setPantryCompared(false);
@@ -6066,43 +6073,12 @@ return rebuiltHistory;
   const duplicateList=(list)=>{
     if(!list)return;
 
-    const now = new Date().toISOString();
+    const now=new Date().toISOString();
     const copy={
-      ...JSON.parse(JSON.stringify(list)),
       id:Date.now().toString(),
       name:(list.name||"Lista")+" (cópia)",
-      type:list.type || "mercado",
-      budget:list.budget || "",
-      status:"draft",
-      isCopy:true,
-      editableCopy:true,
-      copiedFrom:list.id || list.sharedId || null,
-      copiedFromId:list.id || null,
-      copiedFromListId:list.id || null,
-      sharedId:null,
-      isShared:false,
-      sharedAt:null,
-      sharedUrl:null,
-      sharedEvents:[],
-      imported:false,
-      importedFrom:null,
-      restoredFromCloud:false,
-      createdAt:now,
-      updatedAt:now,
-      finishedAt:null,
-      completedAt:null,
-      finalizedAt:null,
-      archivedFinished:false,
-      finished:false,
-      completed:false,
-      isFinished:false,
-      finalizada:false,
-      finalized:false,
-      isReadOnly:false,
-      readOnly:false,
-      locked:false,
-      history:false,
-      total:0,
+      type:list.type||"mercado",
+      budget:Number(list.budget||0),
       categories:(Array.isArray(list.categories)?list.categories:[]).map(cat=>({
         ...cat,
         items:(Array.isArray(cat.items)?cat.items:[]).map(item=>({
@@ -6113,12 +6089,50 @@ return rebuiltHistory;
           price:null,
           total:null,
         }))
-      }))
+      })),
+      createdAt:now,
+      updatedAt:now,
+      lastSyncedAt:null,
+      total:0,
+
+      // Marcadores usados para liberar a cópia como pré-lista editável.
+      status:"draft",
+      copyMode:"prelist",
+      isCopy:true,
+      editableCopy:true,
+      copiedFrom:list.id || list.sharedId || null,
+      copiedFromId:list.id || null,
+      copiedFromListId:list.id || null,
+
+      // Remove qualquer marca de finalização/travamento herdada da lista original.
+      archivedFinished:false,
+      finishedAt:null,
+      completedAt:null,
+      finalizedAt:null,
+      finished:false,
+      completed:false,
+      isFinished:false,
+      finalizada:false,
+      finalized:false,
+      isReadOnly:false,
+      readOnly:false,
+      locked:false,
+      history:false,
+
+      // Cópia começa local e independente.
+      sharedId:null,
+      isShared:false,
+      sharedAt:null,
+      sharedUrl:null,
+      sharedEvents:[],
+      imported:false,
+      importedFrom:null,
+      restoredFromCloud:false,
     };
 
     saveLists([copy,...lists]);
     setListMenuId(null);
-    showToast("📄 Cópia criada. Toque em Editar lista para ajustar.");
+    showToast("📄 Cópia criada. Abra o menu da cópia e toque em Editar lista.");
   };
 
   const stopListSharing=async(list)=>{
