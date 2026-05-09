@@ -3337,6 +3337,9 @@ const [lists,setLists]=useState(()=>{
   const [mPriceText,setMPriceText]=useState("");
   const [mPriceMode,setMPriceMode]=useState("total");
   const [mWeightText,setMWeightText]=useState("");
+  const [mEditName,setMEditName]=useState("");
+  const [mUnit,setMUnit]=useState("unidade");
+  const [mShowEditDetails,setMShowEditDetails]=useState(false);
 
   // Extra modal
   const [extraModal,setExtraModal]=useState(false);
@@ -6012,6 +6015,27 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
     return "unit";
   };
 
+  const getAllowedPurchaseUnits=()=>["unidade","pacote","kg","litro","caixa","fardo","saco"];
+
+  const inferPriceModeForUnit=(unit,item={})=>{
+    const normalized=normalizeUnitValue(unit || item?.unit || "unidade");
+    if(normalized==="kg")return "perKg";
+    if(normalized==="litro" || normalized==="L")return "perLiter";
+    if(normalized==="pacote")return "package";
+    return "unit";
+  };
+
+  const getPriceLabelForModeAndUnit=(mode,unit)=>{
+    const normalized=normalizeUnitValue(unit||"unidade");
+    if(mode==="perKg")return "Preço por kg";
+    if(mode==="perLiter")return "Preço por litro";
+    if(normalized==="pacote")return "Preço por pacote";
+    if(normalized==="caixa")return "Preço por caixa";
+    if(normalized==="fardo")return "Preço por fardo";
+    if(normalized==="saco")return "Preço por saco";
+    return "Preço por unidade";
+  };
+
   const qtyToKg=(item)=>{
     const q=normalizeCalcNumber(item?.qty,0);
     const u=normalizeUnitForCalc(item?.unit);
@@ -6571,6 +6595,9 @@ return rebuiltHistory;
     setMPriceMode(defaultMode);
     setMPriceText(item.price!=null?fmtBRL(item.price):"");
     setMWeightText(item.purchaseWeightKg?String(item.purchaseWeightKg).replace(".",","):"");
+    setMEditName(item.name || "");
+    setMUnit(normalizeUnitValue(item.unit || "unidade"));
+    setMShowEditDetails(false);
     setMNotFound(false);
   };
 
@@ -6581,6 +6608,8 @@ return rebuiltHistory;
     const confirmedQty=numberFromText(mQtyText) || Number(mQty||1) || 1;
     const previousQty=Number(item.qty||1);
     if(item.originalQty==null)item.originalQty=previousQty;
+    item.name=smartNormalizeProductName(mEditName || item.name || "");
+    item.unit=normalizeUnitValue(mUnit || item.unit || "unidade");
     item.qty=confirmedQty;
     item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     item.notFound=mNotFound;
@@ -6591,7 +6620,7 @@ return rebuiltHistory;
       if(p!=null&&p>=0){
         item.price=p;
         item.priceRecordedAt=new Date().toISOString();
-        item.priceMode=normalizePriceMode(mPriceMode) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
+        item.priceMode=normalizePriceMode(mPriceMode) || inferPriceModeForUnit(item.unit,item) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
         if(item.priceMode==="perKg"){
           const kg=numberFromText(mWeightText);
           const estimated=getEstimatedProduceWeight(item);
@@ -7582,35 +7611,88 @@ return rebuiltHistory;
         const item=currentList.categories[itemModal.ci]?.items[itemModal.ii];
         if(!item)return null;
         const theme=getCatTheme(currentList.categories[itemModal.ci]?.name);
-        const inferredMode=item.priceMode || inferDefaultPriceMode(item);
+        const effectiveItem={...item,name:mEditName || item.name,unit:mUnit || item.unit,qty:numberFromText(mQtyText)||Number(mQty||1)||1};
+        const inferredMode=mPriceMode || inferPriceModeForUnit(effectiveItem.unit,effectiveItem) || item.priceMode || inferDefaultPriceMode(effectiveItem);
         const qtyOriginal=Number(item.originalQty ?? item.qty ?? 1);
         const qtyAtual=numberFromText(mQtyText) || Number(mQty||1) || 1;
         const qtyChanged=Number(qtyAtual)!==Number(qtyOriginal);
         const tempPrice=parseBRL(mPriceText);
-        const estimatedProduceWeight=getEstimatedProduceWeight({...item,qty:qtyAtual});
+        const estimatedProduceWeight=getEstimatedProduceWeight({...effectiveItem,qty:qtyAtual});
         const manualWeight=numberFromText(mWeightText);
-        const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
+        const temp={...effectiveItem,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
         const total=tempPrice!=null?getItemLineTotal(temp):0;
-        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço por unidade":inferredMode==="package"?"Preço por pacote":"Preço total pago";
+        const unitLabel=getPriceLabelForModeAndUnit(inferredMode,effectiveItem.unit);
+        const focusPriceInput=(node)=>{
+          if(!node)return;
+          setTimeout(()=>{try{node.focus();node.setSelectionRange?.(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}},0);
+        };
+
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
-            <div style={{textAlign:"center",marginBottom:16}}>
-              <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{[item.name,item.detail].filter(Boolean).join(" ")}</div>
+            <div style={{textAlign:"center",marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap",fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>
+                <span>{item.extra || item.addedDuringPurchase ? "➕" : "🛒"}</span>
+                <span>{mEditName || item.name}</span>
+                {(item.extra || item.addedDuringPurchase) && (
+                  <span style={{fontSize:10,fontWeight:900,color:"#C2410C",background:"#FFF7ED",border:"1px solid #FED7AA",borderRadius:999,padding:"4px 8px"}}>EXTRA</span>
+                )}
+              </div>
               <div style={{fontSize:13,color:"#6B7280"}}>{currentList.categories[itemModal.ci]?.name}</div>
             </div>
+
+            <button
+              type="button"
+              onClick={()=>setMShowEditDetails(v=>!v)}
+              style={{width:"100%",marginBottom:12,padding:"11px 12px",borderRadius:16,border:"1px solid #E5E7EB",background:"#F9FAFB",color:"#4B5563",fontWeight:900,fontSize:13,fontFamily:"inherit",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+            >
+              <span>⚙️ Editar nome e unidade</span>
+              <span>{mShowEditDetails ? "▴" : "▾"}</span>
+            </button>
+
+            {mShowEditDetails && (
+              <div style={{marginBottom:14,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12}}>
+                <label style={lbl}>Nome do item</label>
+                <input value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder="Nome do item" style={inp({height:50,fontWeight:800})} />
+
+                <div style={{height:12}} />
+
+                <label style={lbl}>Unidade de medida</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {getAllowedPurchaseUnits().map((u)=>(
+                    <button
+                      type="button"
+                      key={u}
+                      onClick={()=>{
+                        const normalized=normalizeUnitValue(u);
+                        setMUnit(normalized);
+                        setMPriceMode(inferPriceModeForUnit(normalized,effectiveItem));
+                        if(["kg","litro"].includes(normalized)){
+                          const current=numberFromText(mQtyText)||Number(mQty)||1;
+                          setMQty(current);
+                          setMQtyText(formatQtyDisplay(current));
+                        }
+                      }}
+                      style={{border:"1px solid "+(normalizeUnitValue(mUnit)===normalizeUnitValue(u)?theme.border:"#E5E7EB"),background:normalizeUnitValue(mUnit)===normalizeUnitValue(u)?theme.bg:"#FFFFFF",color:normalizeUnitValue(mUnit)===normalizeUnitValue(u)?theme.header:"#374151",borderRadius:999,padding:"8px 11px",fontSize:12,fontWeight:900,fontFamily:"inherit",cursor:"pointer"}}
+                    >
+                      {formatUnitForQuantity(Number(mQtyText?.replace(",",".")||1),u)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{marginBottom:14,background:qtyChanged?"#EEF2FF":"#F9FAFB",border:`1px solid ${qtyChanged?"#A78BFA":"#E5E7EB"}`,borderRadius:18,padding:12,boxShadow:qtyChanged?"0 0 0 4px rgba(124,58,237,0.08)":"none",transition:"all 0.2s"}}>
               <label style={{...lbl,marginBottom:10}}>Quantidade</label>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <button onClick={()=>{const next=Math.max(0.001,Math.round(((numberFromText(mQtyText)||Number(mQty)||1)-0.1)*1000)/1000);setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>−</button>
+                <button onClick={()=>{const step=["kg","litro"].includes(normalizeUnitValue(mUnit))?0.5:1;const next=Math.max(step,Math.round(((numberFromText(mQtyText)||Number(mQty)||step)-step)*1000)/1000);setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>−</button>
                 <input value={mQtyText} onChange={e=>{const txt=normalizeDecimalInput(e.target.value);setMQtyText(txt);const v=numberFromText(txt);if(v!=null&&v>0)setMQty(v);}} inputMode="decimal" style={{...inp({textAlign:"center",fontWeight:900,fontSize:20,padding:"10px 8px",borderColor:qtyChanged?"#A78BFA":"#E5E7EB"}),width:112}} />
-                <button onClick={()=>{const next=Math.round(((numberFromText(mQtyText)||Number(mQty)||0)+0.1)*1000)/1000;setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>＋</button>
-                <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{item.unit||"un"}</span>
+                <button onClick={()=>{const step=["kg","litro"].includes(normalizeUnitValue(mUnit))?0.5:1;const next=Math.round(((numberFromText(mQtyText)||Number(mQty)||0)+step)*1000)/1000;setMQty(next);setMQtyText(formatQtyDisplay(next));}} style={qBtn}>＋</button>
+                <span style={{fontSize:14,color:"#6B7280",marginLeft:4}}>{formatUnitForQuantity(qtyAtual,mUnit||item.unit||"unidade")}</span>
               </div>
               {qtyChanged&&<div style={{fontSize:12,color:"#4C1D95",fontWeight:800,marginTop:8}}>Quantidade original alterada.</div>}
             </div>
 
-            {inferredMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(item.unit)) && (
+            {inferredMode==="perKg" && !["kg","g"].includes(normalizeUnitForCalc(mUnit||item.unit)) && (
               <div style={{marginBottom:14}}>
                 <label style={lbl}>Peso total comprado em kg</label>
                 {estimatedProduceWeight && (
@@ -7629,16 +7711,16 @@ return rebuiltHistory;
               <label style={lbl}>{unitLabel}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-                <input value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
+                <input ref={focusPriceInput} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
                   placeholder="0,00" inputMode="numeric" autoFocus
-                  style={inp({paddingLeft:44,fontWeight:900,fontSize:18})}
-                  onFocus={e=>e.target.style.borderColor=theme.border} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
+                  style={inp({paddingLeft:44,fontWeight:900,fontSize:18,textAlign:"left",caretColor:theme.header})}
+                  onFocus={e=>{e.target.style.borderColor=theme.border;try{e.target.setSelectionRange(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}}} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
               <div style={{fontSize:12,color:"#6B7280",marginTop:6}}>Digite apenas números. Ex.: 800 vira R$ 8,00.</div>
               {tempPrice!=null&&mPriceText&&(<div style={{marginTop:10,fontSize:13,fontWeight:900,color:theme.header,background:theme.bg,border:`1px solid ${theme.border}40`,borderRadius:14,padding:"10px 12px",display:"flex",justifyContent:"space-between",gap:12}}>
                 <span>Total calculado</span><span>{fmtR(total)}</span>
               </div>)}
-              {tempPrice!=null&&mPriceText&&<PriceMonthBadge itemName={item.name} price={tempPrice} recordedAt={item.priceRecordedAt || null} listId={currentList?.id} itemId={item.id || item.name} />}
+              {tempPrice!=null&&mPriceText&&<PriceMonthBadge itemName={mEditName||item.name} price={tempPrice} recordedAt={item.priceRecordedAt || null} listId={currentList?.id} itemId={item.id || item.name} />}
             </div>
 
             <div style={{display:"flex",gap:10}}>
