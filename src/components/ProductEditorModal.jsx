@@ -28,6 +28,12 @@ export default function ProductEditorModal({
   buildManualPreview,
   btnGr,
   confirmDialog,
+  exPrice,
+  setExPrice,
+  formatMoneyInput,
+  parseBRL,
+  getExtraPriceInputLabel,
+  getCategoryForExtraItem,
 }) {
   if (!itemDialog) return null;
 
@@ -52,7 +58,7 @@ export default function ProductEditorModal({
         {dlgLoading
           ? ""
           : itemDialogMode === "extra"
-            ? "Defina quantidade e unidade. O preço pode ser informado na própria lista."
+            ? "Defina quantidade, unidade e, se já estiver comprando, informe o preço."
             : (editPendingIdx != null || itemDialogMode === "pantryReview")
               ? "Editar item"
               : "Defina quantidade e unidade"}
@@ -122,6 +128,34 @@ export default function ProductEditorModal({
           <div style={{ background: "#F5F3FF", borderRadius: 18, padding: "12px 14px", marginBottom: 16, fontSize: 14, color: "#6D28D9", fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
             <span>✅</span><span>{buildManualPreview()}</span>
           </div>
+
+          {itemDialogMode === "extra" && (() => {
+            const previewItem = { name: itemDialog?.name || "", qty: dlgQty, unit: dlgUnit };
+            const targetCategory = typeof getCategoryForExtraItem === "function" ? getCategoryForExtraItem(previewItem) : "Itens Extras";
+            const priceLabel = typeof getExtraPriceInputLabel === "function" ? getExtraPriceInputLabel(previewItem, targetCategory) : "Preço";
+            const hasPrice = typeof parseBRL === "function" && parseBRL(exPrice) != null && parseBRL(exPrice) > 0;
+
+            return (
+              <div style={{ marginBottom: 16, background: hasPrice ? "#ECFDF5" : "#FFF7ED", border: "1px solid " + (hasPrice ? "#A7F3D0" : "#FED7AA"), borderRadius: 18, padding: 12 }}>
+                <label style={lbl}>{priceLabel} <span style={{ color: "#9CA3AF", fontWeight: 700 }}>(opcional)</span></label>
+                <input
+                  value={exPrice || ""}
+                  onChange={(e) => setExPrice(formatMoneyInput ? formatMoneyInput(e.target.value) : e.target.value)}
+                  placeholder="R$ 0,00"
+                  inputMode="decimal"
+                  style={inp({ height: 52, fontWeight: 900 })}
+                />
+                <div style={{ fontSize: 12, color: hasPrice ? "#047857" : "#9A3412", fontWeight: 800, marginTop: 8, lineHeight: 1.35 }}>
+                  {hasPrice
+                    ? "Com preço informado, o item entrará como comprado/adquirido."
+                    : "Sem preço, o item entra pendente na categoria correta para marcar depois."}
+                </div>
+                <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 700, marginTop: 6 }}>
+                  Categoria prevista: {targetCategory}
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 
@@ -137,7 +171,7 @@ export default function ProductEditorModal({
             onClick={confirmDialog}
             style={{ flex: 2, padding: 14, borderRadius: 18, background: "linear-gradient(135deg,#6D28D9,#8B5CF6)", border: "none", color: "white", fontWeight: 800, fontSize: 15, cursor: "pointer", fontFamily: "inherit" }}
           >
-            {itemDialogMode === "extra" ? "Adicionar à seção Extras ✓" : editPendingIdx != null ? "Atualizar ✓" : "Confirmar ✓"}
+            {itemDialogMode === "extra" ? ((parseBRL && parseBRL(exPrice) != null && parseBRL(exPrice) > 0) ? "Adicionar como comprado ✓" : "Adicionar à lista ✓") : editPendingIdx != null ? "Atualizar ✓" : "Confirmar ✓"}
           </button>
         )}
       </div>
