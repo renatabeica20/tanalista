@@ -2221,6 +2221,23 @@ function wasListDeletedLocally(list) {
   return getListPersistenceKeys(list).some(key => deleted.has(key));
 }
 
+function filterDeletedLocalLists(input) {
+  return (Array.isArray(input) ? input : []).filter((list) => {
+    if (!list) return false;
+    return !wasListDeletedLocally(list);
+  });
+}
+
+function saveListsToLocalStorageFiltered(input) {
+  const safe = filterDeletedLocalLists(input);
+  try {
+    localStorage.setItem("tnl_lists", JSON.stringify(safe));
+  } catch {
+    // Mantém o app funcionando se o armazenamento local falhar.
+  }
+  return safe;
+}
+
 function isSharedRecordHiddenForCurrentUser(record) {
   const data = record?.data && typeof record.data === "object" ? record.data : {};
   const deviceId = getAppDeviceId();
@@ -3099,7 +3116,9 @@ export default function App(){
 const [lists,setLists]=useState(()=>{
     try{
       const stored=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      return Array.isArray(stored)?mergeUniqueLists(stored):[];
+      const safe = Array.isArray(stored) ? mergeUniqueLists(filterDeletedLocalLists(stored)) : [];
+      saveListsToLocalStorageFiltered(safe);
+      return safe;
     }catch{return[]}
   });
   const [currentList,setCurrentList]=useState(null);
@@ -3477,7 +3496,7 @@ const [lists,setLists]=useState(()=>{
         ? current.map((item) => item?.id === recentId ? { ...item, ...archivedPantryList } : item)
         : [archivedPantryList, ...current];
       const safe = mergeUniqueLists(next);
-      try { localStorage.setItem("tnl_lists", JSON.stringify(safe)); } catch {}
+      saveListsToLocalStorageFiltered(safe);
       return safe;
     });
   }, []);
@@ -3849,9 +3868,11 @@ const [lists,setLists]=useState(()=>{
   };
 
   const saveLists=(nl)=>{
-    const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
+    const safe=mergeUniqueLists(
+      filterDeletedLocalLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags))
+    );
     setLists(safe);
-    localStorage.setItem("tnl_lists",JSON.stringify(safe));
+    saveListsToLocalStorageFiltered(safe);
   };
 
   const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
@@ -3874,8 +3895,8 @@ const [lists,setLists]=useState(()=>{
           }
         }
         if(!restored.length)return current;
-        const merged=mergeUniqueLists([...restored,...current]);
-        try{localStorage.setItem("tnl_lists",JSON.stringify(merged));}catch{}
+        const merged=mergeUniqueLists(filterDeletedLocalLists([...restored,...current]));
+        saveListsToLocalStorageFiltered(merged);
         if(!silent)showToast(`${restored.length} lista(s) recuperada(s)`);
         return merged;
       });
@@ -3945,7 +3966,7 @@ const [lists,setLists]=useState(()=>{
       }
     }
     if(changed){
-      saveLists(updated);
+      saveLists(filterDeletedLocalLists(updated));
       showToast("☁️ Listas locais sincronizadas com sua conta",2200);
     }
   },[lists,persistListRecordToCloud,showToast]);
@@ -4555,7 +4576,7 @@ const [lists,setLists]=useState(()=>{
     const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
-    localStorage.setItem("tnl_lists",JSON.stringify(nl));
+    saveListsToLocalStorageFiltered(nl);
     setCurrentList(finalReceived);
     setScreen("list");
     setSearch("");
@@ -6147,7 +6168,7 @@ return rebuiltHistory;
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
       setLists(prev=>{
         const next=(Array.isArray(prev)?prev:[]).map(l=>l.id===synced.id || (sharedId&&l.sharedId===sharedId)?{...l,...synced}:l);
-        try{localStorage.setItem("tnl_lists",JSON.stringify(next));}catch{}
+        try{saveListsToLocalStorageFiltered(next);}catch{}
         return next;
       });
       setSharedUpdateNotice({type:"ok",msg:"Lista sincronizada agora"});
@@ -6193,7 +6214,7 @@ return rebuiltHistory;
         ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
         : [refreshed,...existing];
       setLists(nl);
-      localStorage.setItem("tnl_lists",JSON.stringify(nl));
+      saveListsToLocalStorageFiltered(nl);
       setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
       showToast("🔄 Lista atualizada");
     }catch(err){
@@ -6490,8 +6511,9 @@ return rebuiltHistory;
       (target.sharedId && l.sharedId===target.sharedId) ||
       getListPersistenceKeys(l).some(key=>targetKeys.has(key))
     );
-    const nl=lists.filter(l=>!sameList(l));
+    const nl=filterDeletedLocalLists(lists.filter(l=>!sameList(l)));
     saveLists(nl);
+    saveListsToLocalStorageFiltered(nl);
     setConfirmDelete(null);
     setListMenuId(null);
 
