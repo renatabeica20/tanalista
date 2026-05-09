@@ -4539,6 +4539,8 @@ const [lists,setLists]=useState(()=>{
       finishedAt:null,
       completedAt:null,
       finalizedAt:null,
+      archivedAt:null,
+      archivedFinished:false,
       locked:false,
       isReadOnly:false,
       readOnly:false,
@@ -6002,90 +6004,106 @@ return rebuiltHistory;
   };
 
 
-  const openListForEdit = useCallback((list) => {
-    if (!list) return;
+  const openListForEdit=(list)=>{
+    if(!list)return;
+    const editableCopy = Boolean(list?.isCopy || list?.editableCopy || list?.copiedFrom || list?.copiedFromId || list?.status === "draft");
+    if(isListFinished(list) && !editableCopy){
+      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
+      setListMenuId(null);
+      return;
+    }
 
-    const items = [];
-    (Array.isArray(list.categories) ? list.categories : []).forEach((cat) => {
-      (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
-        items.push({
-          ...item,
-          checked: false,
-          notFound: false,
-          checkedAt: null,
-          price: null,
-          total: null,
-        });
-      });
-    });
+    const items=(list.categories||[]).flatMap(cat=>(cat.items||[]).map(item=>normalizeListItem({
+      name:item.name,
+      marca:item.marca||"",
+      tipo:item.tipo||item.detail||"",
+      embalagem:item.embalagem||item.detail||"",
+      peso:item.peso||"",
+      volume:item.volume||"",
+      qty:item.qty||1,
+      unit:item.unit||"unidade",
+      price:null,
+      checked:false,
+      notFound:false,
+      extra:Boolean(item.extra || cat.name==="Itens Extras")
+    })));
 
-    setPendingItems(items.map(normalizeListItem));
-    setListName((list.name || "").replace(/\s*\(cópia\)$/i, ""));
-    setBudget(list.budget || "");
-    setType(list.type || "mercado");
-    setCurrentList(null);
+    setEditingListId(list.id);
+    setCurrentList(list);
+    setListName(list.name||"Minha lista");
+    setListType(list.type||"mercado");
+    setBudgetText(Number(list.budget||0)>0?fmtBRL(Number(list.budget||0)):"");
+    setBudgetEnabled(Number(list.budget||0)>0);
+    setBudgetConfirmed(Boolean(Number(list.budget||0)>0));
+    setListNameConfirmed(Boolean(list.name));
+    setPendingItems(items);
+    setCurrentInput("");
+    setEditPendingIdx(null);
+    setScreen("create");
     setSearch("");
     setCollapsedCats({});
     setListMenuId(null);
-    setPantryCompared(false);
-    setPantryComparison(null);
-    setShowPantryComparisonDetails(false);
-    setScreen("create");
-    showToast("✏️ Cópia aberta para edição.", 2200);
-  }, [setPendingItems, setListName, setBudget, setType, setCurrentList, setSearch, setCollapsedCats, setListMenuId, setPantryCompared, setPantryComparison, setShowPantryComparisonDetails, setScreen, showToast]);
+    showToast("✏️ Lista aberta para edição");
+  };
 
-  const duplicateList = useCallback((list) => {
-    if (!list) return;
-
-    const now = new Date().toISOString();
-    const sourceCategories = Array.isArray(list.categories) ? list.categories : [];
-
-    const copiedCategories = sourceCategories.map((cat) => ({
-      ...cat,
-      items: (Array.isArray(cat.items) ? cat.items : []).map((item) => ({
-        ...item,
-        checked: false,
-        notFound: false,
-        checkedAt: null,
-        price: null,
-        total: null,
+  const duplicateList=(list)=>{
+    if(!list)return;
+    const copiedSource = JSON.parse(JSON.stringify(list));
+    const copy={
+      ...copiedSource,
+      categories:(Array.isArray(copiedSource.categories)?copiedSource.categories:[]).map(cat=>({
+        ...cat,
+        items:(Array.isArray(cat.items)?cat.items:[]).map(item=>({
+          ...item,
+          checked:false,
+          notFound:false,
+          checkedAt:null,
+          price:null,
+          total:null,
+        }))
       })),
-    }));
-
-    const copy = {
-      ...list,
-      id: `copy-${Date.now()}`,
-      sharedId: null,
-      isShared: false,
-      sharedAt: null,
-      sharedUrl: null,
-      sharedEvents: [],
-      cloudPersisted: false,
-      lastSyncedAt: null,
-      name: `${list.name || "Lista"} (cópia)`,
-      categories: copiedCategories,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      finishedAt: null,
-      finalizedAt: null,
-      archivedAt: null,
-      archivedFinished: false,
-      finished: false,
-      completed: false,
-      isFinished: false,
-      status: "draft",
-      isCopy: true,
-      editableCopy: true,
-      copiedFrom: list.id || list.sharedId || null,
-      copiedFromId: list.id || null,
-      copiedFromName: list.name || "",
+      id:Date.now().toString(),
+      name:(list.name||"Lista")+" (cópia)",
+      status:"draft",
+      isCopy:true,
+      editableCopy:true,
+      copiedFrom:list.id || list.sharedId || null,
+      copiedFromId:list.id || null,
+      sharedId:null,
+      isShared:false,
+      sharedAt:null,
+      sharedUrl:null,
+      sharedEvents:[],
+      imported:false,
+      importedFrom:null,
+      restoredFromCloud:false,
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      finishedAt:null,
+      completedAt:null,
+      finalizedAt:null,
+      finished:false,
+      completed:false,
+      isFinished:false,
+      finalizada:false,
+      finalized:false,
+      isFinished:false,
+      isReadOnly:false,
+      readOnly:false,
+      locked:false,
+      history:false,
+      copiedFromListId:list.id || null,
+      status:"open",
+      total:0,
+      categories:(list.categories||[]).map(cat=>({
+        ...cat,
+        items:(cat.items||[]).map(item=>({...item,checked:false,notFound:false,price:null}))
+      }))
     };
-
-    saveLists([copy, ...lists]);
+    saveLists([copy,...lists]);
     setListMenuId(null);
-    showToast("📄 Cópia criada. Você já pode editar a lista.", 2600);
-  }, [lists, saveLists, setListMenuId, showToast]);
+    showToast("📄 Cópia criada");
+  };
 
   const stopListSharing=async(list)=>{
     if(!list?.sharedId)return;
