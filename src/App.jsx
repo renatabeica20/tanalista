@@ -3383,8 +3383,19 @@ const [lists,setLists]=useState(()=>{
   },[]);
 
   const hasValidLocalSession=useCallback(()=>{
-    const name=getAppUserName();
-    return Boolean(name && isPinSessionVerified(name));
+    const name=String(getAppUserName() || "").trim();
+    if(!name)return false;
+
+    // Para abrir link compartilhado, não faz sentido pedir PIN novamente
+    // se este aparelho já tem usuário salvo do app. O PIN continua sendo exigido
+    // apenas no fluxo normal de entrada quando não há sessão/usuário conhecido.
+    if(isPinSessionVerified(name))return true;
+
+    const userId=String(getAppUserId() || "").trim();
+    const deviceId=String(getAppDeviceId() || "").trim();
+    const registered=localStorage.getItem(APP_USER_REGISTERED_KEY)==="1";
+
+    return Boolean(name && (userId || deviceId || registered));
   },[]);
 
   const clearSharedUrlFromAddressBar=useCallback(()=>{
@@ -4740,6 +4751,7 @@ const [lists,setLists]=useState(()=>{
     try{
       if(embedded){
         if(validSession){
+          setUserNameModal(false);
           await importSharedRecordToApp(null, embedded);
           clearSharedUrlFromAddressBar();
           return;
@@ -4761,6 +4773,7 @@ const [lists,setLists]=useState(()=>{
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
 
       if(validSession){
+        setUserNameModal(false);
         await importSharedRecordToApp(record);
         clearSharedUrlFromAddressBar();
         return;
