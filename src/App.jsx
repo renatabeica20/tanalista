@@ -969,7 +969,7 @@ async function aiOrganize(items, type) {
 ITENS:
 ${list}
 
-Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior;
+Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos. Antes de classificar, corrija nomes digitados de forma aproximada, como 'lápi de cor' para 'lápis de cor', 'lustra móvei' para 'lustra-móveis' e 'bom bom' para 'bombom'.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior;
 - itens como abóbora, rúcula, caqui, flores comestíveis/verduras e legumes devem ficar em Hortifruti;
 - álcool, lustra móvel, brilho alumínio, limpa alumínio, sapólio, bucha/esponja e produtos de limpeza devem ficar em Limpeza;
 - coxão mole, fígado, bucho, acém, músculo e cortes/miúdos devem ficar em Carnes e Aves;
@@ -1016,6 +1016,81 @@ function normalizePlainText(value) {
     .toLowerCase()
     .trim();
 }
+
+const SMART_PRODUCT_NAME_CORRECTIONS = {
+  "lapi de cor": "Lápis de cor",
+  "lapis de cor": "Lápis de cor",
+  "lapiz de cor": "Lápis de cor",
+  "lapis cor": "Lápis de cor",
+  "lapi cor": "Lápis de cor",
+  "lustra movel": "Lustra-móveis",
+  "lustra moveis": "Lustra-móveis",
+  "lustra móveis": "Lustra-móveis",
+  "lustra móvei": "Lustra-móveis",
+  "lustra movei": "Lustra-móveis",
+  "lustra móvel": "Lustra-móveis",
+  "pano prato": "Pano de prato",
+  "pano de prato": "Pano de prato",
+  "pano d prato": "Pano de prato",
+  "bom bom": "Bombom",
+  "bombom": "Bombom",
+  "bombon": "Bombom",
+  "rucula": "Rúcula",
+  "rúcula": "Rúcula",
+  "alcool": "Álcool",
+  "álcool": "Álcool",
+  "abobora": "Abóbora",
+  "abóbora": "Abóbora",
+  "caqui": "Caqui",
+  "coxao mole": "Coxão mole",
+  "coxão mole": "Coxão mole",
+  "figado": "Fígado",
+  "fígado": "Fígado",
+  "brilho aluminio": "Brilho alumínio",
+  "brilho alumínio": "Brilho alumínio",
+  "limpa aluminio": "Limpa alumínio",
+  "limpa alumínio": "Limpa alumínio",
+  "bucho": "Bucho",
+  "amendoim": "Amendoim"
+};
+
+function smartNormalizeProductName(value) {
+  const original = String(value || "").trim();
+  if (!original) return "";
+
+  const plain = normalizePlainText(original)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (SMART_PRODUCT_NAME_CORRECTIONS[plain]) {
+    return SMART_PRODUCT_NAME_CORRECTIONS[plain];
+  }
+
+  // Correções por aproximação simples para erros comuns de digitação.
+  const compact = plain.replace(/\s+/g, "");
+  const compactMap = {
+    "lapidecor": "Lápis de cor",
+    "lapisdecor": "Lápis de cor",
+    "lapizdecor": "Lápis de cor",
+    "lustramovel": "Lustra-móveis",
+    "lustamovel": "Lustra-móveis",
+    "lustramovei": "Lustra-móveis",
+    "lustramoveis": "Lustra-móveis",
+    "panodeprato": "Pano de prato",
+    "panoprato": "Pano de prato",
+    "bombom": "Bombom",
+    "bombon": "Bombom",
+    "bombo": "Bombom"
+  };
+
+  if (compactMap[compact]) {
+    return compactMap[compact];
+  }
+
+  return normalizeProductName(original);
+}
+
 
 function normalizeTextForCategory(value) {
   return normalizePlainText(value)
@@ -1169,7 +1244,7 @@ function categoryOrderIndex(name) {
 function normalizeListItem(item) {
   const qty = Number(String(item?.qty ?? item?.quantidade ?? 1).replace(",", "."));
   const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
-  const name = normalizeProductName(item?.name || item?.nome || "");
+  const name = smartNormalizeProductName(item?.name || item?.nome || "");
   return {
     ...item,
     name,
@@ -1581,7 +1656,7 @@ async function aiParseShoppingText(text, type = "mercado") {
   }
   return rawItems
     .map((item) => {
-      const name = normalizeProductName(item?.name || item?.nome || "");
+      const name = smartNormalizeProductName(item?.name || item?.nome || "");
       if (!name) return null;
       const qty = Number(String(item?.qty || item?.quantidade || 1).replace(",", "."));
       const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
@@ -1642,6 +1717,12 @@ function inferPreferredCategoryForItem(item) {
   if (hasWord("amendoim", "castanha", "castanha de caju", "castanha do para", "castanha-do-pará", "nozes", "pistache", "bombom", "bala", "chiclete", "doce", "paçoca", "pacoca", "barra de cereal")) return "Snacks e Doces";
   if (hasWord("lapis de cor", "lápis de cor", "giz de cera", "canetinha", "hidrocor", "cola escolar", "tesoura escolar", "regua", "régua", "estojo", "cartolina", "eva", "papel sulfite")) return "Material de Escrita";
 
+
+  if (hasWord("bombom", "bom bom", "bombon", "bala", "chiclete", "paçoca", "pacoca", "doce")) return "Snacks e Doces";
+  if (hasWord("lapis de cor", "lápis de cor", "lapiz de cor", "lapi de cor", "canetinha", "giz de cera", "hidrocor")) return "Material de Escrita";
+  if (hasWord("lustra moveis", "lustra móveis", "lustra movel", "lustra móvel", "lustra-móveis", "lustra-moveis", "polidor de moveis", "polidor de móveis")) return "Limpeza";
+  if (hasWord("pano de prato", "pano prato", "flanela", "pano multiuso", "pano de limpeza", "perfex")) return "Limpeza";
+
   const rules = [
     { cat: "Mercearia", keys: ["arroz","feijao","feijão","macarrao","macarrão","massa","farinha","acucar","açúcar","sal","oleo","óleo","azeite","vinagre","milho","ervilha","atum","sardinha","fuba","fubá","maionese","ketchup","mostarda","aveia","granola","cereal matinal","leite condensado","creme de leite"] },
     { cat: "Padaria e Matinais", keys: ["pao","pão","bisnaguinha","torrada","bolo","cereal","granola","aveia"] },
@@ -1681,6 +1762,10 @@ function demoOrganize(items) {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
   const map = [
 
+
+    [["bombom","bom bom","bombon","bala","chiclete","paçoca","pacoca"],"Snacks e Doces"],
+    [["lápis de cor","lapis de cor","lapi de cor","lapiz de cor","canetinha","giz de cera","hidrocor"],"Material de Escrita"],
+    [["lustra-móveis","lustra moveis","lustra móveis","lustra movel","lustra móvel","polidor de móveis","polidor de moveis","pano de prato","pano prato","flanela","pano multiuso"],"Limpeza"],
     [["abóbora","abobora","rúcula","rucula","caqui","flor bambu","flor","hortelã","hortela","coentro","agrião","agriao","quiabo","jiló","jilo","vagem","inhame"],"Hortifruti"],
     [["coxão mole","coxao mole","coxão duro","coxao duro","fígado","figado","bucho","miúdo","miudo","músculo","musculo","acém","acem","cupim","paleta","lagarto"],"Carnes e Aves"],
     [["álcool","alcool","lustra móvel","lustra movel","brilho alumínio","brilho aluminio","limpa alumínio","limpa aluminio","sapólio","sapolio","veja","desengordurante","limpa vidro","limpa vidros"],"Limpeza"],
@@ -2105,7 +2190,7 @@ function photoItemsToText(items) {
     .map((item) => {
       const qty = item?.qty || item?.quantidade || 1;
       const unit = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
-      const name = normalizeProductName(item?.name || item?.nome || "");
+      const name = smartNormalizeProductName(item?.name || item?.nome || "");
       if (!name) return "";
       return `${qty} ${unit} ${name}`.trim();
     })
