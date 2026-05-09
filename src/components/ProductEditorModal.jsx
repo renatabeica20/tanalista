@@ -39,14 +39,20 @@ export default function ProductEditorModal({
       setCurrentInput("");
     }}>
       <div style={{ fontWeight: 900, fontSize: 20, color: "#111827", marginBottom: 4 }}>
-        🛒 {itemDialogMode === "pantryReview" ? "Editar item da Itens em Casa" : itemDialog.name}
+        🛒 {itemDialogMode === "extra" ? "Item extra" : itemDialogMode === "pantryReview" ? "Editar item da Itens em Casa" : itemDialog.name}
       </div>
+
+      {itemDialogMode === "extra" && (
+        <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", color: "#C2410C", borderRadius: 16, padding: "10px 12px", fontSize: 13, fontWeight: 800, marginBottom: 12 }}>
+          ➕ {itemDialog.name} será adicionado durante a compra e classificado automaticamente.
+        </div>
+      )}
 
       <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 12 }}>
         {dlgLoading
           ? ""
           : itemDialogMode === "extra"
-            ? "Defina quantidade e unidade do item extra"
+            ? "Defina quantidade e unidade. O preço pode ser informado na própria lista."
             : (editPendingIdx != null || itemDialogMode === "pantryReview")
               ? "Editar item"
               : "Defina quantidade e unidade"}
