@@ -1,17 +1,14 @@
 export default function ItemRow({
   item,
   ci,
-  ii,
   realII,
   theme,
-  isExtra = false,
-  isHighlighted = false,
-  isLast = false,
-  currentList,
+  isExtra,
+  isHighlighted,
+  isLast,
   onOpenItem,
   onToggleCheck,
   onToggleNotFound,
-  showToast,
   formatQtyUnit,
   getItemLineTotal,
   getCompactUnitPriceLabel,
@@ -23,193 +20,170 @@ export default function ItemRow({
   checkHighlightStyle = {},
   missingHighlightStyle = {},
 }) {
-  if (!item) return null;
+  const checked = Boolean(item?.checked);
+  const notFound = Boolean(item?.notFound);
+  const extra = Boolean(item?.extra || item?.addedDuringPurchase || isExtra);
+  const total = getItemLineTotal ? getItemLineTotal(item) : 0;
+  const unitPrice = getCompactUnitPriceLabel ? getCompactUnitPriceLabel(item) : "";
+  const qtyLabel = formatQtyUnit ? formatQtyUnit(item?.qty || 1, item?.unit || "unidade") : `${item?.qty || 1} ${item?.unit || "unidade"}`;
+  const faded = checked || notFound;
+  const borderColor = isHighlighted ? theme?.border || "#8B5CF6" : "#EEF2F7";
 
-  const descLine = [item.name, item.detail].filter(Boolean).join(" ");
-  const qtyLabel = formatQtyUnit(item.qty || 1, item.unit || "unidade");
-  const titleLine = `${qtyLabel} – ${descLine}`;
-  const hasPrice = item.price != null;
-  const totalItemPrice = hasPrice ? fmtR(getItemLineTotal(item)) : "";
-  const unitPriceLabel = hasPrice ? getCompactUnitPriceLabel(item) : "";
+  const rowBg = notFound
+    ? "#F9FAFB"
+    : checked
+      ? "#F0FDF4"
+      : extra
+        ? "#FFF7ED"
+        : "#FFFFFF";
 
-  const handleOpen = () => {
-    if (item.notFound) return;
-    onOpenItem?.(ci, realII);
-  };
-
-  const handleToggleCheck = (event) => {
-    event.stopPropagation();
-
-    if (item.notFound) {
-      showToast?.("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
-      return;
-    }
-
-    const rowElement = event.currentTarget.closest("[data-item-row]");
-    const scrollY = window.scrollY;
-
-    onToggleCheck?.(ci, realII);
-
-    requestAnimationFrame(() => {
-      window.scrollTo({
-        top: scrollY,
-        behavior: "auto",
-      });
-
-      rowElement?.scrollIntoView({
-        block: "nearest",
-        behavior: "smooth",
-      });
-    });
-  };
-
-  const handleToggleNotFound = (event) => {
-    event.stopPropagation();
-    onToggleNotFound?.(ci, realII);
-  };
+  const line2 = [
+    qtyLabel,
+    unitPrice || "Sem preço",
+    total > 0 ? `Total ${fmtR(total)}` : "Total pendente",
+  ];
 
   return (
     <div
-      data-item-row
-      onClick={handleOpen}
       style={{
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: "38px minmax(0,1fr) 38px",
+        gap: 10,
         alignItems: "center",
-        gap: 13,
-        padding: "15px 16px",
-        borderBottom: isLast ? "none" : `1px solid ${hexToRgba(theme.border, 0.10)}`,
-        background: isHighlighted
-          ? "#FFFDE7"
-          : item.notFound
-            ? "#FFFBEB"
-            : item.checked
-              ? hexToRgba(theme.border, 0.055)
-              : "rgba(255,255,255,0.98)",
-        opacity: item.notFound ? 0.46 : item.checked ? 0.62 : 1,
-        filter: item.notFound ? "grayscale(0.15)" : "none",
-        cursor: item.notFound ? "not-allowed" : "pointer",
-        transition: "background 0.15s",
-        ...priceHighlightStyle,
+        padding: "12px 12px",
+        background: rowBg,
+        borderBottom: isLast ? "none" : "1px solid #F1F5F9",
+        boxShadow: isHighlighted ? `inset 4px 0 0 ${theme?.border || "#8B5CF6"}` : "none",
       }}
     >
-      <div
-        onClick={handleToggleCheck}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCheck?.(ci, realII);
+        }}
+        aria-label={checked ? "Desmarcar item" : "Marcar item comprado"}
         style={{
           width: 34,
           height: 34,
           borderRadius: "50%",
-          border: `2.5px solid ${item.checked ? theme.border : item.notFound ? "#F59E0B" : "#E5E7EB"}`,
-          background: item.checked ? theme.border : item.notFound ? "#FEF3C7" : "white",
+          border: "2px solid " + (checked ? "#16A34A" : theme?.border || "#CBD5E1"),
+          background: checked ? "#16A34A" : "#FFFFFF",
+          color: "#FFFFFF",
+          fontWeight: 900,
+          fontSize: 16,
+          cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          flexShrink: 0,
-          fontSize: 15,
-          color: "white",
-          cursor: item.notFound ? "not-allowed" : "pointer",
-          transition: "all 0.2s",
-          boxShadow: item.checked ? `0 8px 18px ${hexToRgba(theme.border, 0.22)}` : "0 3px 10px rgba(15,23,42,0.04)",
           ...checkHighlightStyle,
         }}
       >
-        {item.checked ? "✓" : ""}
-      </div>
+        {checked ? "✓" : ""}
+      </button>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <button
+        onClick={() => onOpenItem?.(ci, realII)}
+        style={{
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          margin: 0,
+          textAlign: "left",
+          minWidth: 0,
+          cursor: "pointer",
+          fontFamily: "inherit",
+          opacity: notFound ? 0.62 : 1,
+          ...priceHighlightStyle,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontSize: 15,
+              fontWeight: 950,
+              color: notFound ? "#6B7280" : "#111827",
+              textDecoration: notFound ? "line-through" : "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: extra ? "calc(100% - 76px)" : "100%",
+            }}
+          >
+            {item?.name || "Item sem nome"}
+          </span>
+
+          {extra && (
+            <span
+              style={{
+                flexShrink: 0,
+                fontSize: 10,
+                fontWeight: 950,
+                color: "#C2410C",
+                background: "#FFEDD5",
+                border: "1px solid #FDBA74",
+                borderRadius: 999,
+                padding: "3px 7px",
+                letterSpacing: 0.2,
+              }}
+            >
+              EXTRA
+            </span>
+          )}
+        </div>
+
         <div
           style={{
-            fontWeight: 800,
-            fontSize: 16,
-            color: item.checked ? "#9E9E9E" : item.notFound ? "#92400E" : "#0F172A",
-            textDecoration: item.checked ? "line-through" : "none",
-            textDecorationColor: item.checked ? "#EF4444" : "inherit",
-            textDecorationThickness: "2px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            marginTop: 5,
             display: "flex",
             alignItems: "center",
             gap: 6,
-            letterSpacing: "-0.25px",
+            flexWrap: "wrap",
+            fontSize: 12,
+            fontWeight: 800,
+            color: notFound ? "#9CA3AF" : "#6B7280",
+            lineHeight: 1.35,
           }}
         >
-          {titleLine}
-
-          {isExtra && (
-            <span style={{ fontSize: 10, fontWeight: 700, background: "#FF7043", color: "white", padding: "2px 6px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
-              extra
-            </span>
-          )}
-
-          {item.qtyAdjusted && (
-            <span style={{ fontSize: 10, fontWeight: 800, background: "#EEF2FF", color: "#4C1D95", padding: "2px 6px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
-              qtd. ajustada
-            </span>
-          )}
-
-          {item.notFound && (
-            <span style={{ fontSize: 10, fontWeight: 900, background: "#DC2626", color: "white", padding: "2px 7px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
-              em falta
-            </span>
-          )}
-
-          {item.checked && (
-            <span style={{ fontSize: 10, fontWeight: 800, background: "#DCFCE7", color: "#166534", padding: "2px 7px", borderRadius: 180, textTransform: "uppercase", flexShrink: 0 }}>
-              adquirido
-            </span>
-          )}
+          <span>{line2[0]}</span>
+          <span style={{ color: "#CBD5E1" }}>•</span>
+          <span>{line2[1]}</span>
+          <span style={{ color: "#CBD5E1" }}>•</span>
+          <span style={{ color: total > 0 ? theme?.header || "#047857" : "#9CA3AF" }}>{line2[2]}</span>
         </div>
 
-        <div style={{ fontSize: 12, marginTop: 5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          {hasPrice ? (
-            <span style={{ fontWeight: 800, fontSize: 13, color: item.checked ? "#9E9E9E" : "#374151" }}>{unitPriceLabel}</span>
-          ) : (
-            <span style={{ color: "#6B7280" }}>Toque para editar item</span>
-          )}
-
-          {hasPrice ? (
-            <span style={{ fontWeight: 900, fontSize: 14, color: item.checked ? "#9E9E9E" : theme.header, flexShrink: 0 }}>{totalItemPrice}</span>
-          ) : (
-            <span style={{ fontSize: 12, color: "#9CA3AF", flexShrink: 0 }}>editar</span>
-          )}
-        </div>
-
-        {hasPrice && PriceMonthBadge && (
-          <PriceMonthBadge
-            itemName={item.name}
-            price={item.price}
-            recordedAt={item.priceRecordedAt || item.checkedAt || null}
-            listId={currentList?.id}
-            itemId={item.id || item.name}
-            compact
-          />
+        {item?.price != null && PriceMonthBadge && (
+          <div style={{ marginTop: 5 }}>
+            <PriceMonthBadge itemName={item.name} price={item.price} recordedAt={item.priceRecordedAt || null} />
+          </div>
         )}
-        {!hasPrice && PriceMemoryLine && <PriceMemoryLine itemName={item.name} />}
-      </div>
+
+        {PriceMemoryLine && (
+          <div style={{ marginTop: 4 }}>
+            <PriceMemoryLine item={item} />
+          </div>
+        )}
+      </button>
 
       <button
-        onClick={handleToggleNotFound}
-        title={item.notFound ? "Voltar para pendente" : "Marcar item em falta"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleNotFound?.(ci, realII);
+        }}
+        aria-label={notFound ? "Retirar item de falta" : "Marcar item em falta"}
         style={{
-          width: 38,
-          height: 38,
-          borderRadius: "50%",
-          border: "2px solid " + (item.notFound ? "#DC2626" : "#E5E7EB"),
-          background: item.notFound ? "#FEE2E2" : "#FFFFFF",
-          color: item.notFound ? "#991B1B" : "#9CA3AF",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          fontSize: 17,
-          fontWeight: 900,
+          width: 34,
+          height: 34,
+          borderRadius: 13,
+          border: "1px solid " + (notFound ? "#FCA5A5" : "#E5E7EB"),
+          background: notFound ? "#FEE2E2" : "#F9FAFB",
+          color: notFound ? "#B91C1C" : "#6B7280",
+          fontWeight: 950,
+          fontSize: 16,
           cursor: "pointer",
-          fontFamily: "inherit",
-          boxShadow: "0 4px 12px rgba(15,23,42,0.06)",
           ...missingHighlightStyle,
         }}
       >
-        {item.notFound ? "!" : "∅"}
+        ∅
       </button>
     </div>
   );
