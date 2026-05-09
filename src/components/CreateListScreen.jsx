@@ -1,4 +1,3 @@
-import { useState } from "react";
 import AppLogo from "./AppLogo";
 import VoiceInput from "./VoiceInput";
 
@@ -115,8 +114,6 @@ export default function CreateListScreen({
   startGuidedTour,
   activePantry,
   removeActivePantry,
-  shareActivePantry,
-  pantryShareStatus,
   formatPantryDate,
   countCategoryItems,
   openPantryViewer,
@@ -148,12 +145,11 @@ export default function CreateListScreen({
   editingListId,
   compareWithActivePantry,
   organizeList,
+  organizeListKeepOrder,
   loading,
   isTourStep,
   tourHighlightStyle,
 }) {
-  const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
-
   return (
 <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
   <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
@@ -173,18 +169,8 @@ export default function CreateListScreen({
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <div style={{fontWeight:900,fontSize:15,color:"#111827"}}>Itens em Casa</div>
             <HelpIcon text="Registre os itens que você já tem em casa. Enquanto a lista de compras estiver aberta, você pode comparar/recomparar para evitar compras desnecessárias." />
-            <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?(pantryCompared?"Comparado com esta lista":(pantryShareStatus||"Lista ativa")):"Opcional"}</span>
-            {activePantry&&(
-              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,position:"relative"}}>
-                <button onClick={shareActivePantry} style={{border:"1px solid #BBF7D0",background:"#DCFCE7",color:"#15803D",borderRadius:999,padding:"4px 9px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Enviar lista</button>
-                <button onClick={()=>setPantryMenuOpen(v=>!v)} title="Mais opções" style={{width:30,height:30,borderRadius:"50%",border:"1px solid #E5E7EB",background:"#FFFFFF",color:"#374151",fontSize:18,fontWeight:900,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>⋯</button>
-                {pantryMenuOpen&&(
-                  <div style={{position:"absolute",right:0,top:34,minWidth:156,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:14,boxShadow:"0 18px 36px rgba(17,24,39,0.16)",padding:6,zIndex:20}}>
-                    <button onClick={()=>{setPantryMenuOpen(false);removeActivePantry?.();}} style={{width:"100%",border:"none",background:"#FEF2F2",color:"#B91C1C",borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>🗑️ Excluir lista</button>
-                  </div>
-                )}
-              </div>
-            )}
+            <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?(pantryCompared?"Comparado com esta lista":"Lista ativa"):"Opcional"}</span>
+            {activePantry&&(<button onClick={removeActivePantry} style={{marginLeft:"auto",border:"1px solid #FECACA",background:"#FEF2F2",color:"#B91C1C",borderRadius:999,padding:"4px 8px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Excluir</button>)}
           </div>
           <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:4,lineHeight:1.35}}>
             {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
@@ -296,10 +282,34 @@ export default function CreateListScreen({
         </div>
       </div>
     )}
-    <button onClick={(activePantry && pendingItems.length>0 && !pantryCompared)?compareWithActivePantry:organizeList} disabled={loading||pendingItems.length===0}
-      style={{...createPrimaryBtn,background:(activePantry && pendingItems.length>0 && !pantryCompared)?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(109,40,217,0.30)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
-      {(activePantry && pendingItems.length>0 && !pantryCompared)?"Comparar com Itens em Casa":(editingListId?"Salvar alterações":"Organizar lista")} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
-    </button>
+    {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId) ? (
+      <button onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
+        style={{...createPrimaryBtn,background:"linear-gradient(135deg,#16A34A,#22C55E)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(22,163,74,0.26)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
+        Comparar com Itens em Casa {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+      </button>
+    ) : editingListId ? (
+      <button onClick={organizeList} disabled={loading||pendingItems.length===0}
+        style={{...createPrimaryBtn,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
+        Salvar alterações {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+      </button>
+    ) : (
+      <div style={{...createCard,padding:14,borderColor:"#DDD6FE",background:"#FAF9FF",...tourHighlightStyle(isTourStep("create_ai"))}}>
+        <div style={{fontWeight:900,fontSize:14,color:"#111827",marginBottom:10}}>Como deseja finalizar?</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
+          <button onClick={organizeList} disabled={loading||pendingItems.length===0}
+            style={{...createPrimaryBtn,minHeight:64,alignItems:"flex-start",justifyContent:"center",flexDirection:"column",gap:3,fontSize:15,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+            <span style={{fontSize:16,fontWeight:900}}>✨ Organizar com IA</span>
+            <span style={{fontSize:12,fontWeight:700,opacity:0.92}}>Agrupa automaticamente os itens por seções</span>
+          </button>
+          <button onClick={organizeListKeepOrder || organizeList} disabled={loading||pendingItems.length===0}
+            style={{...createSecondaryBtn,minHeight:64,alignItems:"flex-start",justifyContent:"center",flexDirection:"column",gap:3,borderColor:"#C7D2FE",background:"#FFFFFF",color:"#4338CA",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer"}}>
+            <span style={{fontSize:16,fontWeight:900}}>📝 Manter minha ordem</span>
+            <span style={{fontSize:12,fontWeight:700,color:"#6B7280"}}>Mantém exatamente a sequência criada</span>
+          </button>
+        </div>
+        {pendingItems.length>0&&(<div style={{fontSize:11,color:"#6B7280",fontWeight:800,textAlign:"center",marginTop:10}}>{pendingItems.length} {pendingItems.length===1?"item":"itens"} na pré-lista</div>)}
+      </div>
+    )}
   </div>
 </div>
   );
