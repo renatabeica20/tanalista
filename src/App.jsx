@@ -3046,10 +3046,11 @@ function findMatchingPantryItem(item, pantryItems) {
 }
 
 function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
-  const pantryItems = flattenCategoryItems(pantryCategories);
+  const pantryItems = flattenCategoryItems(pantryCategories).map(normalizeListItem);
   const removed = [];
   const adjusted = [];
   const kept = [];
+  const matchedPantryKeys = new Set();
 
   const nextItems = (Array.isArray(pendingItems) ? pendingItems : []).flatMap(original => {
     const item = normalizeListItem(original);
@@ -3059,6 +3060,9 @@ function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
       return [item];
     }
 
+    const matchKey = pantryItemKey(match);
+    if (matchKey) matchedPantryKeys.add(matchKey);
+
     const sameUnit = normalizeUnitValue(item.unit) === normalizeUnitValue(match.unit);
     const itemQty = Number(item.qty || 1);
     const pantryQty = Number(match.qty || 1);
@@ -3066,8 +3070,17 @@ function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
 
     if (sameUnit && Number.isFinite(itemQty) && Number.isFinite(pantryQty)) {
       if (pantryQty >= itemQty) {
+        const pantryOnly = normalizeListItem({
+          ...match,
+          checked: true,
+          notFound: false,
+          pantryCompared: true,
+          pantryOnly: true,
+          pantryNote,
+          detail: [match.detail, "Item em casa"].filter(Boolean).join(" · "),
+        });
         removed.push({ item, pantry: match, reason: pantryNote });
-        return [];
+        return [pantryOnly];
       }
       const newQty = Number((itemQty - pantryQty).toFixed(2));
       const changed = { ...item, qty: newQty, pantryCompared: true, pantryNote: `${pantryNote}. Comprar complemento: ${formatQtyUnit(newQty, item.unit)}` };
@@ -3080,7 +3093,27 @@ function comparePendingItemsWithPantry(pendingItems, pantryCategories) {
     return [marked];
   });
 
-  return { items: nextItems, removed, adjusted, kept };
+  const pantryOnlyItems = pantryItems
+    .filter((pantryItem) => {
+      const key = pantryItemKey(pantryItem);
+      if (!key || matchedPantryKeys.has(key)) return false;
+      const alreadyInList = nextItems.some((item) => {
+        const itemKey = pantryItemKey(item);
+        return itemKey && (itemKey === key || itemKey.includes(key) || key.includes(itemKey));
+      });
+      return !alreadyInList;
+    })
+    .map((pantryItem) => normalizeListItem({
+      ...pantryItem,
+      checked: true,
+      notFound: false,
+      pantryCompared: true,
+      pantryOnly: true,
+      pantryNote: `Item existente nos Itens em Casa: ${formatQtyUnit(pantryItem.qty, pantryItem.unit)}`,
+      detail: [pantryItem.detail, "Item em casa"].filter(Boolean).join(" · "),
+    }));
+
+  return { items: [...nextItems, ...pantryOnlyItems], removed, adjusted, kept, pantryOnly: pantryOnlyItems };
 }
 
 function formatPantryDate(value) {
@@ -3413,7 +3446,7 @@ const [lists,setLists]=useState(()=>{
 
   const isPantryFinishedByShareStatus = (pantry) => {
     const status = normalizePlainText(pantry?.sharedStatus || pantry?.status || "");
-    return ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed"].includes(status);
+    return ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed", "archived_completed"].includes(status);
   };
 
   const activePantry = pantryLists.find(p => p.status === "ativa" && !isPantryFinishedByShareStatus(p)) || null;
@@ -3448,8 +3481,11 @@ const [lists,setLists]=useState(()=>{
       finishedAt,
       completedAt: data.completedAt || finishedAt,
       finalizedAt: data.finalizedAt || finishedAt,
-      status: "archived_completed",
+      status: "completed",
+      archivedStatus: "archived_completed",
       archivedFinished: true,
+      finished: true,
+      completed: true,
       isFinished: true,
       isPantryHistory: true,
       sharedId: pantry.sharedId || data.sharedId || null,
@@ -3507,7 +3543,11 @@ const [lists,setLists]=useState(()=>{
             finalizedAt: data.finalizedAt || p.finalizedAt || null,
             finishedAt: shouldConclude ? (data.finishedAt || data.finalizedAt || data.concludedAt || p.finishedAt || new Date().toISOString()) : p.finishedAt,
             archivedFinished: shouldConclude ? true : p.archivedFinished,
-            status: shouldConclude ? "concluida" : p.status,
+            status: shouldConclude ? "completed" : p.status,
+            archivedStatus: shouldConclude ? "archived_completed" : p.archivedStatus,
+            finished: shouldConclude ? true : p.finished,
+            completed: shouldConclude ? true : p.completed,
+            isFinished: shouldConclude ? true : p.isFinished,
           };
         }));
 
@@ -3548,7 +3588,7 @@ const [lists,setLists]=useState(()=>{
             const record = await getSharedListRecord(pantry.sharedId).catch(() => null);
             const data = record?.data || {};
             const status = normalizePlainText(data.sharedStatus || data.status || "");
-            const finished = ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed"].includes(status);
+            const finished = ["concluida", "concluída", "finalizada", "finalizado", "completed", "archived completed", "archived_completed"].includes(status);
             return { pantry, data, finished };
           })
         );
@@ -3569,9 +3609,13 @@ const [lists,setLists]=useState(()=>{
           const data = finishedById.get(pantry.id) || {};
           return {
             ...pantry,
-            status: "concluida",
+            status: "completed",
             sharedStatus: "concluida",
+            archivedStatus: "archived_completed",
             archivedFinished: true,
+            finished: true,
+            completed: true,
+            isFinished: true,
             finishedAt: data.finishedAt || data.finalizedAt || data.concludedAt || pantry.finishedAt || now,
             concludedAt: data.concludedAt || data.finalizedAt || pantry.concludedAt || now,
             finalizedAt: data.finalizedAt || data.concludedAt || pantry.finalizedAt || now,
@@ -4348,9 +4392,16 @@ const [lists,setLists]=useState(()=>{
       }
       if(status === "concluida" || status === "finalizada"){
         payload.sharedStatus="concluida";
-        payload.status="concluida";
+        payload.status="completed";
+        payload.archivedStatus="archived_completed";
+        payload.archivedFinished=true;
+        payload.finished=true;
+        payload.completed=true;
+        payload.isFinished=true;
         payload.concludedAt=extra.concludedAt || now;
         payload.finalizedAt=extra.finalizedAt || now;
+        payload.finishedAt=extra.finishedAt || extra.finalizedAt || extra.concludedAt || now;
+        payload.completedAt=extra.completedAt || extra.finishedAt || extra.finalizedAt || extra.concludedAt || now;
       }
       await updateSharedListRecord(sharedId,payload);
       return true;
@@ -4855,10 +4906,17 @@ const [lists,setLists]=useState(()=>{
 
     savePantryLists(pantryLists.map(p => p.id === active.id ? {
       ...p,
-      status: "concluida",
+      status: "completed",
       sharedStatus: "concluida",
+      archivedStatus: "archived_completed",
+      archivedFinished: true,
+      finished: true,
+      completed: true,
+      isFinished: true,
       concludedAt: now,
       finalizedAt: now,
+      finishedAt: now,
+      completedAt: now,
       usedByName: actorName,
       usedByListId: sourceList?.id || p.usedByListId || null,
       usedByListName: sourceList?.name || p.usedByListName || null,
