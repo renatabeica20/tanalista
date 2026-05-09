@@ -160,7 +160,7 @@ export default function CreateListScreen({
   const closeAndRemovePantry = () => {
     setPantryMenuOpen(false);
     setConfirmDeleteConfig({
-      title: "Excluir Itens em Casa?",
+      title: "Excluir?",
       message: "Essa ação remove a lista ativa de Itens em Casa deste aparelho.",
       onConfirm: () => removeActivePantry?.(),
     });
@@ -209,7 +209,7 @@ export default function CreateListScreen({
                       onClick={closeAndRemovePantry}
                       style={{width:"100%",border:"none",background:"#FFFFFF",color:"#B91C1C",padding:"12px 14px",fontSize:13,fontWeight:900,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}
                     >
-                      🗑 Excluir Itens em Casa
+                      🗑 Excluir
                     </button>
                   </div>
                 )}
