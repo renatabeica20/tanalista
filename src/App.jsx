@@ -6006,12 +6006,14 @@ return rebuiltHistory;
 
   const openListForEdit=(list)=>{
     if(!list)return;
-    const editableCopy = Boolean(list?.isCopy || list?.editableCopy || list?.copiedFrom || list?.copiedFromId || list?.status === "draft");
-    if(isListFinished(list) && !editableCopy){
-      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
-      setListMenuId(null);
-      return;
-    }
+
+    const editableCopy = Boolean(
+      list?.isCopy ||
+      list?.editableCopy ||
+      list?.copiedFrom ||
+      list?.copiedFromId ||
+      list?.status === "draft"
+    );
 
     const items=(list.categories||[]).flatMap(cat=>(cat.items||[]).map(item=>normalizeListItem({
       name:item.name,
@@ -6025,18 +6027,39 @@ return rebuiltHistory;
       price:null,
       checked:false,
       notFound:false,
-      extra:Boolean(item.extra || cat.name==="Itens Extras")
     })));
 
+    if(editableCopy){
+      setEditingListId(null);
+      setCurrentList(null);
+      setPendingItems(items);
+      setListName(String(list.name || "").replace(/\s*\(cópia\)$/i,""));
+      setBudget(list.budget ? String(list.budget) : "");
+      setType(list.type || "mercado");
+      setCurrentInput("");
+      setEditPendingIdx(null);
+      setPantryCompared(false);
+      setPantryComparison(null);
+      setShowPantryComparisonDetails(false);
+      setScreen("create");
+      setSearch("");
+      setCollapsedCats({});
+      setListMenuId(null);
+      showToast("✏️ Cópia aberta como nova pré-lista. Agora organize novamente.");
+      return;
+    }
+
+    if(isListFinished(list)){
+      showToast("🔒 Lista finalizada. Faça uma cópia para editar.");
+      setListMenuId(null);
+      return;
+    }
+
     setEditingListId(list.id);
-    setCurrentList(list);
-    setListName(list.name||"Minha lista");
-    setListType(list.type||"mercado");
-    setBudgetText(Number(list.budget||0)>0?fmtBRL(Number(list.budget||0)):"");
-    setBudgetEnabled(Number(list.budget||0)>0);
-    setBudgetConfirmed(Boolean(Number(list.budget||0)>0));
-    setListNameConfirmed(Boolean(list.name));
     setPendingItems(items);
+    setListName(list.name||"");
+    setBudget(list.budget?String(list.budget):"");
+    setType(list.type||"mercado");
     setCurrentInput("");
     setEditPendingIdx(null);
     setScreen("create");
