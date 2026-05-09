@@ -3412,17 +3412,58 @@ const [lists,setLists]=useState(()=>{
   }, []);
 
   const activePantry = pantryLists.find(p => p.status === "ativa") || null;
-  const pantryShareStatus = activePantry?.sharedStatus === "utilizada_na_comparacao"
-    ? "Utilizada na comparação"
-    : activePantry?.sharedStatus === "importada"
-      ? "Recebida"
-      : activePantry?.sharedAt
-        ? "Compartilhada"
-        : null;
+  const pantryShareStatus = activePantry?.sharedStatus === "concluida" || activePantry?.sharedStatus === "finalizada"
+    ? "Finalizada pelo destinatário"
+    : activePantry?.sharedStatus === "utilizada_na_comparacao"
+      ? "Utilizada na comparação"
+      : activePantry?.sharedStatus === "importada"
+        ? "Recebida"
+        : activePantry?.sharedAt
+          ? "Compartilhada"
+          : null;
 
   useEffect(() => {
     syncNotificationsFromLists(lists);
   }, [lists, syncNotificationsFromLists]);
+
+  useEffect(() => {
+    if (!activePantry?.sharedId) return;
+    let cancelled = false;
+
+    const refreshOriginPantryStatus = async () => {
+      try {
+        const record = await getSharedListRecord(activePantry.sharedId);
+        const data = record?.data || {};
+        if (cancelled || !data?.sharedStatus) return;
+
+        const nextStatus = data.sharedStatus === "finalizada" ? "concluida" : data.sharedStatus;
+        const shouldConclude = nextStatus === "concluida";
+
+        savePantryLists(pantryLists.map((p) => {
+          if (p.id !== activePantry.id) return p;
+          return {
+            ...p,
+            sharedStatus: nextStatus,
+            usedForComparisonAt: data.usedForComparisonAt || p.usedForComparisonAt || null,
+            usedByName: data.usedByName || p.usedByName || null,
+            usedByListName: data.usedByListName || p.usedByListName || null,
+            concludedAt: data.concludedAt || p.concludedAt || null,
+            finalizedAt: data.finalizedAt || p.finalizedAt || null,
+            status: shouldConclude ? "concluida" : p.status,
+          };
+        }));
+      } catch (err) {
+        console.warn("Não foi possível consultar status dos Itens em Casa compartilhados:", err);
+      }
+    };
+
+    refreshOriginPantryStatus();
+    const timer = setInterval(refreshOriginPantryStatus, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activePantry?.sharedId, activePantry?.id, pantryLists, savePantryLists]);
 
 
   const resetPantryFlow = useCallback(() => {
@@ -4146,6 +4187,37 @@ const [lists,setLists]=useState(()=>{
     }
   };
 
+  const updateSharedPantryOriginStatus=async(sharedId,status,extra={})=>{
+    try{
+      if(!sharedId)return false;
+      const record=await getSharedListRecord(sharedId);
+      const data=record?.data || {};
+      if(!data)return false;
+      const now=new Date().toISOString();
+      const payload={
+        ...data,
+        sharedStatus:status,
+        updatedAt:now,
+        lastStatusAt:now,
+        ...extra,
+      };
+      if(status === "utilizada_na_comparacao"){
+        payload.usedForComparisonAt=extra.usedForComparisonAt || now;
+      }
+      if(status === "concluida" || status === "finalizada"){
+        payload.sharedStatus="concluida";
+        payload.status="concluida";
+        payload.concludedAt=extra.concludedAt || now;
+        payload.finalizedAt=extra.finalizedAt || now;
+      }
+      await updateSharedListRecord(sharedId,payload);
+      return true;
+    }catch(err){
+      console.warn("Não foi possível atualizar status dos Itens em Casa compartilhados:",err);
+      return false;
+    }
+  };
+
   const importSharedRecordToApp=useCallback(async(record, embeddedFallback=null)=>{
     const sourceSharedId=record?.id || extractSharedIdFromUrl();
     const baseData=record?.data || embeddedFallback;
@@ -4596,25 +4668,38 @@ const [lists,setLists]=useState(()=>{
     if (!activePantry) { showToast("⚠️ Nenhuma lista de Itens em Casa ativa"); return; }
     if (pendingItems.length === 0) { showToast("⚠️ Faça sua pré-lista antes de comparar"); return; }
     const result = comparePendingItemsWithPantry(pendingItems, activePantry.categories);
+    const now = new Date().toISOString();
+    const actorName = getAppUserName() || "Usuário";
+    const targetListName = listName || "Nova lista";
+    const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
+
     setPendingItems(result.items);
     setPantryComparison(result);
     setPantryCompared(true);
     setShowPantryComparisonDetails(false);
-    const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
+
     if (pantrySourceSharedId) {
       appendSharedListEvent(pantrySourceSharedId, {
         type: "pantry-used-comparison",
-        actorName: getAppUserName() || "Usuário",
-        listName: listName || "Nova lista",
+        actorName,
+        listName: targetListName,
         pantryId: activePantry.id,
-        message: `${getAppUserName() || "Usuário"} usou os Itens em Casa compartilhados na comparação.`,
+        message: `${actorName} usou os Itens em Casa compartilhados na comparação.`,
+      });
+      updateSharedPantryOriginStatus(pantrySourceSharedId, "utilizada_na_comparacao", {
+        usedForComparisonAt: now,
+        usedByName: actorName,
+        usedByListName: targetListName,
+        usedByPantryId: activePantry.id,
       });
     }
+
     savePantryLists(pantryLists.map(p => p.id === activePantry.id ? {
       ...p,
       sharedStatus: "utilizada_na_comparacao",
-      usedForComparisonAt: new Date().toISOString(),
-      usedByListName: listName || p.usedByListName || null,
+      usedForComparisonAt: now,
+      usedByName: actorName,
+      usedByListName: targetListName,
     } : p));
     setScreen("pantry_compare_result");
   };
@@ -4623,13 +4708,36 @@ const [lists,setLists]=useState(()=>{
     const active = pantryLists.find(p => p.status === "ativa");
     if (!active) return;
     const now = new Date().toISOString();
+    const actorName = getAppUserName() || "Usuário";
+    const pantrySourceSharedId = active.sourceSharedId || active.originalSharedId || active.sharedId || null;
+
     savePantryLists(pantryLists.map(p => p.id === active.id ? {
       ...p,
       status: "concluida",
+      sharedStatus: "concluida",
       concludedAt: now,
+      finalizedAt: now,
+      usedByName: actorName,
       usedByListId: sourceList?.id || p.usedByListId || null,
       usedByListName: sourceList?.name || p.usedByListName || null,
     } : p));
+
+    if (pantrySourceSharedId) {
+      appendSharedListEvent(pantrySourceSharedId, {
+        type: "pantry-finished",
+        actorName,
+        listName: sourceList?.name || active.usedByListName || "Lista de compras",
+        pantryId: active.id,
+        message: `${actorName} finalizou a compra usando os Itens em Casa compartilhados.`,
+      });
+      updateSharedPantryOriginStatus(pantrySourceSharedId, "concluida", {
+        concludedAt: now,
+        finalizedAt: now,
+        usedByName: actorName,
+        usedByListId: sourceList?.id || active.usedByListId || null,
+        usedByListName: sourceList?.name || active.usedByListName || null,
+      });
+    }
   }, [pantryLists, savePantryLists]);
 
 
