@@ -7432,71 +7432,210 @@ return rebuiltHistory;
             formatRelativeSyncTime={formatRelativeSyncTime}
           />
 
-          {/* Painel orçamento excedido */}
-          {budget>0&&budgetDiff!==null&&budgetDiff<0&&(
-            <div style={{margin:"10px 20px 0",background:"#FEF2F2",borderRadius:18,border:"2px solid #EF4444",overflow:"hidden"}}>
-              <div onClick={()=>setShowSuggestions(s=>!s)}
-                style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-                <span style={{fontSize:18}}>⚠️</span>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:14,color:"#B91C1C"}}>Acima do orçamento em {fmtR(Math.abs(budgetDiff))}</div>
-                  <div style={{fontSize:12,color:"#EF4444",marginTop:1}}>Toque para ver sugestões de ajuste</div>
-                </div>
-                <span style={{fontSize:12,color:"#EF4444",transform:showSuggestions?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s",display:"inline-block"}}>▾</span>
-              </div>
-              {showSuggestions&&(()=>{
-                const suggs=getSuggestions();
-                if(suggs.length===0)return <div style={{padding:"8px 14px 14px",fontSize:13,color:"#B91C1C"}}>Nenhum item comprado ainda para sugerir ajuste.</div>;
-                return(
-                  <div style={{borderTop:"1px solid #FECACA"}}>
-                    <div style={{padding:"8px 14px 4px",fontSize:11,fontWeight:700,color:"#B91C1C",textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                      Plano de ajuste até voltar ao orçamento
-                    </div>
-                    {suggs.map(({ci,ii,name,qty,price,tipo,catName},i)=>(
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid #FECACA",background:"#FFFFFF"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-                            {tipo==="remover"&&<span style={{fontSize:10,fontWeight:700,background:"#FEF2F2",color:"#B91C1C",padding:"2px 6px",borderRadius:180,border:"1px solid #FECACA",flexShrink:0}}>supérfluo</span>}
-                          </div>
-                          <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>
-                            {tipo==="reduzir"?`${qty} un · reduzir 1 un economiza ${fmtR(price)}`:`remover economiza ${fmtR(price*qty)}`}
-                          </div>
-                        </div>
-                        {tipo==="reduzir"?(
-                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                            <button onClick={()=>quickAdjust(ci,ii,-1)}
-                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #EF4444",background:"#FEF2F2",color:"#EF4444",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>−</button>
-                            <span style={{fontWeight:800,fontSize:14,minWidth:18,textAlign:"center"}}>{qty}</span>
-                            <button onClick={()=>quickAdjust(ci,ii,1)}
-                              style={{width:30,height:30,borderRadius:"50%",border:"2px solid #6D28D9",background:"#F5F3FF",color:"#6D28D9",fontWeight:900,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>+</button>
-                          </div>
-                        ):(
-                          <button onClick={()=>{
-                            const l=JSON.parse(JSON.stringify(currentList));
-                            l.categories[ci].items.splice(ii,1);
-                            if(l.categories[ci].items.length===0)l.categories.splice(ci,1);
-                            updateList(l);returnToSearch();showToast("🗑 "+name+" removido");
-                          }}
-                            style={{padding:"6px 12px",borderRadius:8,border:"2px solid #EF4444",background:"#FEF2F2",color:"#B91C1C",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                            🗑 Remover
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <div style={{padding:"6px 14px 8px",fontSize:11,color:"#EF4444",fontStyle:"italic"}}>
-                      As sugestões continuam aparecendo até o total voltar ao orçamento programado
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
           {/* Search */}
           <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
             <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Como usar esta tela</button>
           </div>
+          {/* Card integrado: orçamento excedido */}
+          {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
+            const suggs = getSuggestions();
+            const preview = suggs.slice(0, 3);
+            return (
+              <div style={{padding:"0 20px",margin:"12px 0 10px"}}>
+                <div style={{
+                  background:"linear-gradient(135deg,#FFF7ED 0%,#FEF2F2 100%)",
+                  border:"1px solid #FDBA74",
+                  borderRadius:24,
+                  boxShadow:"0 14px 34px rgba(234,88,12,0.10)",
+                  overflow:"hidden"
+                }}>
+                  <button
+                    type="button"
+                    onClick={()=>setShowSuggestions(s=>!s)}
+                    style={{
+                      width:"100%",
+                      border:"none",
+                      background:"transparent",
+                      padding:"14px 15px",
+                      display:"flex",
+                      alignItems:"center",
+                      gap:12,
+                      cursor:"pointer",
+                      fontFamily:"inherit",
+                      textAlign:"left"
+                    }}
+                  >
+                    <div style={{
+                      width:38,
+                      height:38,
+                      borderRadius:16,
+                      background:"#FFEDD5",
+                      border:"1px solid #FDBA74",
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                      fontSize:19,
+                      flexShrink:0
+                    }}>
+                      ⚠️
+                    </div>
+
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:950,fontSize:14,color:"#9A3412"}}>
+                        Orçamento ultrapassado em {fmtR(Math.abs(budgetDiff))}
+                      </div>
+                      <div style={{fontSize:12,color:"#C2410C",fontWeight:750,marginTop:2,lineHeight:1.35}}>
+                        {suggs.length>0
+                          ? `${suggs.length} sugestão${suggs.length>1?"ões":""} para voltar ao planejado`
+                          : "Assim que houver itens comprados, o app sugere ajustes"}
+                      </div>
+                    </div>
+
+                    <span style={{
+                      fontSize:14,
+                      color:"#C2410C",
+                      fontWeight:950,
+                      transform:showSuggestions?"rotate(180deg)":"rotate(0)",
+                      transition:"transform 0.2s",
+                      display:"inline-block"
+                    }}>
+                      ▾
+                    </span>
+                  </button>
+
+                  {!showSuggestions && preview.length>0 && (
+                    <div style={{padding:"0 15px 14px 65px",display:"flex",gap:7,flexWrap:"wrap"}}>
+                      {preview.map((s,i)=>(
+                        <span key={i} style={{
+                          fontSize:11,
+                          fontWeight:900,
+                          color:"#9A3412",
+                          background:"#FFFFFF",
+                          border:"1px solid #FED7AA",
+                          borderRadius:999,
+                          padding:"5px 8px",
+                          maxWidth:"100%",
+                          overflow:"hidden",
+                          textOverflow:"ellipsis",
+                          whiteSpace:"nowrap"
+                        }}>
+                          {s.tipo==="remover"?"Remover":"Reduzir"} {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {showSuggestions&&(
+                    <div style={{borderTop:"1px solid #FED7AA",background:"rgba(255,255,255,0.72)"}}>
+                      {suggs.length===0 ? (
+                        <div style={{padding:"12px 15px 15px",fontSize:13,color:"#9A3412",fontWeight:750,lineHeight:1.4}}>
+                          Nenhum item comprado ainda para sugerir ajuste. Continue registrando preços para o app calcular alternativas.
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{padding:"11px 15px 5px",fontSize:11,fontWeight:950,color:"#9A3412",textTransform:"uppercase",letterSpacing:"0.45px"}}>
+                            Sugestões priorizando itens supérfluos e extras
+                          </div>
+
+                          {suggs.map(({ci,ii,name,qty,price,tipo,catName,economy},i)=>(
+                            <div key={i} style={{
+                              display:"grid",
+                              gridTemplateColumns:"minmax(0,1fr) auto",
+                              gap:10,
+                              alignItems:"center",
+                              padding:"10px 15px",
+                              borderTop:i===0?"none":"1px solid #FFEDD5"
+                            }}>
+                              <div style={{minWidth:0}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flexWrap:"wrap"}}>
+                                  <span style={{fontWeight:900,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>
+                                    {name}
+                                  </span>
+                                  <span style={{
+                                    fontSize:10,
+                                    fontWeight:950,
+                                    color:tipo==="remover"?"#B91C1C":"#92400E",
+                                    background:tipo==="remover"?"#FEE2E2":"#FEF3C7",
+                                    border:"1px solid "+(tipo==="remover"?"#FCA5A5":"#FCD34D"),
+                                    borderRadius:999,
+                                    padding:"3px 7px"
+                                  }}>
+                                    {tipo==="remover"?"Remover":"Reduzir"}
+                                  </span>
+                                </div>
+                                <div style={{fontSize:11,color:"#9A3412",fontWeight:750,marginTop:3}}>
+                                  {catName} • economia estimada {fmtR(economy || price || 0)}
+                                </div>
+                              </div>
+
+                              {tipo==="remover" ? (
+                                <button
+                                  type="button"
+                                  onClick={()=>{
+                                    const l=JSON.parse(JSON.stringify(currentList));
+                                    if(!l.categories?.[ci]?.items?.[ii]) return;
+                                    l.categories[ci].items.splice(ii,1);
+                                    if(l.categories[ci].items.length===0)l.categories.splice(ci,1);
+                                    updateList(l);returnToSearch();showToast("🗑 "+name+" removido");
+                                  }}
+                                  style={{
+                                    padding:"8px 11px",
+                                    borderRadius:12,
+                                    border:"1px solid #FCA5A5",
+                                    background:"#FEF2F2",
+                                    color:"#B91C1C",
+                                    fontWeight:900,
+                                    fontSize:12,
+                                    cursor:"pointer",
+                                    fontFamily:"inherit",
+                                    whiteSpace:"nowrap"
+                                  }}
+                                >
+                                  Remover
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={()=>{
+                                    const l=JSON.parse(JSON.stringify(currentList));
+                                    const it=l.categories?.[ci]?.items?.[ii];
+                                    if(!it)return;
+                                    if(it.originalQty==null)it.originalQty=Number(it.qty||1);
+                                    it.qty=Math.max(1,Math.floor(Number(it.qty||1)-1));
+                                    it.qtyAdjusted=Number(it.qty||0)!==Number(it.originalQty||0);
+                                    updateList(l);returnToSearch();showToast("➖ Quantidade reduzida: "+name);
+                                  }}
+                                  style={{
+                                    padding:"8px 11px",
+                                    borderRadius:12,
+                                    border:"1px solid #FCD34D",
+                                    background:"#FFFBEB",
+                                    color:"#92400E",
+                                    fontWeight:900,
+                                    fontSize:12,
+                                    cursor:"pointer",
+                                    fontFamily:"inherit",
+                                    whiteSpace:"nowrap"
+                                  }}
+                                >
+                                  Reduzir
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          <div style={{padding:"8px 15px 12px",fontSize:11,color:"#C2410C",fontWeight:700,lineHeight:1.35}}>
+                            O card permanece aqui até o total voltar ao orçamento programado.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <SearchBar
             searchRef={searchRef}
             search={search}
