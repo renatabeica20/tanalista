@@ -34,14 +34,7 @@ export default function ListCard({
   const originMeta = getListOriginMeta(list);
   const shared = list.isShared === true;
   const finished = isListFinished(list);
-  const editableCopy = Boolean(
-    list?.isCopy === true ||
-    list?.copiedFrom ||
-    list?.copiedFromId ||
-    list?.editableCopy === true ||
-    list?.status === "draft" ||
-    list?.status === "editing"
-  );
+  const editableCopy = Boolean(list?.isCopy || list?.editableCopy || list?.copiedFrom || list?.copiedFromId || list?.status === "draft");
   const canEditList = !finished || editableCopy;
   const stats = variant === "history" ? getListCardStats(list) : null;
   const isHistory = variant === "history";
