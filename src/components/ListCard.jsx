@@ -34,7 +34,13 @@ export default function ListCard({
   const originMeta = getListOriginMeta(list);
   const shared = list.isShared === true;
   const finished = isListFinished(list);
-  const editableCopy = Boolean(list?.isCopy || list?.editableCopy || list?.copiedFrom || list?.copiedFromId || list?.status === "draft");
+  const editableCopy = Boolean(
+    list?.editableCopy ||
+    list?.status === "draft" ||
+    list?.isCopy ||
+    list?.copiedFrom ||
+    list?.copiedFromId
+  );
   const canEditList = !finished || editableCopy;
   const stats = variant === "history" ? getListCardStats(list) : null;
   const isHistory = variant === "history";
