@@ -727,7 +727,7 @@ function getProductClassificationCache(name) {
       tipos: Array.isArray(parsed.tipos) ? parsed.tipos : [],
       pesos: Array.isArray(parsed.pesos) ? parsed.pesos : [],
       volumes: Array.isArray(parsed.volumes) ? parsed.volumes : [],
-      unidades: Array.isArray(parsed.unidades) && parsed.unidades.length ? parsed.unidades : ["unidade", "pacote", "kg"],
+      unidades: Array.isArray(parsed.unidades) && parsed.unidades.length ? parsed.unidades : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
     };
   } catch {
     return null;
@@ -743,7 +743,7 @@ function setProductClassificationCache(name, cfg) {
       tipos: Array.isArray(cfg?.tipos) ? cfg.tipos.slice(0, 12) : [],
       pesos: Array.isArray(cfg?.pesos) ? cfg.pesos.slice(0, 12) : [],
       volumes: Array.isArray(cfg?.volumes) ? cfg.volumes.slice(0, 12) : [],
-      unidades: Array.isArray(cfg?.unidades) && cfg.unidades.length ? cfg.unidades.slice(0, 12) : ["unidade", "pacote", "kg"],
+      unidades: Array.isArray(cfg?.unidades) && cfg.unidades.length ? cfg.unidades.slice(0, 12) : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
       cachedAt: Date.now(),
     };
     window.localStorage.setItem(PRODUCT_CLASSIFICATION_CACHE_PREFIX + key, JSON.stringify(safe));
@@ -775,14 +775,14 @@ async function classifyProduct(name) {
     "Classifique o produto para lista de compras: " + name,
     "",
     "Retorne APENAS JSON válido, sem markdown, sem explicação e sem texto antes ou depois:",
-    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":["500g","1kg"],"volumes":["500ml","1L"],"unidades":["unidade","pacote","kg"]}',
+    '{"marcas":["Marca1","Marca2"],"tipos":["Tipo1","Tipo2"],"pesos":[],"volumes":[],"unidades":["unidade","pacote","kg","litro","caixa","fardo","saco"]}',
     "",
     "Regras:",
     "- marcas: 4 a 8 marcas brasileiras comuns;",
     "- tipos: 3 a 7 variações comuns;",
-    "- pesos: tamanhos em g/kg se for sólido, senão [];",
-    "- volumes: tamanhos em ml/L se for líquido, senão [];",
-    "- unidades: formas de contagem, como pacote, kg, fardo, lata, garrafa e unidade.",
+    "- pesos: retorne sempre []; o app não usa mais unidade de medida na inclusão;",
+    "- volumes: retorne sempre []; o app não usa mais unidade de medida na inclusão;",
+    "- unidades: use apenas unidade, pacote, kg, litro, caixa, fardo ou saco.",
   ].join("\n");
 
   try {
@@ -797,7 +797,7 @@ async function classifyProduct(name) {
       tipos: Array.isArray(p.tipos) ? p.tipos : [],
       pesos: Array.isArray(p.pesos) ? p.pesos : [],
       volumes: Array.isArray(p.volumes) ? p.volumes : [],
-      unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg"],
+      unidades: Array.isArray(p.unidades) && p.unidades.length ? p.unidades : ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"],
     };
 
     setProductClassificationCache(name, cfg);
@@ -898,8 +898,8 @@ const TYPE_NAMES = {
 // Cada entrada: { marcas[], tipos[], pesos[], volumes[], unidades[] }
 // marcas  = principais marcas do Atacadão para o produto
 // tipos   = variações / sabores / versões do produto
-// pesos   = tamanhos em gramas/kg (produtos sólidos — embalagem pacote/saco/lata)
-// volumes = tamanhos em ml/L (produtos líquidos — garrafa/frasco/caixinha)
+// pesos   = unidades em gramas/kg (produtos sólidos — embalagem pacote/saco/lata)
+// volumes = unidades em ml/L (produtos líquidos — garrafa/frasco/caixinha)
 // unidades= como o produto é contado na compra
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -964,7 +964,7 @@ async function aiOrganize(items, type) {
     .join("\n");
 
   const prompt = `Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
-{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}
+{"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e unidade","qty":1,"unit":"un","price":null,"checked":false}]}]}
 
 ITENS:
 ${list}
@@ -1169,17 +1169,21 @@ function normalizeUnitValue(unit) {
   if (/^pacote/.test(raw)) return "pacote";
   if (/^caixa/.test(raw)) return "caixa";
   if (/^fardo/.test(raw)) return "fardo";
-  if (/^lata/.test(raw)) return "lata";
-  if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^saco/.test(raw)) return "saco";
   if (/^quilo|^kg$/.test(raw)) return "kg";
-  if (/^grama|^g$/.test(raw)) return "g";
-  if (/^litro|^l$/.test(raw)) return "L";
-  if (/^mililitro|^ml$/.test(raw)) return "ml";
-  if (/^duzia/.test(raw)) return "dúzia";
-  if (/^peca|^peça/.test(raw)) return "peça";
-  if (/^par/.test(raw)) return "par";
+  if (/^litro|^l$/.test(raw)) return "litro";
   if (/^unidade|^un$/.test(raw)) return "unidade";
-  return String(unit || "unidade").trim() || "unidade";
+
+  // Compatibilidade com listas antigas:
+  if (/^lata/.test(raw)) return "unidade";
+  if (/^garrafa/.test(raw)) return "litro";
+  if (/^grama|^g$/.test(raw)) return "kg";
+  if (/^mililitro|^ml$/.test(raw)) return "litro";
+  if (/^duzia/.test(raw)) return "unidade";
+  if (/^peca|^peça/.test(raw)) return "unidade";
+  if (/^par/.test(raw)) return "unidade";
+
+  return "unidade";
 }
 
 function formatUnitForQuantity(qty, unit) {
@@ -1191,12 +1195,14 @@ function formatUnitForQuantity(qty, unit) {
     "fardo":"fardos",
     "lata":"latas",
     "garrafa":"garrafas",
+    "litro":"litros",
+    "saco":"sacos",
     "unidade":"unidades",
     "dúzia":"dúzias",
     "peça":"peças",
     "par":"pares"
   };
-  if (["kg", "g", "L", "ml"].includes(u)) return u;
+  if (["kg"].includes(u)) return u;
   return n > 1 ? (plural[u] || u) : u;
 }
 
@@ -1204,6 +1210,36 @@ function formatQtyUnit(qty, unit) {
   const n = Number(qty || 1);
   return `${Number.isInteger(n) ? n : String(n).replace(".", ",")} ${formatUnitForQuantity(n, unit)}`;
 }
+
+function getPriceLabelForUnit(unit, categoryName = "", itemName = "") {
+  const u = normalizeUnitValue(unit);
+  const category = normalizePlainText(categoryName);
+  const name = normalizePlainText(itemName);
+  const isProduce =
+    category.includes("hortifruti") ||
+    ["abobora", "abobrinha", "rucula", "caqui", "mamao", "manga", "pera", "banana", "tomate", "alface", "cebola", "batata", "cenoura"].some((p) => name.includes(p));
+
+  if (isProduce && u === "unidade") return "Preço por kg";
+  if (u === "kg") return "Preço por kg";
+  if (u === "litro") return "Preço por litro";
+  if (u === "caixa") return "Preço por caixa";
+  if (u === "fardo") return "Preço por fardo";
+  if (u === "saco") return "Preço por saco";
+  if (u === "pacote") return "Preço por pacote";
+  return "Preço correspondente";
+}
+
+function shouldUseApproxWeight(item, categoryName = "") {
+  const u = normalizeUnitValue(item?.unit || item?.unidade || "unidade");
+  const category = normalizePlainText(categoryName || item?.category || item?.categoryName || "");
+  const name = normalizePlainText(item?.name || item?.nome || "");
+  const isProduce =
+    category.includes("hortifruti") ||
+    ["abobora", "abobrinha", "rucula", "caqui", "mamao", "manga", "pera", "banana", "tomate", "alface", "cebola", "batata", "cenoura"].some((p) => name.includes(p));
+
+  return isProduce && u === "unidade";
+}
+
 
 const CATEGORY_CORRIDOR_ORDER = [
   "Hortifruti",
@@ -1250,7 +1286,7 @@ function normalizeListItem(item) {
     name,
     qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
     unit,
-    detail: String(item?.detail || item?.tipo || item?.embalagem || item?.peso || item?.volume || "").trim(),
+    detail: String(item?.detail || item?.tipo || "").trim(),
     price: item?.price ?? null,
     checked: Boolean(item?.checked),
     notFound: Boolean(item?.notFound),
@@ -1482,7 +1518,7 @@ function splitContinuousVoiceIntoChunks(text) {
     .map(v => v.replace(/§DEC§/g, ",").replace(/§JOIN§/g, " ").trim())
     .filter(v => v.length > 1);
 
-  // Correção crítica: o transcritor às vezes separa o tamanho da embalagem
+  // Correção crítica: o transcritor às vezes separa o unidade de medida
   // como se fosse um item próprio. Ex.: "1 pacote arroz, 5 kg".
   // Esses fragmentos de medida devem ser anexados ao item anterior.
   const merged = [];
@@ -1629,9 +1665,9 @@ async function aiParseShoppingText(text, type = "mercado") {
     "- Mamão, manga, pera, maçã, banana, tomate, uva, melão, abacaxi e similares são Hortifruti quando a lista for organizada por categoria;",
     "- name deve conter apenas o produto principal, sem quantidade, sem unidade e sem peso/volume;",
     "- unit deve representar a quantidade comprada: unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par, peça;",
-    "- peso use apenas g/kg quando houver tamanho/peso da embalagem;",
-    "- volume use apenas ml/L quando houver tamanho/volume da embalagem;",
-    "- embalagem pode combinar forma e tamanho, como 'pacote 5kg', 'lata 350ml' ou apenas '5kg';",
+    "- peso use apenas g/kg quando houver unidade/peso da embalagem;",
+    "- volume use apenas ml/L quando houver unidade/volume da embalagem;",
+    "- embalagem pode combinar forma e unidade, como 'pacote 5kg', 'lata 350ml' ou apenas '5kg';",
     "- marca e tipo só devem ser preenchidos quando forem expressamente citados pelo usuário;",
     "- Não invente itens não mencionados.",
     "",
@@ -6037,7 +6073,7 @@ return rebuiltHistory;
     if(mode==="perKg")return `Preço por kg: ${fmtR(item.price)}`;
     if(mode==="perLiter")return `Preço por litro: ${fmtR(item.price)}`;
     if(mode==="package")return `Preço por pacote: ${fmtR(item.price)}`;
-    return `Preço unitário: ${fmtR(item.price)}`;
+    return `Preço correspondente: ${fmtR(item.price)}`;
   };
 
   const getCompactUnitPriceLabel=(item)=>{
@@ -7528,7 +7564,7 @@ return rebuiltHistory;
         const manualWeight=numberFromText(mWeightText);
         const temp={...item,qty:qtyAtual,price:tempPrice,priceMode:inferredMode,purchaseWeightKg:manualWeight||item.purchaseWeightKg||estimatedProduceWeight?.estimatedKg};
         const total=tempPrice!=null?getItemLineTotal(temp):0;
-        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço por unidade":inferredMode==="package"?"Preço por pacote":"Preço total pago";
+        const unitLabel=inferredMode==="perKg"?"Preço por kg":inferredMode==="perLiter"?"Preço por litro":inferredMode==="unit"?"Preço correspondente":inferredMode==="package"?"Preço por pacote":"Preço total pago";
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
             <div style={{textAlign:"center",marginBottom:16}}>
