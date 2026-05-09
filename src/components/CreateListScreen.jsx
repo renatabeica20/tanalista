@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import AppLogo from "./AppLogo";
 import VoiceInput from "./VoiceInput";
 
@@ -154,10 +155,15 @@ export default function CreateListScreen({
   tourHighlightStyle,
 }) {
   const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
+  const [confirmDeleteConfig, setConfirmDeleteConfig] = useState(null);
 
   const closeAndRemovePantry = () => {
     setPantryMenuOpen(false);
-    removeActivePantry?.();
+    setConfirmDeleteConfig({
+      title: "Excluir Itens em Casa?",
+      message: "Essa ação remove a lista ativa de Itens em Casa deste aparelho.",
+      onConfirm: () => removeActivePantry?.(),
+    });
   };
 
   return (
@@ -314,7 +320,11 @@ export default function CreateListScreen({
               </div>
               <button onClick={()=>editPendingItem(i)}
                 style={{background:"#F5F3FF",border:"none",borderRadius:6,padding:"4px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14,marginRight:4}}>✏️</button>
-              <button onClick={()=>setPendingItems(prev=>prev.filter((_,j)=>j!==i))}
+              <button onClick={()=>setConfirmDeleteConfig({
+                  title:"Excluir item?",
+                  message:`Deseja excluir "${item.name || "item"}" da pré-lista?`,
+                  onConfirm:()=>setPendingItems(prev=>prev.filter((_,j)=>j!==i)),
+                })}
                 style={{background:"#FFE8E8",border:"none",borderRadius:6,padding:"4px 10px",color:"#FF4444",cursor:"pointer",fontSize:14}}>×</button>
             </div>
           );
@@ -352,6 +362,18 @@ export default function CreateListScreen({
       </>
     )}
   </div>
+
+  <ConfirmDeleteModal
+    open={Boolean(confirmDeleteConfig)}
+    title={confirmDeleteConfig?.title || "Excluir?"}
+    message={confirmDeleteConfig?.message || "Essa ação não pode ser desfeita."}
+    onCancel={()=>setConfirmDeleteConfig(null)}
+    onConfirm={()=>{
+      const action=confirmDeleteConfig?.onConfirm;
+      setConfirmDeleteConfig(null);
+      if(typeof action==="function") action();
+    }}
+  />
 </div>
   );
 }
