@@ -3412,6 +3412,13 @@ const [lists,setLists]=useState(()=>{
   }, []);
 
   const activePantry = pantryLists.find(p => p.status === "ativa") || null;
+  const pantryShareStatus = activePantry?.sharedStatus === "utilizada_na_comparacao"
+    ? "Utilizada na comparação"
+    : activePantry?.sharedStatus === "importada"
+      ? "Recebida"
+      : activePantry?.sharedAt
+        ? "Compartilhada"
+        : null;
 
   useEffect(() => {
     syncNotificationsFromLists(lists);
@@ -4071,10 +4078,124 @@ const [lists,setLists]=useState(()=>{
     return{sharedId:record.id,link:makeShareUrl(record.id),list:updated,mode:"supabase"};
   };
 
+
+  const buildPantryShareText=(pantry,link)=>{
+    const lines=[];
+    lines.push("🏠 Tá na Lista");
+    lines.push("");
+    lines.push("Você recebeu uma lista de Itens em Casa:");
+    lines.push("*Itens em Casa*");
+    lines.push("");
+    lines.push("📌 Itens: "+(pantry?.itemCount || countCategoryItems(pantry?.categories || [])));
+    lines.push("");
+    lines.push("Abra no app para importar para seus Itens em Casa:");
+    lines.push(link);
+    lines.push("");
+    lines.push("Depois, use a comparação para evitar compras repetidas.");
+    return lines.join("\n");
+  };
+
+  const publishSharedPantry=async(pantry)=>{
+    if(!pantry)throw new Error("Itens em Casa não encontrados.");
+    const sender=getSenderName();
+    const now=new Date().toISOString();
+    const payload={
+      id: pantry.id || `pantry-${Date.now()}`,
+      name:"Itens em Casa",
+      type:"pantry",
+      listKind:"pantry_share",
+      categories: pantry.categories || [],
+      itemCount: pantry.itemCount || countCategoryItems(pantry.categories || []),
+      createdAt: pantry.createdAt || now,
+      updatedAt: now,
+      ownerName: sender,
+      remetente: sender,
+      sharedAt: now,
+      isShared:true,
+      sharedStatus:"compartilhada",
+    };
+
+    if(pantry.sharedId){
+      await updateSharedListRecord(pantry.sharedId,payload).catch(()=>null);
+      return { sharedId: pantry.sharedId, link: makeShareUrl(pantry.sharedId), pantry: { ...pantry, ...payload, sharedId: pantry.sharedId } };
+    }
+
+    const record=await createSharedListRecord(payload);
+    if(!record?.id)throw new Error("Não foi possível gerar o link dos Itens em Casa.");
+    const updated={...pantry,...payload,sharedId:record.id};
+    savePantryLists(pantryLists.map(p=>p.id===pantry.id?updated:p));
+    await registrarEvento("share_pantry", {
+      pantry_id: updated.id || null,
+      shared_id: updated.sharedId || null,
+      item_count: updated.itemCount || 0,
+    });
+    return { sharedId: record.id, link: makeShareUrl(record.id), pantry: updated };
+  };
+
+  const shareActivePantry=async()=>{
+    if(!activePantry){ showToast("⚠️ Nenhuma lista de Itens em Casa ativa"); return; }
+    try{
+      showToast("🔗 Gerando link dos Itens em Casa...");
+      const { link, pantry } = await publishSharedPantry(activePantry);
+      const text=buildPantryShareText(pantry,link);
+      openWhatsAppDirect(text);
+      showToast("✅ WhatsApp aberto para envio dos Itens em Casa.",3200);
+    }catch(err){
+      console.error("Erro ao compartilhar Itens em Casa:",err);
+      showToast("⚠️ Não foi possível compartilhar os Itens em Casa. Verifique o Supabase.",6500);
+    }
+  };
+
   const importSharedRecordToApp=useCallback(async(record, embeddedFallback=null)=>{
     const sourceSharedId=record?.id || extractSharedIdFromUrl();
     const baseData=record?.data || embeddedFallback;
     if(!baseData)throw new Error("Lista compartilhada não encontrada.");
+
+    if(baseData?.listKind === "pantry_share" || baseData?.type === "pantry"){
+      const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
+      await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
+      const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
+      const now=new Date().toISOString();
+      const importedPantry={
+        id:`pantry-imported-${sourceSharedId || Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name:"Itens em Casa",
+        status:"ativa",
+        categories: Array.isArray(baseData.categories) ? baseData.categories : [],
+        itemCount: baseData.itemCount || countCategoryItems(baseData.categories || []),
+        createdAt: now,
+        updatedAt: now,
+        imported:true,
+        importedFrom: sender,
+        sharedOwner: sender,
+        originalSharedId: sourceSharedId || baseData.sharedId || null,
+        sourceSharedId: sourceSharedId || baseData.sharedId || null,
+        sharedStatus:"importada",
+      };
+      savePantryLists([importedPantry, ...pantryLists.map(p=>p.status === "ativa" ? { ...p, status:"concluida", replacedAt: now } : p)]);
+      setPantryCompared(false);
+      setPantryComparison(null);
+      setShowPantryComparisonDetails(false);
+      setScreen("create");
+      setSharedLandingRecord(null);
+      try { window.history.replaceState({}, document.title, "/"); } catch {}
+      if(sourceSharedId){
+        appendSharedListEvent(sourceSharedId, {
+          type:"pantry-imported",
+          actorName:currentUserName || "Usuário",
+          targetName:sender,
+          listName:"Itens em Casa",
+          pantryId:importedPantry.id,
+          message:`${currentUserName || "Usuário"} importou os Itens em Casa compartilhados.`,
+        });
+      }
+      await registrarEvento("shared_pantry_imported", {
+        pantry_id: importedPantry.id || null,
+        original_shared_id: sourceSharedId || null,
+        imported_from: sender,
+      });
+      showToast("🏠 Itens em Casa importados e ativados");
+      return importedPantry;
+    }
 
     const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
     const currentUserId=await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
@@ -4479,6 +4600,22 @@ const [lists,setLists]=useState(()=>{
     setPantryComparison(result);
     setPantryCompared(true);
     setShowPantryComparisonDetails(false);
+    const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
+    if (pantrySourceSharedId) {
+      appendSharedListEvent(pantrySourceSharedId, {
+        type: "pantry-used-comparison",
+        actorName: getAppUserName() || "Usuário",
+        listName: listName || "Nova lista",
+        pantryId: activePantry.id,
+        message: `${getAppUserName() || "Usuário"} usou os Itens em Casa compartilhados na comparação.`,
+      });
+    }
+    savePantryLists(pantryLists.map(p => p.id === activePantry.id ? {
+      ...p,
+      sharedStatus: "utilizada_na_comparacao",
+      usedForComparisonAt: new Date().toISOString(),
+      usedByListName: listName || p.usedByListName || null,
+    } : p));
     setScreen("pantry_compare_result");
   };
 
@@ -6210,6 +6347,8 @@ return rebuiltHistory;
           startGuidedTour={startGuidedTour}
           activePantry={activePantry}
           removeActivePantry={removeActivePantry}
+          shareActivePantry={shareActivePantry}
+          pantryShareStatus={pantryShareStatus}
           formatPantryDate={formatPantryDate}
           countCategoryItems={countCategoryItems}
           openPantryViewer={openPantryViewer}
