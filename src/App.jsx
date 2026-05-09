@@ -4929,10 +4929,141 @@ const [lists,setLists]=useState(()=>{
     showToast("✅ Itens em Casa salvos e ativos");
   };
 
+
+function getComparableProductKey(item) {
+  const raw = [
+    item?.name,
+    item?.nome,
+    item?.detail,
+    item?.tipo,
+    item?.marca,
+    item?.embalagem,
+    item?.peso,
+    item?.volume,
+  ].filter(Boolean).join(" ");
+
+  const clean = normalizePlainText(raw)
+    .replace(/\b(pacote|pacotes|pct|pcte|unidade|unidades|un|und|caixa|caixas|cx|fardo|fardos|lata|latas|garrafa|garrafas|kg|quilo|quilos|g|grama|gramas|l|litro|litros|ml)\b/g, " ")
+    .replace(/\b(de|da|do|das|dos|com|para|e)\b/g, " ")
+    .replace(/\d+[,.]?\d*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const knownProducts = [
+    "feijao", "arroz", "macarrao", "cafe", "leite", "oleo", "acucar", "farinha", "sal",
+    "detergente", "sabonete", "shampoo", "condicionador", "papel higienico",
+    "tomate", "cebola", "batata", "cenoura", "banana", "maca", "laranja",
+    "carne", "frango", "queijo", "presunto", "cerveja", "refrigerante", "agua"
+  ];
+
+  const found = knownProducts.find((product) => clean.split(/\s+/).includes(product));
+  return found || clean;
+}
+
+function unitIsCompatibleForPantryCompare(a, b) {
+  const ua = normalizePlainText(normalizeUnitValue(a || "unidade"));
+  const ub = normalizePlainText(normalizeUnitValue(b || "unidade"));
+  if (ua === ub) return true;
+  return ["unidade", "un", "und", "unid"].includes(ua) || ["unidade", "un", "und", "unid"].includes(ub);
+}
+
+function comparePendingItemsWithPantryDirect(items, pantryCategories = []) {
+  const toNumber = (value, fallback = 1) => {
+    const n = Number(String(value ?? "").replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+
+  const pantryItems = [];
+  (Array.isArray(pantryCategories) ? pantryCategories : []).forEach((cat) => {
+    (Array.isArray(cat?.items) ? cat.items : []).forEach((raw) => {
+      const item = normalizeListItem(raw);
+      const key = getComparableProductKey(item);
+      if (!key) return;
+      pantryItems.push({
+        ...item,
+        key,
+        qty: toNumber(item.qty, 1),
+        unit: normalizeUnitValue(item.unit || "unidade"),
+      });
+    });
+  });
+
+  const used = new Map();
+  const finalItems = [];
+  const removed = [];
+  const adjusted = [];
+
+  (Array.isArray(items) ? items : []).forEach((raw) => {
+    const item = normalizeListItem(raw);
+    const key = getComparableProductKey(item);
+    const originalQty = toNumber(item.qty, 1);
+    let remaining = originalQty;
+    let abated = 0;
+
+    pantryItems.forEach((pantryItem, index) => {
+      if (remaining <= 0) return;
+      if (!key || key !== pantryItem.key) return;
+      if (!unitIsCompatibleForPantryCompare(item.unit, pantryItem.unit)) return;
+
+      const alreadyUsed = Number(used.get(index) || 0);
+      const available = Math.max(0, Number(pantryItem.qty || 0) - alreadyUsed);
+      if (available <= 0) return;
+
+      const discount = Math.min(remaining, available);
+      remaining = Number((remaining - discount).toFixed(3));
+      abated = Number((abated + discount).toFixed(3));
+      used.set(index, Number((alreadyUsed + discount).toFixed(3)));
+    });
+
+    if (abated <= 0) {
+      finalItems.push(item);
+      return;
+    }
+
+    if (remaining <= 0) {
+      removed.push({
+        ...item,
+        originalQty,
+        pantryQty: abated,
+        removedReason: `Removido porque já havia ${formatQtyUnit(abated, item.unit)} nos Itens em Casa.`,
+      });
+      return;
+    }
+
+    const updated = {
+      ...item,
+      qty: remaining,
+      qtyAdjusted: true,
+      originalQty,
+      pantryQty: abated,
+      pantryNote: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
+      adjustmentReason: `Abatido ${formatQtyUnit(abated, item.unit)} dos Itens em Casa`,
+    };
+
+    adjusted.push(updated);
+    finalItems.push(updated);
+  });
+
+  return {
+    items: finalItems,
+    removed,
+    adjusted,
+    pantryItems,
+  };
+}
+
   const compareWithActivePantry = () => {
-    if (!activePantry) { showToast("⚠️ Nenhuma lista de Itens em Casa ativa"); return; }
-    if (pendingItems.length === 0) { showToast("⚠️ Faça sua pré-lista antes de comparar"); return; }
-    const result = comparePendingItemsWithPantry(pendingItems, activePantry.categories);
+    if (!activePantry) {
+      showToast("⚠️ Nenhuma lista de Itens em Casa ativa");
+      return;
+    }
+
+    if (pendingItems.length === 0) {
+      showToast("⚠️ Faça sua pré-lista antes de comparar");
+      return;
+    }
+
+    const result = comparePendingItemsWithPantryDirect(pendingItems, activePantry.categories);
     const now = new Date().toISOString();
     const actorName = getAppUserName() || "Usuário";
     const targetListName = listName || "Nova lista";
@@ -4951,6 +5082,7 @@ const [lists,setLists]=useState(()=>{
         pantryId: activePantry.id,
         message: `${actorName} usou os Itens em Casa compartilhados na comparação.`,
       });
+
       updateSharedPantryOriginStatus(pantrySourceSharedId, "utilizada_na_comparacao", {
         usedForComparisonAt: now,
         usedByName: actorName,
@@ -4967,10 +5099,19 @@ const [lists,setLists]=useState(()=>{
       usedByListName: targetListName,
     } : p));
 
-    showToast(
-      `✅ Comparação aplicada: ${result.adjusted.length} ajustado(s), ${result.removed.length} removido(s).`,
-      4200
-    );
+    const totalChanges = Number(result.adjusted.length || 0) + Number(result.removed.length || 0);
+
+    if (totalChanges > 0) {
+      showToast(
+        `✅ Comparação aplicada: ${result.adjusted.length} ajustado(s) e ${result.removed.length} removido(s). Agora organize a lista.`,
+        6000
+      );
+    } else {
+      showToast(
+        `ℹ️ Comparação feita, mas nenhum item da lista principal coincidiu com os Itens em Casa.`,
+        6500
+      );
+    }
 
     setScreen("create");
   };
