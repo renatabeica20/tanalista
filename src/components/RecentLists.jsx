@@ -25,12 +25,36 @@ export default function RecentLists({
   fmtR,
   WhatsAppIcon,
 }) {
-  const baseVisibleLists = Array.isArray(visibleLists) ? visibleLists : [];
-  const safeRecentLists = baseVisibleLists.slice(0, 3);
-  const safeHistoryLists = [
-    ...baseVisibleLists.slice(3),
+  const getListTime = (list) => {
+    const value =
+      list?.updatedAt ||
+      list?.completedAt ||
+      list?.finishedAt ||
+      list?.createdAt ||
+      list?.date ||
+      "";
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  };
+
+  const allListsChronological = [
+    ...(Array.isArray(visibleLists) ? visibleLists : []),
+    ...(Array.isArray(recentLists) ? recentLists : []),
     ...(Array.isArray(historyLists) ? historyLists : []),
-  ].filter((list, index, arr) => list?.id && arr.findIndex(item => item?.id === list.id) === index);
+  ]
+    .filter(Boolean)
+    .filter((list, index, arr) => {
+      const key = list?.id || list?.sharedId || `${list?.name || "lista"}-${list?.createdAt || index}`;
+      return arr.findIndex((item, itemIndex) => {
+        const itemKey = item?.id || item?.sharedId || `${item?.name || "lista"}-${item?.createdAt || itemIndex}`;
+        return itemKey === key;
+      }) === index;
+    })
+    .sort((a, b) => getListTime(b) - getListTime(a));
+
+  const safeRecentLists = allListsChronological.slice(0, 3);
+  const safeHistoryLists = allListsChronological.slice(3);
+  const baseVisibleLists = allListsChronological;
 
   const listCardProps = {
     listMenuId,
