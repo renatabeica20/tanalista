@@ -1176,6 +1176,43 @@ function normalizeListItem(item) {
   };
 }
 
+
+function mergePendingItemsWithPantryForFinalList(pendingItemsInput, pantryCategoriesInput) {
+  const normalizeKey = (value) => normalizePlainText(value || "").replace(/\s+/g, " ").trim();
+  const map = new Map();
+
+  (Array.isArray(pendingItemsInput) ? pendingItemsInput : []).forEach((item) => {
+    const normalized = normalizeListItem(item);
+    const key = normalizeKey(normalized.name);
+    if (!key) return;
+    map.set(key, {
+      ...normalized,
+      checked: Boolean(normalized.checked),
+      notFound: Boolean(normalized.notFound),
+    });
+  });
+
+  (Array.isArray(pantryCategoriesInput) ? pantryCategoriesInput : []).forEach((cat) => {
+    (Array.isArray(cat?.items) ? cat.items : []).forEach((item) => {
+      const normalized = normalizeListItem(item);
+      const key = normalizeKey(normalized.name);
+      if (!key || map.has(key)) return;
+      map.set(key, {
+        ...normalized,
+        checked: false,
+        notFound: false,
+        fromPantry: true,
+        pantryImported: true,
+      });
+    });
+  });
+
+  return Array.from(map.values()).sort((a, b) =>
+    normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")
+  );
+}
+
+
 function sanitizeCategories(categories) {
   return (Array.isArray(categories) ? categories : [])
     .map((cat) => {
@@ -3473,7 +3510,14 @@ const [lists,setLists]=useState(()=>{
       name: "Itens em Casa",
       type: "pantry",
       listKind: "pantry_history",
-      categories: pantry.categories || data.categories || [],
+      categories: (pantry.categories || data.categories || []).map(cat => ({
+        ...cat,
+        items: (cat.items || []).map(item => ({
+          ...item,
+          checked: true,
+          notFound: Boolean(item.notFound),
+        })),
+      })),
       itemCount,
       budget: 0,
       createdAt: pantry.createdAt || data.createdAt || now,
@@ -4866,7 +4910,7 @@ const [lists,setLists]=useState(()=>{
     const targetListName = listName || "Nova lista";
     const pantrySourceSharedId = activePantry.sourceSharedId || activePantry.originalSharedId || activePantry.sharedId || null;
 
-    setPendingItems(result.items);
+    setPendingItems(mergePendingItemsWithPantryForFinalList(pendingItems, activePantry.categories));
     setPantryComparison(result);
     setPantryCompared(true);
     setShowPantryComparisonDetails(false);
@@ -5645,6 +5689,18 @@ return rebuiltHistory;
   };
 
   const isListFinished=(list)=>{
+    if (!list) return false;
+    const explicitFinished = Boolean(
+      list.archivedFinished === true ||
+      list.finished === true ||
+      list.completed === true ||
+      list.isFinished === true ||
+      list.finalizada === true ||
+      list.finalized === true ||
+      ["completed", "concluida", "concluída", "finalizada", "finalizado", "archived_completed", "archived completed"].includes(normalizePlainText(list.status || "")) ||
+      ["concluida", "concluída", "finalizada", "finalizado", "completed"].includes(normalizePlainText(list.sharedStatus || ""))
+    );
+    if (explicitFinished) return true;
     const total=(list?.categories||[]).reduce((s,c)=>s+(c.items||[]).length,0);
     return total>0 && (list?.categories||[]).every(c=>(c.items||[]).every(i=>i.checked||i.notFound));
   };
