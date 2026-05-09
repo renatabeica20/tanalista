@@ -5259,6 +5259,75 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
 }
   };
 
+  const organizeListKeepOrder=async()=>{
+    if(pendingItems.length===0){showToast("⚠️ Adicione pelo menos um item");return;}
+    setLoading(true);
+    try{
+      const itemsWithMemory=applyUserMemoryToItems(pendingItems).map((item,index)=>({
+        ...normalizeListItem(item),
+        checked:false,
+        notFound:false,
+        price:item.price ?? null,
+        originalOrder:index,
+      }));
+
+      let categories=[{
+        name:"Minha sequência",
+        items:itemsWithMemory,
+        manualOrder:true,
+      }];
+
+      saveUserItemMemoryFromCategories(categories);
+      const now=new Date().toISOString();
+      const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
+      if(editingOriginal){
+        categories=preserveEditedListStatus(editingOriginal,categories);
+      }
+
+      let newList=editingOriginal
+        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0,isShared:editingOriginal.isShared===true,organizationMode:"manual_order"}
+        : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0,isShared:false,organizationMode:"manual_order"};
+
+      try{
+        newList=await persistListRecordToCloud(newList,{silent:false});
+      }catch(err){
+        console.warn("Falha ao salvar lista na nuvem. Mantendo lista local:",err);
+        showToast("⚠️ Lista salva apenas neste aparelho. Nuvem indisponível.",3600);
+      }
+
+      await registrarEvento(editingOriginal ? "update_list" : "create_list",{
+        list_id:newList.id||null,
+        shared_id:newList.sharedId||null,
+        list_name:newList.name||"",
+        list_type:newList.type||listType,
+        organization_mode:"manual_order",
+        budget:Number(newList.budget||0),
+        item_count:countCategoryItems(newList.categories||[]),
+      });
+
+      const nl=editingOriginal
+        ? lists.map(l=>l.id===editingOriginal.id?newList:l)
+        : [newList,...lists];
+
+      saveLists(nl);
+      setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
+      setSearch("");setCollapsedCats({});
+      if(editingOriginal){
+        setCurrentList(null);
+        archiveFinishedListsBeforeHome();
+      }else{
+        setCurrentList(newList);
+        setScreen("list");
+      }
+      showToast(editingOriginal?"✅ Alterações salvas. Voltando para o início.":"✅ Lista criada na sua ordem!");
+    }catch(err){
+      console.error("Erro ao criar lista na ordem do usuário:",err);
+      showToast("❌ Erro ao criar lista: "+(err?.message||String(err)),6000);
+    }finally{
+      setLoading(false);
+    }
+  };
+
   // ── Reutilizar lista ─────────────────────────────────────────────────
   const reuseList=(list)=>{
     setListName(list.name+" (copia)");
@@ -6919,6 +6988,7 @@ return rebuiltHistory;
           editingListId={editingListId}
           compareWithActivePantry={compareWithActivePantry}
           organizeList={organizeList}
+          organizeListKeepOrder={organizeListKeepOrder}
           loading={loading}
           isTourStep={isTourStep}
           tourHighlightStyle={tourHighlightStyle}
