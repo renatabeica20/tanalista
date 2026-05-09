@@ -5208,11 +5208,45 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
-      if(editingOriginal){
+      const editingEditableCopy=Boolean(
+        editingOriginal?.editableCopy===true ||
+        editingOriginal?.isCopy===true ||
+        editingOriginal?.copyMode==="prelist" ||
+        editingOriginal?.status==="draft"
+      );
+      if(editingOriginal && !editingEditableCopy){
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
       let newList=editingOriginal
-        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0,isShared:editingOriginal.isShared===true}
+        ? {
+            ...editingOriginal,
+            name:listName.trim()||editingOriginal.name||"Minha lista",
+            type:listType,
+            budget:parseBRL(budgetText)||0,
+            categories,
+            lastEditedAt:now,
+            updatedAt:now,
+            lastSyncedAt:now,
+            total:0,
+            isShared:editingOriginal.isShared===true,
+            status: editingEditableCopy ? "active" : editingOriginal.status,
+            editableCopy:false,
+            isCopy:false,
+            copyMode:null,
+            archivedFinished:false,
+            finishedAt:null,
+            completedAt:null,
+            finalizedAt:null,
+            finished:false,
+            completed:false,
+            isFinished:false,
+            finalizada:false,
+            finalized:false,
+            isReadOnly:false,
+            readOnly:false,
+            locked:false,
+            history:false,
+          }
         : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0,isShared:false};
 
       // Toda lista criada pelo usuário passa a ser salva também na nuvem.
@@ -5238,7 +5272,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveLists(nl);
       setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
       setSearch("");setCollapsedCats({});
-      if(editingOriginal){
+      if(editingOriginal && !editingEditableCopy){
         setCurrentList(null);
         archiveFinishedListsBeforeHome();
       }else{
@@ -5246,7 +5280,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         setScreen("list");
       }
      showToast(
-  editingOriginal
+  editingOriginal && !editingEditableCopy
     ? "✅ Alterações salvas. Voltando para o início."
     : "✅ Lista organizada!"
 );
@@ -5282,12 +5316,47 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
-      if(editingOriginal){
+      const editingEditableCopy=Boolean(
+        editingOriginal?.editableCopy===true ||
+        editingOriginal?.isCopy===true ||
+        editingOriginal?.copyMode==="prelist" ||
+        editingOriginal?.status==="draft"
+      );
+      if(editingOriginal && !editingEditableCopy){
         categories=preserveEditedListStatus(editingOriginal,categories);
       }
 
       let newList=editingOriginal
-        ? {...editingOriginal,name:listName.trim()||editingOriginal.name||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,lastEditedAt:now,lastSyncedAt:now,total:0,isShared:editingOriginal.isShared===true,organizationMode:"manual_order"}
+        ? {
+            ...editingOriginal,
+            name:listName.trim()||editingOriginal.name||"Minha lista",
+            type:listType,
+            budget:parseBRL(budgetText)||0,
+            categories,
+            lastEditedAt:now,
+            updatedAt:now,
+            lastSyncedAt:now,
+            total:0,
+            isShared:editingOriginal.isShared===true,
+            organizationMode:"manual_order",
+            status: editingEditableCopy ? "active" : editingOriginal.status,
+            editableCopy:false,
+            isCopy:false,
+            copyMode:null,
+            archivedFinished:false,
+            finishedAt:null,
+            completedAt:null,
+            finalizedAt:null,
+            finished:false,
+            completed:false,
+            isFinished:false,
+            finalizada:false,
+            finalized:false,
+            isReadOnly:false,
+            readOnly:false,
+            locked:false,
+            history:false,
+          }
         : {id:Date.now().toString(),name:listName.trim()||"Minha lista",type:listType,budget:parseBRL(budgetText)||0,categories,createdAt:now,lastSyncedAt:now,total:0,isShared:false,organizationMode:"manual_order"};
 
       try{
@@ -5314,14 +5383,14 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       saveLists(nl);
       setPendingItems([]);setListName("");setBudgetText("");setBudgetEnabled(false);setListType("mercado");setCurrentInput("");setListNameConfirmed(false);setBudgetConfirmed(false);setEditingListId(null);
       setSearch("");setCollapsedCats({});
-      if(editingOriginal){
+      if(editingOriginal && !editingEditableCopy){
         setCurrentList(null);
         archiveFinishedListsBeforeHome();
       }else{
         setCurrentList(newList);
         setScreen("list");
       }
-      showToast(editingOriginal?"✅ Alterações salvas. Voltando para o início.":"✅ Lista criada na sua ordem!");
+      showToast(editingOriginal && !editingEditableCopy ? "✅ Alterações salvas. Voltando para o início." : "✅ Lista criada na sua ordem!");
     }catch(err){
       console.error("Erro ao criar lista na ordem do usuário:",err);
       showToast("❌ Erro ao criar lista: "+(err?.message||String(err)),6000);
@@ -6049,7 +6118,7 @@ return rebuiltHistory;
     })));
 
     // Cópia de lista finalizada vira nova pré-lista, não edição da lista original.
-    setEditingListId(editableCopy ? null : list.id);
+    setEditingListId(list.id);
     setCurrentList(null);
     setPendingItems(items);
     setListName(String(list.name || "").replace(/\s*\(c[oó]pia\)$/i,""));
