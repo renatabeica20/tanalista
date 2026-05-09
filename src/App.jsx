@@ -3345,6 +3345,8 @@ const [lists,setLists]=useState(()=>{
   const [senderName,setSenderName]=useState(()=>getAppUserName()||"");
   const [userNameModal,setUserNameModal]=useState(()=>!getAppUserName());
   const [userNameInput,setUserNameInput]=useState(()=>getAppUserName()||"");
+  const userNameInputRef=useRef(userNameInput);
+  useEffect(()=>{ userNameInputRef.current=userNameInput; },[userNameInput]);
   const [userPinInput,setUserPinInput]=useState("");
   const [userPinConfirmInput,setUserPinConfirmInput]=useState("");
   const [isFirstAccessMode,setIsFirstAccessMode]=useState(false);
@@ -4037,7 +4039,7 @@ const [lists,setLists]=useState(()=>{
   const persistListRecordToCloud=useCallback(async(list,{silent=true}={})=>{
     if(!list || !hasSupabaseConfig())return list;
     try{
-      const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInput || "Usuário do Tá na Lista");
+      const ownerName=saveAppUserName(list.ownerName || list.remetente || senderName || getAppUserName() || userNameInputRef.current || "Usuário do Tá na Lista");
       const userId=await registerAppUser(ownerName,{force:true});
       const base={
         ...list,
@@ -4072,7 +4074,7 @@ const [lists,setLists]=useState(()=>{
       if(!silent)showToast("⚠️ Lista salva neste aparelho, mas ainda não sincronizada na nuvem.",4200);
       return list;
     }
-  },[senderName,userNameInput,showToast]);
+  },[senderName,showToast]);
 
   const persistLocalListsToCloud=useCallback(async()=>{
     const currentName=getAppUserName();
@@ -4593,7 +4595,7 @@ const [lists,setLists]=useState(()=>{
     if(!baseData)throw new Error("Lista compartilhada não encontrada.");
 
     if(baseData?.listKind === "pantry_share" || baseData?.type === "pantry"){
-      const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
+      const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInputRef.current || "Usuário do Tá na Lista");
       await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
       const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
       const now=new Date().toISOString();
@@ -4647,7 +4649,7 @@ const [lists,setLists]=useState(()=>{
       return importedPantry;
     }
 
-    const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInput || "Usuário do Tá na Lista");
+    const currentUserName=saveAppUserName(getAppUserName() || senderName || userNameInputRef.current || "Usuário do Tá na Lista");
     const currentUserId=await registerAppUser(currentUserName,{force:true}).catch(()=>getAppUserId());
     const sender=record?.remetente || baseData.remetente || baseData.ownerName || "Não informado";
     const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
@@ -4739,7 +4741,7 @@ const [lists,setLists]=useState(()=>{
     });
     showToast("📲 Lista recebida salva no seu app");
     return finalReceived;
-  },[showToast, addNotification, senderName, userNameInput, persistListRecordToCloud]);
+  },[showToast, addNotification, senderName, persistListRecordToCloud]);
 
   const loadSharedListFromUrl=useCallback(async()=>{
     const embedded=extractEmbeddedListFromUrl();
