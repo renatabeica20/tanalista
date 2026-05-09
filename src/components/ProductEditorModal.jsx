@@ -25,12 +25,6 @@ export default function ProductEditorModal({
   normalizeUnitValue,
   dlgUnit,
   formatUnitForQuantity,
-  getManualSizeOptions,
-  setDlgPeso,
-  setDlgVolume,
-  dlgPeso,
-  dlgVolume,
-  setManualSize,
   buildManualPreview,
   btnGr,
   confirmDialog,
@@ -52,10 +46,10 @@ export default function ProductEditorModal({
         {dlgLoading
           ? ""
           : itemDialogMode === "extra"
-            ? "Defina os detalhes do item extra"
+            ? "Defina quantidade e unidade do item extra"
             : (editPendingIdx != null || itemDialogMode === "pantryReview")
               ? "Editar item"
-              : "Defina os detalhes"}
+              : "Defina quantidade e unidade"}
       </div>
 
       {!dlgLoading && dlgConfig && (editPendingIdx != null || itemDialogMode === "pantryReview" || itemDialogMode === "pantry") && (
@@ -118,29 +112,6 @@ export default function ProductEditorModal({
               ))}
             </div>
           </div>
-
-          {getManualSizeOptions().length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>Tamanho da embalagem <span style={{ fontWeight: 500, color: "#9CA3AF" }}>(opcional)</span></label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <button
-                  onClick={() => { setDlgPeso(""); setDlgVolume(""); }}
-                  style={chip(!(dlgPeso || dlgVolume), "#1A6B8A", "#E8F4F8", "#1A6B8A")}
-                >
-                  Sem tamanho
-                </button>
-                {getManualSizeOptions().map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setManualSize(size)}
-                    style={chip((dlgPeso || dlgVolume) === size, "#1A6B8A", "#E8F4F8", "#1A6B8A")}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div style={{ background: "#F5F3FF", borderRadius: 18, padding: "12px 14px", marginBottom: 16, fontSize: 14, color: "#6D28D9", fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
             <span>✅</span><span>{buildManualPreview()}</span>
