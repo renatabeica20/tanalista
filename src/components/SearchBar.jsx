@@ -8,14 +8,6 @@ import { useState } from "react";
  *   - inputStyle (mesclado por cima do estilo base — sobrescreve quando fornecido)
  *   - highlightStyle (aplicado ao container)
  *   - placeholder
- *
- * Melhorias:
- *   - Foco premium com anel suave (box-shadow) e borda animada
- *   - Ícones SVG nítidos (substituem emoji) com aria-hidden
- *   - Botão "limpar" acessível (aria-label) e com área de toque ≥ 32px
- *   - Transições suaves em borda, sombra e cor
- *   - role="search" no container e type="search" no input
- *   - Mobile-first: altura confortável, fontes legíveis, sem zoom no iOS (16px)
  */
 export default function SearchBar({
   searchRef,
@@ -26,26 +18,35 @@ export default function SearchBar({
   placeholder = "Buscar item na lista...",
 }) {
   const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const hasValue = Boolean(search);
+
+  const borderColor = focused
+    ? "#7C3AED"
+    : hovered
+      ? "#C4B5FD"
+      : "#E0D9FF";
 
   const baseInputStyle = {
     width: "100%",
-    height: 46,
-    padding: "0 42px 0 42px",
+    height: 50,
+    padding: "0 46px 0 46px",
     fontSize: 16, // evita zoom no iOS
-    color: "#111827",
-    background: "#FFFFFF",
-    border: `1.5px solid ${focused ? "#6D28D9" : "#E5E7EB"}`,
-    borderRadius: 14,
+    color: "#0F172A",
+    background: focused ? "#FFFFFF" : "#FBFAFF",
+    border: `1.5px solid ${borderColor}`,
+    borderRadius: 16,
     outline: "none",
     boxShadow: focused
-      ? "0 0 0 4px rgba(109, 40, 217, 0.14), 0 1px 2px rgba(17, 24, 39, 0.04)"
-      : "0 1px 2px rgba(17, 24, 39, 0.04)",
+      ? "0 0 0 4px rgba(124, 58, 237, 0.14), 0 6px 18px -8px rgba(124, 58, 237, 0.25)"
+      : "0 1px 2px rgba(17, 24, 39, 0.04), inset 0 0 0 1px rgba(255,255,255,0.6)",
     transition:
-      "border-color 180ms ease, box-shadow 220ms ease, background-color 180ms ease",
+      "border-color 200ms ease, box-shadow 240ms ease, background-color 200ms ease",
     WebkitAppearance: "none",
     appearance: "none",
     fontWeight: 500,
-    letterSpacing: "-0.005em",
+    letterSpacing: "-0.01em",
+    fontFamily: "inherit",
   };
 
   return (
@@ -62,24 +63,30 @@ export default function SearchBar({
         aria-hidden="true"
         style={{
           position: "absolute",
-          left: 14,
+          left: 16,
           top: "50%",
           transform: "translateY(-50%)",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          color: focused ? "#6D28D9" : "#9CA3AF",
-          transition: "color 180ms ease",
+          width: 22,
+          height: 22,
+          borderRadius: 8,
+          background: focused
+            ? "linear-gradient(135deg, rgba(124,58,237,0.14), rgba(159,103,250,0.10))"
+            : "transparent",
+          color: focused ? "#7C3AED" : "#94A3B8",
+          transition: "color 200ms ease, background 240ms ease",
           pointerEvents: "none",
         }}
       >
         <svg
-          width="18"
-          height="18"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.2"
+          strokeWidth="2.3"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
@@ -101,21 +108,23 @@ export default function SearchBar({
         spellCheck={false}
         enterKeyHint="search"
         style={{ ...baseInputStyle, ...inputStyle }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         onFocus={(e) => {
           setFocused(true);
           if (inputStyle?.borderColor === undefined) {
-            e.target.style.borderColor = "#6D28D9";
+            e.target.style.borderColor = "#7C3AED";
           }
         }}
         onBlur={(e) => {
           setFocused(false);
           if (inputStyle?.borderColor === undefined) {
-            e.target.style.borderColor = "#E5E7EB";
+            e.target.style.borderColor = "#E0D9FF";
           }
         }}
       />
 
-      {search && (
+      {hasValue && (
         <button
           type="button"
           onClick={() => {
@@ -128,35 +137,36 @@ export default function SearchBar({
             right: 8,
             top: "50%",
             transform: "translateY(-50%)",
-            width: 32,
-            height: 32,
+            width: 34,
+            height: 34,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#F3F4F6",
-            border: "none",
+            background: "#F3EFFF",
+            border: "1px solid rgba(124, 58, 237, 0.12)",
             borderRadius: 999,
-            color: "#4B5563",
+            color: "#6D28D9",
             cursor: "pointer",
             padding: 0,
             lineHeight: 1,
+            boxShadow: "0 2px 6px -2px rgba(124, 58, 237, 0.18)",
             transition:
-              "background-color 160ms ease, color 160ms ease, transform 120ms ease",
+              "background-color 160ms ease, color 160ms ease, transform 140ms ease, box-shadow 180ms ease",
           }}
           onMouseDown={(e) => {
-            e.currentTarget.style.transform = "translateY(-50%) scale(0.92)";
+            e.currentTarget.style.transform = "translateY(-50%) scale(0.9)";
           }}
           onMouseUp={(e) => {
             e.currentTarget.style.transform = "translateY(-50%) scale(1)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "translateY(-50%) scale(1)";
-            e.currentTarget.style.background = "#F3F4F6";
-            e.currentTarget.style.color = "#4B5563";
+            e.currentTarget.style.background = "#F3EFFF";
+            e.currentTarget.style.color = "#6D28D9";
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#EDE9FE";
-            e.currentTarget.style.color = "#6D28D9";
+            e.currentTarget.style.background = "#7C3AED";
+            e.currentTarget.style.color = "#FFFFFF";
           }}
         >
           <svg
@@ -165,7 +175,7 @@ export default function SearchBar({
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2.4"
+            strokeWidth="2.6"
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
