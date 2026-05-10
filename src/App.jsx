@@ -3217,7 +3217,7 @@ function HelpIcon({ text = "" }) {
 
 export default function App(){
 
-  const TNL_USE_LOVABLE_PREVIEW = true;
+  const TNL_USE_LOVABLE_PREVIEW = false;
 
   if (TNL_USE_LOVABLE_PREVIEW) {
     return <ShoppingListPreview />;
