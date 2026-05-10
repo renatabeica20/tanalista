@@ -29,16 +29,16 @@ export default function ItemRow({
     ? formatQtyUnit(item?.qty || 1, item?.unit || "unidade")
     : `${item?.qty || 1} ${item?.unit || "unidade"}`;
 
-  const accent = theme?.border || "#8B5CF6";
+  const accent = theme?.border || "#7C3AED";
   const accentHeader = theme?.header || "#047857";
 
-  // Background: subtle surface, not loud
+  // Background: surface limpa, leve tom lilás
   const rowBg = notFound
-    ? "#FAFAFA"
+    ? "#FAFAFC"
     : checked
-      ? "linear-gradient(180deg, #F6FDF9 0%, #FFFFFF 100%)"
+      ? "linear-gradient(180deg, #F2FBF6 0%, #FFFFFF 75%)"
       : extra
-        ? "linear-gradient(180deg, #FFFBF4 0%, #FFFFFF 100%)"
+        ? "linear-gradient(180deg, #FFFAF2 0%, #FFFFFF 75%)"
         : "#FFFFFF";
 
   return (
@@ -46,18 +46,18 @@ export default function ItemRow({
       style={{
         position: "relative",
         display: "grid",
-        gridTemplateColumns: "40px minmax(0,1fr) 38px",
-        gap: 12,
+        gridTemplateColumns: "44px minmax(0,1fr) 40px",
+        gap: 14,
         alignItems: "center",
-        padding: "14px 14px",
+        padding: "16px 16px",
         background: rowBg,
-        borderBottom: isLast ? "none" : "1px solid rgba(15, 23, 42, 0.06)",
+        borderBottom: isLast ? "none" : "1px solid rgba(100, 80, 200, 0.07)",
         transition:
-          "background 220ms ease, box-shadow 220ms ease, opacity 220ms ease",
+          "background 240ms ease, box-shadow 240ms ease, opacity 240ms ease",
         boxShadow: isHighlighted
-          ? `inset 3px 0 0 ${accent}`
+          ? `inset 3px 0 0 ${accent}, 0 0 0 1px rgba(124,58,237,0.05)`
           : "inset 0 0 0 0 transparent",
-        opacity: notFound ? 0.78 : 1,
+        opacity: notFound ? 0.74 : 1,
       }}
     >
       {/* Checkbox premium */}
@@ -68,12 +68,12 @@ export default function ItemRow({
         }}
         aria-label={checked ? "Desmarcar item" : "Marcar item comprado"}
         style={{
-          width: 30,
-          height: 30,
+          width: 32,
+          height: 32,
           borderRadius: "50%",
           border: checked
             ? "2px solid #16A34A"
-            : `2px solid ${notFound ? "#E5E7EB" : "#D1D5DB"}`,
+            : `2px solid ${notFound ? "#E5E7EB" : "#D6CCFA"}`,
           background: checked
             ? "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)"
             : "#FFFFFF",
@@ -85,14 +85,14 @@ export default function ItemRow({
           alignItems: "center",
           justifyContent: "center",
           boxShadow: checked
-            ? "0 4px 10px -2px rgba(22, 163, 74, 0.45), inset 0 1px 0 rgba(255,255,255,0.25)"
-            : "0 1px 2px rgba(15, 23, 42, 0.06)",
-          transform: checked ? "scale(1)" : "scale(1)",
+            ? "0 6px 14px -4px rgba(22, 163, 74, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)"
+            : "0 1px 2px rgba(100, 80, 200, 0.08), inset 0 0 0 2px #FFFFFF",
+          transform: "scale(1)",
           transition:
-            "background 200ms ease, border-color 200ms ease, box-shadow 220ms ease, transform 160ms ease",
+            "background 220ms ease, border-color 220ms ease, box-shadow 240ms ease, transform 160ms ease",
           ...checkHighlightStyle,
         }}
-        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.92)")}
+        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.9)")}
         onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
         onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
       >
@@ -100,7 +100,7 @@ export default function ItemRow({
           style={{
             display: "inline-block",
             transform: checked ? "scale(1)" : "scale(0)",
-            transition: "transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+            transition: "transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1)",
             lineHeight: 1,
           }}
         >
@@ -137,10 +137,11 @@ export default function ItemRow({
             style={{
               fontSize: 15.5,
               fontWeight: 700,
-              letterSpacing: -0.1,
-              color: notFound ? "#6B7280" : "#0F172A",
+              letterSpacing: -0.15,
+              color: notFound ? "#9CA3AF" : "#0F172A",
               textDecoration: notFound ? "line-through" : "none",
-              textDecorationColor: notFound ? "#9CA3AF" : undefined,
+              textDecorationColor: notFound ? "#CBD5E1" : undefined,
+              textDecorationThickness: notFound ? "1.5px" : undefined,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -158,12 +159,13 @@ export default function ItemRow({
                 fontSize: 9.5,
                 fontWeight: 800,
                 color: "#9A3412",
-                background: "#FFF7ED",
+                background: "linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)",
                 border: "1px solid #FED7AA",
                 borderRadius: 999,
                 padding: "2px 8px",
                 letterSpacing: 0.6,
                 textTransform: "uppercase",
+                boxShadow: "0 1px 2px rgba(154, 52, 18, 0.08)",
               }}
             >
               Extra
@@ -174,24 +176,24 @@ export default function ItemRow({
         {/* Meta line: qty • unit price */}
         <div
           style={{
-            marginTop: 4,
+            marginTop: 5,
             display: "flex",
             alignItems: "center",
             gap: 6,
             flexWrap: "wrap",
             fontSize: 12,
             fontWeight: 600,
-            color: notFound ? "#9CA3AF" : "#64748B",
+            color: notFound ? "#9CA3AF" : "#6B7280",
             lineHeight: 1.35,
           }}
         >
           <span>{qtyLabel}</span>
-          <span style={{ color: "#CBD5E1" }}>•</span>
+          <span style={{ color: "#D6CCFA" }}>•</span>
           <span>{unitPrice || "Sem preço"}</span>
         </div>
 
         {/* Total — destacado */}
-        <div style={{ marginTop: 6 }}>
+        <div style={{ marginTop: 7 }}>
           {total > 0 ? (
             <span
               style={{
@@ -203,17 +205,17 @@ export default function ItemRow({
                 background: notFound
                   ? "#F3F4F6"
                   : hexToRgba
-                    ? hexToRgba(accentHeader, 0.08)
-                    : "rgba(4, 120, 87, 0.08)",
+                    ? hexToRgba(accentHeader, 0.09)
+                    : "rgba(4, 120, 87, 0.09)",
                 border: `1px solid ${
                   notFound
                     ? "#E5E7EB"
                     : hexToRgba
-                      ? hexToRgba(accentHeader, 0.18)
-                      : "rgba(4, 120, 87, 0.18)"
+                      ? hexToRgba(accentHeader, 0.2)
+                      : "rgba(4, 120, 87, 0.2)"
                 }`,
-                padding: "3px 9px",
-                borderRadius: 8,
+                padding: "3px 10px",
+                borderRadius: 10,
                 fontWeight: 800,
                 fontSize: 13.5,
                 letterSpacing: -0.1,
@@ -224,11 +226,16 @@ export default function ItemRow({
           ) : (
             <span
               style={{
-                fontSize: 11.5,
+                display: "inline-block",
+                fontSize: 10.5,
                 fontWeight: 700,
-                color: "#9CA3AF",
+                color: "#7C3AED",
+                background: "#F3EFFF",
+                border: "1px solid rgba(124, 58, 237, 0.14)",
+                padding: "3px 9px",
+                borderRadius: 999,
                 textTransform: "uppercase",
-                letterSpacing: 0.4,
+                letterSpacing: 0.5,
               }}
             >
               Total pendente
@@ -237,7 +244,7 @@ export default function ItemRow({
         </div>
 
         {item?.price != null && PriceMonthBadge && (
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: 7 }}>
             <PriceMonthBadge
               itemName={item.name}
               price={item.price}
@@ -261,11 +268,13 @@ export default function ItemRow({
         }}
         aria-label={notFound ? "Retirar item de falta" : "Marcar item em falta"}
         style={{
-          width: 34,
-          height: 34,
+          width: 36,
+          height: 36,
           borderRadius: 12,
-          border: "1px solid " + (notFound ? "#FCA5A5" : "#E5E7EB"),
-          background: notFound ? "#FEE2E2" : "#FFFFFF",
+          border: "1px solid " + (notFound ? "#FCA5A5" : "rgba(100, 80, 200, 0.14)"),
+          background: notFound
+            ? "linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)"
+            : "#FFFFFF",
           color: notFound ? "#B91C1C" : "#94A3B8",
           fontWeight: 800,
           fontSize: 18,
@@ -275,13 +284,13 @@ export default function ItemRow({
           alignItems: "center",
           justifyContent: "center",
           boxShadow: notFound
-            ? "inset 0 0 0 1px rgba(185, 28, 28, 0.06)"
-            : "0 1px 2px rgba(15, 23, 42, 0.04)",
+            ? "0 4px 10px -3px rgba(185, 28, 28, 0.25), inset 0 1px 0 rgba(255,255,255,0.4)"
+            : "0 1px 2px rgba(100, 80, 200, 0.06)",
           transition:
-            "background 200ms ease, color 200ms ease, border-color 200ms ease, transform 160ms ease",
+            "background 220ms ease, color 220ms ease, border-color 220ms ease, transform 160ms ease, box-shadow 220ms ease",
           ...missingHighlightStyle,
         }}
-        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.92)")}
+        onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.9)")}
         onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
         onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
       >
