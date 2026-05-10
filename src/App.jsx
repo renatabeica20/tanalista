@@ -116,6 +116,7 @@ import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
+import ShoppingListPreview from "./components/ShoppingListPreview";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -3215,6 +3216,13 @@ function HelpIcon({ text = "" }) {
 }
 
 export default function App(){
+
+  const TNL_USE_LOVABLE_PREVIEW = true;
+
+  if (TNL_USE_LOVABLE_PREVIEW) {
+    return <ShoppingListPreview />;
+  }
+
 
   useEffect(() => {
     ensureMobileViewport();
