@@ -7309,7 +7309,22 @@ return rebuiltHistory;
   ].map(m=>{
     const inactive = !m.active;
     return (
-      <div key={m.name}
+      <div
+        key={m.name}
+        role="button"
+        tabIndex={m.active ? 0 : -1}
+        aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
+        onClick={() => {
+          if (!m.active) return;
+          setScreen("create");
+        }}
+        onKeyDown={(e) => {
+          if (!m.active) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setScreen("create");
+          }
+        }}
         style={{
           background: m.active
             ? "linear-gradient(140deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)"
