@@ -7269,31 +7269,36 @@ return rebuiltHistory;
           HOME
       ════════════════════════════════════ */}
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
-      {screen==="home"&&(
+           {screen==="home"&&(
 <HomeScreen>
-        <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)",position:"relative"}}>
-          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",paddingTop:24,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:28,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
-            <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
-            <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(160deg,#f5f0ff 0%,#faf8ff 40%,#f0f4ff 100%)",position:"relative"}}>
+
+          {/* ── BANNER SUPERIOR ── */}
+          <div style={{background:"linear-gradient(135deg,#6d28d9 0%,#7c3aed 54%,#9f67fa 100%)",paddingTop:28,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:32,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",boxShadow:"0 16px 48px rgba(109,40,217,0.28)"}}>
+            {/* Orbes decorativos */}
+            <div style={{position:"absolute",top:-80,right:-60,width:240,height:240,background:"radial-gradient(circle,rgba(255,255,255,0.14),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",bottom:-50,left:-40,width:180,height:180,background:"radial-gradient(circle,rgba(255,255,255,0.10),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
             <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-              <div style={{textAlign:"center",background:"rgba(255,255,255,0.58)",border:"1px solid rgba(221,214,254,0.72)",borderRadius:28,padding:"18px 18px 16px",width:"100%",boxShadow:"0 18px 42px rgba(109,40,217,0.08)",backdropFilter:"blur(8px)"}}>
+              <div style={{textAlign:"center",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:28,padding:"20px 20px 18px",width:"100%",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
                 <BrandWordmark />
-                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
+                <div style={{color:"rgba(255,255,255,0.80)",fontSize:13,lineHeight:1.5,fontStyle:"italic",fontWeight:500,marginTop:12}}>Organize, compartilhe e controle o orçamento</div>
                 <button
                   onClick={()=>startGuidedTour("home")}
-                  style={{marginTop:14,border:"none",borderRadius:999,padding:"11px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)"}}
+                  style={{marginTop:16,border:"1.5px solid rgba(255,255,255,0.40)",borderRadius:999,padding:"11px 20px",background:"rgba(255,255,255,0.18)",color:"#FFFFFF",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",transition:"background 0.2s"}}
                 >
                   ✨ Como usar o app
                 </button>
               </div>
             </div>
           </div>
-          <div style={{paddingTop:20,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-              <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Módulos</div>
-              <div style={{fontSize:12,color:"#8B5CF6",fontWeight:800}}>6 áreas integradas</div>
+
+          {/* ── GRADE DE MÓDULOS ── */}
+          <div style={{paddingTop:24,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontWeight:800,fontSize:11,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"1.2px"}}>Módulos</div>
+              <div style={{fontSize:12,color:"#7c3aed",fontWeight:700,background:"#f0ebff",padding:"3px 10px",borderRadius:999}}>6 áreas integradas</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:30}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14,marginBottom:30}}>
               {[
                 {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
                 {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
@@ -7310,16 +7315,18 @@ return rebuiltHistory;
                     aria-disabled={inactive}
                     title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
                     style={{
-                      background:m.active
-                        ? "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)"
-                        : "linear-gradient(180deg,#FFFFFF 0%,#F8F8F9 100%)",
+                      background: m.active
+                        ? "linear-gradient(145deg,#7c3aed,#9f67fa)"
+                        : "rgba(255,255,255,0.85)",
                       borderRadius:24,
-                      padding:m.active?"20px 14px":"18px 14px",
-                      cursor:m.active?"pointer":"not-allowed",
-                      boxShadow:m.active
-                        ? "0 22px 48px rgba(109,40,217,0.20), 0 4px 10px rgba(109,40,217,0.08)"
-                        : "0 8px 22px rgba(17,24,39,0.045)",
-                      border:m.active?"2px solid #B794F6":"1px solid #E5E7EB",
+                      padding:m.active?"22px 14px":"18px 14px",
+                      cursor:m.active?"pointer":"default",
+                      boxShadow: m.active
+                        ? "0 12px 32px rgba(124,58,237,0.38), 0 2px 8px rgba(124,58,237,0.18)"
+                        : "0 2px 12px rgba(100,80,200,0.07)",
+                      border: m.active
+                        ? "1px solid rgba(255,255,255,0.25)"
+                        : "1px solid rgba(124,58,237,0.08)",
                       position:"relative",
                       overflow:"hidden",
                       textAlign:"center",
@@ -7327,26 +7334,40 @@ return rebuiltHistory;
                       flexDirection:"column",
                       alignItems:"center",
                       justifyContent:"center",
-                      minHeight:m.active?164:154,
+                      minHeight:m.active?168:152,
                       transform:m.active?"translateY(-2px)":"none",
-                      transition:"transform .2s ease, box-shadow .2s ease, border-color .2s ease",
+                      transition:"transform .2s ease, box-shadow .2s ease",
                       ...(m.active ? tourHighlightStyle(isTourStep("home_compras")) : {}),
                     }}
                   >
+                    {/* Brilho interno no card ativo */}
                     {m.active&&(
-                      <div style={{position:"absolute",top:10,right:10,background:"#ECFDF5",color:"#047857",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #A7F3D0",zIndex:3}}>Ativo</div>
+                      <div style={{position:"absolute",top:0,left:0,right:0,height:"50%",background:"radial-gradient(circle at 50% 0%,rgba(255,255,255,0.22),transparent 70%)",pointerEvents:"none",zIndex:0}}/>
                     )}
+
+                    {/* Badge ATIVO */}
+                    {m.active&&(
+                      <div style={{position:"absolute",top:10,right:10,background:"rgba(255,255,255,0.95)",color:"#6d28d9",fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:180,textTransform:"uppercase",letterSpacing:"0.5px",zIndex:3}}>Ativo</div>
+                    )}
+
+                    {/* Badge EM BREVE */}
                     {inactive&&(
                       <>
-                        <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.42)",zIndex:1,pointerEvents:"none"}} />
-                        <div style={{position:"absolute",top:10,right:10,background:"#F3F4F6",color:"#6B7280",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #D1D5DB",zIndex:3}}>Em breve</div>
+                        <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.35)",zIndex:1,pointerEvents:"none"}} />
+                        <div style={{position:"absolute",top:10,right:10,background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"3px 9px",borderRadius:180,textTransform:"uppercase",letterSpacing:"0.5px",zIndex:3}}>Em breve</div>
                       </>
                     )}
-                    <div style={{position:"relative",zIndex:2,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"grayscale(1) saturate(0) contrast(0.88)",opacity:m.active?1:0.54}}>
-                      <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
+
+                    {/* Ícone */}
+                    <div style={{position:"relative",zIndex:2,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"grayscale(1) saturate(0)",opacity:m.active?1:0.45}}>
+                      <ModuleIcon type={m.iconType} size={m.active?72:66} active={m.active} />
                     </div>
-                    <div style={{position:"relative",zIndex:2,fontWeight:900,fontSize:m.active?16:15,color:m.active?"#111827":"#6B7280",textAlign:"center",width:"100%"}}>{m.name}</div>
-                    <div style={{position:"relative",zIndex:2,fontSize:12,color:m.active?"#6B7280":"#9CA3AF",marginTop:4,lineHeight:1.35,textAlign:"center",width:"100%",fontWeight:600}}>{m.desc}</div>
+
+                    {/* Nome */}
+                    <div style={{position:"relative",zIndex:2,fontWeight:800,fontSize:m.active?16:14,color:m.active?"#ffffff":"#4b5563",textAlign:"center",width:"100%"}}>{m.name}</div>
+
+                    {/* Descrição */}
+                    <div style={{position:"relative",zIndex:2,fontSize:12,color:m.active?"rgba(255,255,255,0.75)":"#9ca3af",marginTop:4,lineHeight:1.35,textAlign:"center",width:"100%",fontWeight:500}}>{m.desc}</div>
                   </div>
                 );
               })}
@@ -7385,6 +7406,7 @@ return rebuiltHistory;
         </div>
      </HomeScreen>
 )}
+
 
       {/* CONFIRM DELETE */}
       <ConfirmDeleteModal
