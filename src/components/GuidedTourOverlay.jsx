@@ -24,7 +24,6 @@ export default function GuidedTourOverlay({
     if (typeof document === "undefined" || !targetId) return null;
     let el = document.querySelector(`[data-tour-step="${targetId}"]`);
     if (el) return el;
-    // Suporte a data-tour-also="id1 id2 id3"
     el = Array.from(document.querySelectorAll("[data-tour-also]")).find(
       (node) => (node.getAttribute("data-tour-also") || "").split(" ").includes(targetId)
     );
@@ -35,7 +34,7 @@ export default function GuidedTourOverlay({
     if (!el) return null;
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return null;
-    const pad = 8;
+    const pad = 10;
     return {
       x: r.left - pad,
       y: r.top - pad,
@@ -65,6 +64,7 @@ export default function GuidedTourOverlay({
         if (!attempt()) timers.push(setTimeout(() => attempt(), 350));
       }, 120));
     } else {
+      // Re-mede após scroll terminar
       timers.push(setTimeout(() => {
         if (cancelled) return;
         const r = measureEl(findEl());
@@ -88,9 +88,6 @@ export default function GuidedTourOverlay({
     };
   }, [targetId, findEl, measureEl]);
 
-  // Posiciona o card do pop-up evitando cobrir o elemento destacado.
-  // Se o elemento está na metade inferior da tela → card aparece no topo.
-  // Se está na metade superior → card aparece na base.
   const screenH = typeof window !== "undefined" ? window.innerHeight : 900;
   const elementInBottomHalf = targetRect ? targetRect.centerY > screenH / 2 : false;
   const cardPosition = elementInBottomHalf ? { top: 88 } : { bottom: 88 };
@@ -98,27 +95,26 @@ export default function GuidedTourOverlay({
   return (
     <div style={{ position:"fixed", inset:0, zIndex:620, pointerEvents:"none" }}>
       <style>{`
-        @keyframes tnl-tour-fade { from{opacity:0} to{opacity:1} }
         @keyframes tnl-tour-pop  { from{transform:translateY(12px) scale(0.97);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
         @keyframes tnl-tour-icon { 0%{transform:scale(0.6) rotate(-8deg);opacity:0} 60%{transform:scale(1.08) rotate(2deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
         @keyframes tnl-tour-shine{ 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
-        @keyframes tnl-tour-ring {
-          0%,100%{ opacity:1; box-shadow:0 0 0 3px rgba(255,255,255,0.95), 0 0 0 7px rgba(124,58,237,0.7), 0 0 28px 4px rgba(124,58,237,0.35); }
-          50%    { opacity:1; box-shadow:0 0 0 5px rgba(255,255,255,1),   0 0 0 12px rgba(124,58,237,0.9), 0 0 40px 8px rgba(124,58,237,0.5); }
+        @keyframes tnl-tour-glow {
+          0%,100%{ box-shadow: 0 0 0 9999px rgba(15,23,42,0.75), 0 0 0 3px rgba(255,255,255,0.9), 0 0 0 6px rgba(124,58,237,0.8); }
+          50%    { box-shadow: 0 0 0 9999px rgba(15,23,42,0.75), 0 0 0 4px rgba(255,255,255,1),   0 0 0 9px rgba(124,58,237,1); }
         }
       `}</style>
 
-      {/* Backdrop escuro simples */}
-      <div style={{
-        position:"absolute", inset:0,
-        background:"rgba(15,23,42,0.72)",
-        backdropFilter:"blur(2px)",
-        WebkitBackdropFilter:"blur(2px)",
-        pointerEvents:"none",
-        animation:"tnl-tour-fade 220ms ease-out",
-      }} />
+      {/* Backdrop escuro apenas quando não há elemento para destacar */}
+      {!targetRect && (
+        <div style={{
+          position:"absolute", inset:0,
+          background:"rgba(15,23,42,0.75)",
+          pointerEvents:"none",
+        }} />
+      )}
 
-      {/* Janela transparente sobre o elemento destacado */}
+      {/* Spotlight: div transparente na posição do elemento.
+          O box-shadow escurece TUDO AO REDOR dele, deixando o elemento visível. */}
       {targetRect && (
         <div style={{
           position:"fixed",
@@ -126,12 +122,11 @@ export default function GuidedTourOverlay({
           top: targetRect.y,
           width: targetRect.w,
           height: targetRect.h,
-          borderRadius: 18,
+          borderRadius: 16,
           background: "transparent",
-          boxShadow: "0 0 0 9999px rgba(15,23,42,0.72)",
+          animation: "tnl-tour-glow 1.8s ease-in-out infinite",
           pointerEvents: "none",
           zIndex: 621,
-          animation: "tnl-tour-ring 1.6s ease-in-out infinite",
         }} />
       )}
 
