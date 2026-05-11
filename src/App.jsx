@@ -486,17 +486,11 @@ function setGuidedTourCompleted(value = "done") {
 }
 
 function tourHighlightStyle(active) {
+  // O destaque visual é feito pelo SVG mask no GuidedTourOverlay.
+  // Retorna apenas um leve brilho para não conflitar com o buraco do SVG.
   if (!active) return {};
   return {
-    position: "relative",
-    zIndex: 735,
-    opacity: 1,
-    filter: "brightness(1.18) saturate(1.12)",
-    outline: "3px solid rgba(255,255,255,0.98)",
-    outlineOffset: 3,
-    boxShadow: "0 0 0 6px rgba(255,255,255,0.98), 0 0 0 14px rgba(124,58,237,0.58), 0 30px 72px rgba(76,29,149,0.52)",
-    transform: "translateY(-2px) scale(1.018)",
-    transition: "box-shadow .25s ease, transform .25s ease, filter .25s ease",
+    filter: "brightness(1.08) saturate(1.05)",
   };
 }
 
@@ -7840,6 +7834,7 @@ return rebuiltHistory;
           })()}
 
           <div data-tour-step="list_search">
+          <div data-tour-step="list_search" style={{padding:"0 20px",margin:"-4px 0 0"}}>
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7847,6 +7842,7 @@ return rebuiltHistory;
             inputStyle={{ ...inp({ padding: "12px 16px 12px 42px", borderRadius: 180 }) }}
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
+          </div>
           </div>
 
           {/* Categorias com cores */}
@@ -7930,7 +7926,7 @@ return rebuiltHistory;
                             hexToRgba={hexToRgba}
                             PriceMonthBadge={PriceMonthBadge}
                             PriceMemoryLine={PriceMemoryLine}
-                            isFirstItem={ii===0}
+                            isFirstItem={ii===0 && !item.checked && !item.notFound}
                             priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
                             checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
                             missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
@@ -7945,10 +7941,12 @@ return rebuiltHistory;
           </div>
 
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
+          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
+          </div>
           </div>
         </div>
       )}
