@@ -26,9 +26,18 @@ export default function GuidedTourOverlay({
   const measureEl = useCallback((el) => {
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return null;
+    // Aceita mesmo se width/height são pequenos — botões circulares são pequenos.
+    // Rejeita apenas se as coordenadas estão completamente fora da tela.
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (r.bottom < -50 || r.top > vh + 50 || r.right < -50 || r.left > vw + 50) return null;
     const pad = 10;
-    return { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2, centerY: r.top + r.height / 2 };
+    const x = Math.max(0, r.left - pad);
+    const y = Math.max(0, r.top - pad);
+    const w = Math.min(vw - x, r.width + pad * 2);
+    const h = Math.min(vh - y, r.height + pad * 2);
+    if (w <= 0 || h <= 0) return null;
+    return { x, y, w, h, centerY: r.top + r.height / 2 };
   }, []);
 
   useEffect(() => {
@@ -47,13 +56,20 @@ export default function GuidedTourOverlay({
     };
 
     if (!attempt()) {
-      timers.push(setTimeout(() => { if (!attempt()) timers.push(setTimeout(attempt, 350)); }, 120));
+      timers.push(setTimeout(() => {
+        if (!attempt()) {
+          timers.push(setTimeout(() => {
+            if (!attempt()) timers.push(setTimeout(attempt, 500));
+          }, 250));
+        }
+      }, 100));
     } else {
+      // Re-mede depois que scroll containers terminam de rolar
       timers.push(setTimeout(() => {
         if (cancelled) return;
         const r = measureEl(findEl());
         if (r) setTargetRect(r);
-      }, 500));
+      }, 600));
     }
 
     const onLayout = () => { if (!cancelled) { const r = measureEl(findEl()); if (r) setTargetRect(r); } };
@@ -67,14 +83,9 @@ export default function GuidedTourOverlay({
   const r = targetRect;
   const radius = 16;
 
-  // Posiciona o card longe do elemento destacado.
-  // Sem elemento: centraliza verticalmente.
+  // Posiciona o card longe do elemento destacado
   const elementInBottomHalf = r ? r.centerY > vh / 2 : false;
-  const cardPos = !r
-    ? { top: "50%", transform: "translateY(-50%)" }
-    : elementInBottomHalf
-      ? { top: 88 }
-      : { bottom: 88 };
+  const cardPos = elementInBottomHalf ? { top: 88 } : { bottom: 88 };
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:620, pointerEvents:"none" }}>
