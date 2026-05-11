@@ -7103,30 +7103,30 @@ return rebuiltHistory;
     else goForwardBySwipe();
   };
 
-  // Calcula a chave do primeiro item pendente globalmente na lista atual
-  // para que apenas UM ItemRow receba isFirstItem=true (para o tour)
+  // Chave do primeiro item pendente (não marcado, não em falta) na lista atual.
+  // Garante que apenas UM ItemRow receba isFirstItem=true para o tour guiado.
   const globalFirstPendingKey = (() => {
     if (!currentList?.categories) return null;
-    const sorted = [...currentList.categories]
-      .map((cat, origIdx) => ({ cat, origIdx }))
+    const sortedCats = [...currentList.categories]
+      .map((cat, oi) => ({ cat, oi }))
       .sort((a, b) => {
-        const aExtra = normalizePlainText(a.cat.name) === "itens extras";
-        const bExtra = normalizePlainText(b.cat.name) === "itens extras";
-        if (aExtra !== bExtra) return aExtra ? 1 : -1;
-        const aDone = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
-        const bDone = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
-        if (aDone === bDone) return a.origIdx - b.origIdx;
-        return aDone ? 1 : -1;
+        const aX = normalizePlainText(a.cat.name) === "itens extras";
+        const bX = normalizePlainText(b.cat.name) === "itens extras";
+        if (aX !== bX) return aX ? 1 : -1;
+        const aD = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
+        const bD = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
+        if (aD === bD) return a.oi - b.oi;
+        return aD ? 1 : -1;
       });
-    for (const { cat } of sorted) {
-      const pending = [...cat.items].sort((a, b) => {
-        const aDone = !!(a.checked || a.notFound);
-        const bDone = !!(b.checked || b.notFound);
-        if (aDone === bDone) return !aDone ? String(a.name || "").localeCompare(String(b.name || ""), "pt-BR") : 0;
-        return aDone ? 1 : -1;
+    for (const { cat } of sortedCats) {
+      const items = [...cat.items].sort((a, b) => {
+        const aD = !!(a.checked || a.notFound);
+        const bD = !!(b.checked || b.notFound);
+        if (aD === bD) return !aD ? String(a.name||"").localeCompare(String(b.name||""),"pt-BR") : 0;
+        return aD ? 1 : -1;
       });
-      const first = pending.find(i => !i.checked && !i.notFound);
-      if (first) return `${first.name}__${first.unit}__${first.qty}`;
+      const first = items.find(i => !i.checked && !i.notFound);
+      if (first) return `${first.name}||${first.unit}||${first.qty}`;
     }
     return null;
   })();
@@ -7951,7 +7951,7 @@ return rebuiltHistory;
                             hexToRgba={hexToRgba}
                             PriceMonthBadge={PriceMonthBadge}
                             PriceMemoryLine={PriceMemoryLine}
-                            isFirstItem={`${item.name}__${item.unit}__${item.qty}`===globalFirstPendingKey}
+                            isFirstItem={`${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey}
                             priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
                             checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
                             missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
