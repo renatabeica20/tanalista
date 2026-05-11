@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import AppLogo from "./AppLogo";
 import VoiceInput from "./VoiceInput";
@@ -14,25 +14,27 @@ const inp = (extra = {}) => ({
   fontFamily: "inherit",
   background: "#FFFFFF",
   boxSizing: "border-box",
+  WebkitTapHighlightColor: "transparent",
+  transition: "border-color .25s ease, box-shadow .25s ease",
   ...extra,
 });
 
 const lbl = {
   fontWeight: 800,
-  fontSize: 12,
-  color: "#374151",
-  marginBottom: 9,
+  fontSize: 11,
+  color: "#4C1D95",
+  marginBottom: 10,
   display: "block",
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.08em",
 };
 
 const createCard = {
-  background: "rgba(255,255,255,0.98)",
+  background: "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)",
   borderRadius: 24,
   padding: 18,
-  border: "1px solid #E5E7EB",
-  boxShadow: "0 14px 30px rgba(17,24,39,0.07)",
+  border: "1px solid rgba(167,139,250,0.22)",
+  boxShadow: "0 14px 30px rgba(17,24,39,0.06), inset 0 1px 0 rgba(255,255,255,0.9)",
   transition: "border-color .25s ease, box-shadow .25s ease, transform .25s ease",
 };
 
@@ -52,7 +54,9 @@ const createSecondaryBtn = {
   alignItems: "center",
   justifyContent: "center",
   gap: 8,
-  boxShadow: "0 8px 20px rgba(17,24,39,0.06)",
+  boxShadow: "0 8px 20px rgba(17,24,39,0.05), inset 0 1px 0 rgba(255,255,255,0.9)",
+  WebkitTapHighlightColor: "transparent",
+  transition: "transform .2s ease, box-shadow .25s ease, border-color .25s ease",
 };
 
 const createPrimaryBtn = {
@@ -60,7 +64,7 @@ const createPrimaryBtn = {
   minHeight: 58,
   padding: "16px 18px",
   borderRadius: 22,
-  background: "linear-gradient(135deg,#6D28D9,#8B5CF6)",
+  background: "linear-gradient(135deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)",
   border: "none",
   color: "white",
   fontWeight: 900,
@@ -71,7 +75,10 @@ const createPrimaryBtn = {
   alignItems: "center",
   justifyContent: "center",
   gap: 8,
-  boxShadow: "0 16px 34px rgba(109,40,217,0.30)",
+  boxShadow: "0 18px 38px rgba(109,40,217,0.34), inset 0 1px 0 rgba(255,255,255,0.18)",
+  letterSpacing: "0.01em",
+  WebkitTapHighlightColor: "transparent",
+  transition: "transform .2s ease, box-shadow .25s ease, opacity .2s ease",
 };
 
 function HelpIcon({ text = "" }) {
@@ -86,13 +93,14 @@ function HelpIcon({ text = "" }) {
         width: 18,
         height: 18,
         borderRadius: "50%",
-        background: "#EEF2FF",
+        background: "linear-gradient(135deg,#EDE9FE,#F5F3FF)",
         color: "#5B21B6",
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 900,
         cursor: "pointer",
         border: "1px solid #C7D2FE",
         flexShrink: 0,
+        fontStyle: "italic",
       }}
     >
       i
@@ -157,6 +165,19 @@ export default function CreateListScreen({
   const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
   const [confirmDeleteConfig, setConfirmDeleteConfig] = useState(null);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const id = "tnl-create-anim";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      @keyframes tnl-create-in { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+      @keyframes tnl-create-pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   const closeAndRemovePantry = () => {
     setPantryMenuOpen(false);
     setConfirmDeleteConfig({
@@ -167,47 +188,48 @@ export default function CreateListScreen({
   };
 
   return (
-<div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-  <div style={{background:"#FFFFFF",padding:"16px 20px 12px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #E5E7EB",position:"sticky",top:0,zIndex:100,boxShadow:"0 8px 24px rgba(17,24,39,0.06)"}}>
+<div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#F8F7FF 0%,#FAFAFB 60%,#FFFFFF 100%)"}}>
+  <div style={{background:"linear-gradient(135deg,#FFFFFF 0%,#FBFAFF 100%)",padding:"16px 20px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid rgba(167,139,250,0.22)",position:"sticky",top:0,zIndex:100,boxShadow:"0 10px 28px rgba(76,29,149,0.08)",backdropFilter:"saturate(140%) blur(8px)"}}>
     <button onClick={()=>{archiveFinishedListsBeforeHome();setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
-      style={{width:36,height:36,borderRadius:"50%",background:"#F9FAFB",border:"none",cursor:"pointer",fontSize:18,color:"#4A5568",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+      style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#F5F3FF,#FFFFFF)",border:"1px solid #EDE9FE",cursor:"pointer",fontSize:18,color:"#4C1D95",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,boxShadow:"0 6px 16px rgba(76,29,149,0.10)",WebkitTapHighlightColor:"transparent"}}>←</button>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><AppLogo size={26} radius={8} shadow={false}/><div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center"}}>{listName?listName:"Nova lista"}</div></div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <AppLogo size={26} radius={8} shadow={false}/>
+        <div style={{fontWeight:900,fontSize:18,color:"#111827",textAlign:"center",letterSpacing:"-0.01em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",background:listName?"linear-gradient(135deg,#4C1D95,#8B5CF6)":"none",WebkitBackgroundClip:listName?"text":"unset",WebkitTextFillColor:listName?"transparent":"#111827"}}>{listName?listName:"Nova lista"}</div>
+      </div>
     </div>
-    <button onClick={()=>startGuidedTour("create")} style={{border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"8px 10px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>✨ Como usar</button>
+    <button onClick={()=>startGuidedTour("create")} style={{border:"1px solid #DDD6FE",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",color:"#5B21B6",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 6px 14px rgba(109,40,217,0.12)",WebkitTapHighlightColor:"transparent"}}>✨ Como usar</button>
   </div>
-
-  <div style={{padding:20,flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",paddingBottom:40}}>
+  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
-    <div style={{...createCard,borderColor:activePantry?"#86EFAC":"#DDD6FE",background:activePantry?"#F0FDF4":"#FAF9FF",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
+    <div style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:48,height:48,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#6D28D9,#8B5CF6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 12px 24px rgba(109,40,217,0.18)"}}>🏠</div>
+        <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <div style={{fontWeight:900,fontSize:15,color:"#111827"}}>Itens em Casa</div>
+            <div style={{fontWeight:900,fontSize:15,color:"#111827",letterSpacing:"-0.01em"}}>Itens em Casa</div>
             <HelpIcon text="Registre os itens que você já tem em casa. Enquanto a lista de compras estiver aberta, você pode comparar/recomparar para evitar compras desnecessárias." />
-            <span style={{fontSize:11,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"#DCFCE7":"#F3E8FF",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`}}>{activePantry?(pantryCompared?"Comparado com esta lista":"Lista ativa"):"Opcional"}</span>
-
+            <span style={{fontSize:10,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"linear-gradient(135deg,#DCFCE7,#BBF7D0)":"linear-gradient(135deg,#F3E8FF,#EDE9FE)",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`,textTransform:"uppercase",letterSpacing:"0.05em"}}>{activePantry?(pantryCompared?"Comparado":"Lista ativa"):"Opcional"}</span>
             {activePantry&&(
               <div style={{marginLeft:"auto",position:"relative",display:"flex",alignItems:"center",gap:6}}>
                 <button
                   onClick={shareActivePantry}
-                  style={{border:"1px solid #A7F3D0",background:"#ECFDF5",color:"#047857",borderRadius:999,padding:"5px 9px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
+                  style={{border:"1px solid #A7F3D0",background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",color:"#047857",borderRadius:999,padding:"6px 11px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 4px 10px rgba(4,120,87,0.15)",WebkitTapHighlightColor:"transparent"}}
                 >
                   Enviar lista
                 </button>
                 <button
                   onClick={()=>setPantryMenuOpen(v=>!v)}
-                  style={{border:"1px solid #E5E7EB",background:"#FFFFFF",color:"#4B5563",borderRadius:999,padding:"5px 9px",fontSize:14,fontWeight:900,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}
+                  style={{border:"1px solid #E5E7EB",background:"#FFFFFF",color:"#4B5563",borderRadius:999,width:30,height:30,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",WebkitTapHighlightColor:"transparent"}}
                   aria-label="Mais opções dos Itens em Casa"
                 >
                   ⋯
                 </button>
                 {pantryMenuOpen&&(
-                  <div style={{position:"absolute",right:0,top:34,zIndex:450,minWidth:180,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,boxShadow:"0 18px 42px rgba(17,24,39,0.16)",overflow:"hidden"}}>
+                  <div style={{position:"absolute",right:0,top:38,zIndex:450,minWidth:180,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,boxShadow:"0 22px 50px rgba(17,24,39,0.18)",overflow:"hidden",animation:"tnl-create-pop .18s ease both"}}>
                     <button
                       onClick={closeAndRemovePantry}
-                      style={{width:"100%",border:"none",background:"#FFFFFF",color:"#B91C1C",padding:"12px 14px",fontSize:13,fontWeight:900,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}
+                      style={{width:"100%",border:"none",background:"#FFFFFF",color:"#B91C1C",padding:"12px 14px",fontSize:13,fontWeight:900,textAlign:"left",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}}
                     >
                       🗑 Excluir
                     </button>
@@ -216,78 +238,78 @@ export default function CreateListScreen({
               </div>
             )}
           </div>
-          <div style={{fontSize:12,color:"#6B7280",fontWeight:700,marginTop:4,lineHeight:1.35}}>
+          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,marginTop:5,lineHeight:1.4}}>
             {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
           </div>
           {activePantry && pantryShareStatus && (
-            <div style={{fontSize:11,color:"#047857",fontWeight:900,marginTop:5}}>
+            <div style={{fontSize:11,color:"#047857",fontWeight:900,marginTop:6,background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 9px",display:"inline-block"}}>
               {pantryShareStatus}
             </div>
           )}
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:12}}>
+      <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
         {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-        <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
+        <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
       </div>
     </div>
 
     {/* ORÇAMENTO */}
     <div style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
-      <label style={lbl}>Orçamento</label>
+      <label style={lbl}>💰 Orçamento</label>
       <div>
         <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#6B7280",fontSize:15,pointerEvents:"none",transition:"color .25s ease, font-weight .25s ease"}}>R$</span>
+          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#9CA3AF",fontSize:15,pointerEvents:"none",transition:"color .25s ease",fontVariantNumeric:"tabular-nums"}}>R$</span>
           <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true); triggerBudgetSavedPulse();}}
             placeholder="0,00" inputMode="numeric"
-            style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.14)":"none",fontWeight:budgetText?900:500,color:budgetText?"#6D28D9":"#111827",transition:"border-color .25s ease, box-shadow .25s ease, color .25s ease, font-weight .25s ease"})}
+            style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:budgetText?900:500,color:budgetText?"#6D28D9":"#111827",fontVariantNumeric:"tabular-nums"})}
             onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=budgetText?"#6D28D9":"#E5E7EB"}/>
         </div>
-        <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:budgetText?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
-          {budgetText ? "Orçamento salvo automaticamente" : "Deixe em branco para não definir limite"}
+        <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:budgetText?900:600,transition:"color .25s ease, font-weight .25s ease",display:"flex",alignItems:"center",gap:6}}>
+          {budgetText ? "✓ Orçamento salvo automaticamente" : "Deixe em branco para não definir limite"}
         </div>
       </div>
     </div>
 
     {/* NOME DA LISTA */}
     <div style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
-      <label style={lbl}>Nome da lista</label>
+      <label style={lbl}>📝 Nome da lista</label>
       <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
         placeholder="Ex: Compras da semana..."
-        style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.14)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827",transition:"border-color .25s ease, box-shadow .25s ease, font-weight .25s ease, color .25s ease"})}
+        style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827"})}
         onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=listName?"#6D28D9":"#E5E7EB"}/>
-      <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:7,fontWeight:listName?900:500,transition:"color .25s ease, font-weight .25s ease"}}>
-        {listName ? "Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
+      <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:listName?900:600,transition:"color .25s ease, font-weight .25s ease"}}>
+        {listName ? "✓ Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
       </div>
     </div>
 
     {/* TIPO DE LISTA */}
     <div style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
-      <label style={lbl}>Tipo de lista</label>
+      <label style={lbl}>🏷 Tipo de lista</label>
       <div style={{position:"relative"}}>
         <select value={listType} onChange={e=>setListType(e.target.value)}
-          style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",cursor:"pointer",paddingRight:42}}>
+          style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",WebkitAppearance:"none",MozAppearance:"none",cursor:"pointer",paddingRight:46,fontWeight:700,color:"#111827"}}>
           {LIST_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6B7280",fontSize:14}}>▼</span>
+        <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6D28D9",fontSize:12,fontWeight:900,background:"#F5F3FF",borderRadius:999,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #DDD6FE"}}>▼</span>
       </div>
     </div>
 
     <div style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
-      <label style={lbl}>Adicionar itens</label>
-      <div style={{display:"flex",gap:8,marginBottom:8}}>
+      <label style={lbl}>🛒 Adicionar itens</label>
+      <div style={{display:"flex",gap:8,marginBottom:10}}>
         <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
           placeholder="Digite um item da lista"
           style={{...inp({height:56}),...tourHighlightStyle(isTourStep("create_item_input"))}} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
         <button onClick={handleAddItem}
-          style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 10px 22px rgba(109,40,217,0.22)",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
+          style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 12px 24px rgba(109,40,217,0.28), inset 0 1px 0 rgba(255,255,255,0.18)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
-      <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+      <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
         <button onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
-          style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
-          Colar lista
+          style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
+          📋 Colar lista
         </button>
         <VoiceInput
           target="list"
@@ -303,29 +325,29 @@ export default function CreateListScreen({
     </div>
 
     {pendingItems.length>0&&(
-      <div style={{background:"#FFFFFF",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 24px rgba(17,24,39,0.06)",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
-        <div style={{padding:"10px 14px",background:"#F9FAFB",borderBottom:"1px solid #E5E7EB",fontSize:12,fontWeight:700,color:"#6B7280",display:"flex",justifyContent:"space-between"}}>
-          <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"}</span>
-          <button onClick={()=>setPendingItems([])} style={{background:"none",border:"none",color:"#FF4444",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Limpar tudo</button>
+      <div style={{background:"linear-gradient(180deg,#FFFFFF,#FBFAFF)",borderRadius:22,overflow:"hidden",boxShadow:"0 12px 28px rgba(17,24,39,0.07)",border:"1px solid rgba(167,139,250,0.22)",animation:"tnl-create-pop .25s ease both",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
+        <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",borderBottom:"1px solid rgba(167,139,250,0.25)",fontSize:12,fontWeight:900,color:"#4C1D95",display:"flex",justifyContent:"space-between",alignItems:"center",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+          <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"} na pré-lista</span>
+          <button onClick={()=>setPendingItems([])} style={{background:"#FFFFFF",border:"1px solid #FECACA",color:"#DC2626",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",borderRadius:999,padding:"4px 10px",WebkitTapHighlightColor:"transparent"}}>Limpar tudo</button>
         </div>
         {pendingItems.map((item,i)=>{
           const emb=item.embalagem||"";
           return(
-            <div key={i} style={{padding:"11px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F0F2F5":"none",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:16}}>🛒</span>
+            <div key={i} style={{padding:"12px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F3F0FA":"none",display:"flex",alignItems:"center",gap:10,background:i%2===0?"transparent":"rgba(245,243,255,0.35)"}}>
+              <span style={{fontSize:16,width:30,height:30,borderRadius:10,background:"#F5F3FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EDE9FE"}}>🛒</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {[formatQtyUnit(item.qty,item.unit),item.marca,item.tipo,item.name,emb].filter(Boolean).join(" · ")}
                 </div>
               </div>
               <button onClick={()=>editPendingItem(i)}
-                style={{background:"#F5F3FF",border:"none",borderRadius:6,padding:"4px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14,marginRight:4}}>✏️</button>
+                style={{background:"#F5F3FF",border:"1px solid #EDE9FE",borderRadius:10,padding:"5px 10px",color:"#6D28D9",cursor:"pointer",fontSize:14,marginRight:4,WebkitTapHighlightColor:"transparent"}}>✏️</button>
               <button onClick={()=>setConfirmDeleteConfig({
                   title:"Excluir item?",
                   message:`Deseja excluir "${item.name || "item"}" da pré-lista?`,
                   onConfirm:()=>setPendingItems(prev=>prev.filter((_,j)=>j!==i)),
                 })}
-                style={{background:"#FFE8E8",border:"none",borderRadius:6,padding:"4px 10px",color:"#FF4444",cursor:"pointer",fontSize:14}}>×</button>
+                style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"5px 10px",color:"#DC2626",cursor:"pointer",fontSize:14,fontWeight:900,lineHeight:1,WebkitTapHighlightColor:"transparent"}}>×</button>
             </div>
           );
         })}
@@ -333,36 +355,35 @@ export default function CreateListScreen({
     )}
 
     {activePantry && pendingItems.length>0 && !pantryCompared && !editingListId && (
-      <div style={{background:"#ECFDF5",border:"1px solid #86EFAC",borderRadius:20,padding:14,color:"#166534",display:"flex",gap:10,alignItems:"flex-start"}}>
-        <div style={{fontSize:18}}>✅</div>
+      <div style={{background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",border:"1px solid #86EFAC",borderRadius:20,padding:14,color:"#166534",display:"flex",gap:10,alignItems:"flex-start",boxShadow:"0 10px 22px rgba(22,163,74,0.12)"}}>
+        <div style={{fontSize:20,width:36,height:36,borderRadius:12,background:"#FFFFFF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px rgba(22,163,74,0.18)"}}>✅</div>
         <div style={{flex:1}}>
           <div style={{fontWeight:900,fontSize:14}}>Itens em Casa ativa detectada</div>
-          <div style={{fontSize:12,fontWeight:700,lineHeight:1.4,marginTop:3}}>Sua pré-lista pode ser comparada com a Itens em Casa antes de organizar.</div>
+          <div style={{fontSize:12,fontWeight:600,lineHeight:1.45,marginTop:3,color:"#15803D"}}>Sua pré-lista pode ser comparada com a Itens em Casa antes de organizar.</div>
         </div>
       </div>
     )}
 
     {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId) ? (
       <button onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
-        style={{...createPrimaryBtn,background:"linear-gradient(135deg,#16A34A,#22C55E)",boxShadow:(loading||pendingItems.length===0)?"none":"0 16px 34px rgba(22,163,74,0.28)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
+        style={{...createPrimaryBtn,background:"linear-gradient(135deg,#15803D 0%,#16A34A 50%,#22C55E 100%)",boxShadow:(loading||pendingItems.length===0)?"none":"0 18px 38px rgba(22,163,74,0.32), inset 0 1px 0 rgba(255,255,255,0.18)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
         Comparar com Itens em Casa {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
       </button>
     ) : (
       <>
         <button onClick={organizeList} disabled={loading||pendingItems.length===0}
           style={{...createPrimaryBtn,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
-          {editingListId?"Salvar alterações":"Organizar com IA"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
+          {editingListId?"Salvar alterações":"✨ Organizar com IA"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
         </button>
         {pendingItems.length>0&&(
           <button onClick={organizeListKeepOrder} disabled={loading}
-            style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"#FAF9FF"}}>
+            style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)"}}>
             📝 Manter minha ordem
           </button>
         )}
       </>
     )}
   </div>
-
   <ConfirmDeleteModal
     open={Boolean(confirmDeleteConfig)}
     title={confirmDeleteConfig?.title || "Excluir?"}
