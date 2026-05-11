@@ -531,6 +531,7 @@ export default function ShoppingListPage3({
                         )}
                         <button
                           type="button"
+                          data-tour-step={idx === 0 ? "list_item_check" : undefined}
                           onClick={() => handleToggle(item.id, cat.key)}
                           aria-label={item.bought ? "Desmarcar item" : "Marcar como comprado"}
                           className={cn(
@@ -561,6 +562,7 @@ export default function ShoppingListPage3({
 
                         <button
                           type="button"
+                          data-tour-step={idx === 0 ? "list_item_price" : undefined}
                           onClick={() => onEditItem?.(item.id, cat.key)}
                           className="min-w-0 flex-1 text-left"
                         >
@@ -612,6 +614,24 @@ export default function ShoppingListPage3({
                             </p>
                           )}
                         </button>
+
+                        <button
+                          type="button"
+                          data-tour-step={idx === 0 ? "list_item_missing" : undefined}
+                          aria-label="Marcar item em falta"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition active:scale-90"
+                          style={{
+                            background:
+                              "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)",
+                            border: "1px solid rgba(167,139,250,0.35)",
+                            color: "#B91C1C",
+                            boxShadow:
+                              "0 1px 2px rgba(76,29,149,0.06)",
+                          }}
+                        >
+                          ∅
+                        </button>
+
                       </li>
                     );
                   })}
@@ -663,6 +683,7 @@ export default function ShoppingListPage3({
         <div className="pointer-events-none fixed inset-x-0 bottom-5 z-10 flex justify-center px-4">
           <button
             type="button"
+            data-tour-step="list_extra_item"
             onClick={() => onAddExtraItem()}
             className="pointer-events-auto inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-extrabold transition active:scale-95"
             style={{
