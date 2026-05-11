@@ -11,6 +11,7 @@ export default function GuidedTourController({
   onClose,
   onSkip,
   screen,
+  externalRect,
 }) {
   if (!show || !step || userNameModal) return null;
 
@@ -25,6 +26,7 @@ export default function GuidedTourController({
       onSkip={onSkip}
       showPrev={screen !== "home"}
       showSkip={screen !== "home" && total > 1}
+      externalRect={externalRect}
     />
   );
 }
