@@ -202,7 +202,7 @@ export default function CreateListScreen({
   </div>
   <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
-    <div style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
+    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
         <div style={{flex:1,minWidth:0}}>
@@ -250,12 +250,12 @@ export default function CreateListScreen({
       </div>
       <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
         {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-        <button onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
+        <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
       </div>
     </div>
 
     {/* ORÇAMENTO */}
-    <div style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
+    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
       <label style={lbl}>💰 Orçamento</label>
       <div>
         <div style={{position:"relative"}}>
@@ -272,7 +272,7 @@ export default function CreateListScreen({
     </div>
 
     {/* NOME DA LISTA */}
-    <div style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
+    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
       <label style={lbl}>📝 Nome da lista</label>
       <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
         placeholder="Ex: Compras da semana..."
@@ -284,7 +284,7 @@ export default function CreateListScreen({
     </div>
 
     {/* TIPO DE LISTA */}
-    <div style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
+    <div data-tour-step={isTourStep("create_type") ? "create_type" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
       <label style={lbl}>🏷 Tipo de lista</label>
       <div style={{position:"relative"}}>
         <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -295,19 +295,19 @@ export default function CreateListScreen({
       </div>
     </div>
 
-    <div style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
+    <div data-tour-step={isTourStep("create_item_input") ? "create_item_input" : isTourStep("create_item_insert") ? "create_item_insert" : isTourStep("create_item_paste") ? "create_item_paste" : isTourStep("create_item_voice") ? "create_item_voice" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
       <label style={lbl}>🛒 Adicionar itens</label>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
-        <input value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
+        <input data-tour-step={isTourStep("create_item_input") ? "create_item_input" : undefined} value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
           placeholder="Digite um item da lista"
           style={{...inp({height:56}),...tourHighlightStyle(isTourStep("create_item_input"))}} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-        <button onClick={handleAddItem}
+        <button data-tour-step={isTourStep("create_item_insert") ? "create_item_insert" : undefined} onClick={handleAddItem}
           style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 12px 24px rgba(109,40,217,0.28), inset 0 1px 0 rgba(255,255,255,0.18)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
-        <button onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
+        <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
           style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
           📋 Colar lista
         </button>
@@ -325,7 +325,7 @@ export default function CreateListScreen({
     </div>
 
     {pendingItems.length>0&&(
-      <div style={{background:"linear-gradient(180deg,#FFFFFF,#FBFAFF)",borderRadius:22,overflow:"hidden",boxShadow:"0 12px 28px rgba(17,24,39,0.07)",border:"1px solid rgba(167,139,250,0.22)",animation:"tnl-create-pop .25s ease both",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
+      <div data-tour-step={isTourStep("create_items_preview") ? "create_items_preview" : undefined} style={{background:"linear-gradient(180deg,#FFFFFF,#FBFAFF)",borderRadius:22,overflow:"hidden",boxShadow:"0 12px 28px rgba(17,24,39,0.07)",border:"1px solid rgba(167,139,250,0.22)",animation:"tnl-create-pop .25s ease both",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",borderBottom:"1px solid rgba(167,139,250,0.25)",fontSize:12,fontWeight:900,color:"#4C1D95",display:"flex",justifyContent:"space-between",alignItems:"center",textTransform:"uppercase",letterSpacing:"0.05em"}}>
           <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"} na pré-lista</span>
           <button onClick={()=>setPendingItems([])} style={{background:"#FFFFFF",border:"1px solid #FECACA",color:"#DC2626",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",borderRadius:999,padding:"4px 10px",WebkitTapHighlightColor:"transparent"}}>Limpar tudo</button>
@@ -365,13 +365,13 @@ export default function CreateListScreen({
     )}
 
     {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId) ? (
-      <button onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
+      <button data-tour-step={isTourStep("create_ai") ? "create_ai" : undefined} onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
         style={{...createPrimaryBtn,background:"linear-gradient(135deg,#15803D 0%,#16A34A 50%,#22C55E 100%)",boxShadow:(loading||pendingItems.length===0)?"none":"0 18px 38px rgba(22,163,74,0.32), inset 0 1px 0 rgba(255,255,255,0.18)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
         Comparar com Itens em Casa {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
       </button>
     ) : (
       <>
-        <button onClick={organizeList} disabled={loading||pendingItems.length===0}
+        <button data-tour-step={isTourStep("create_ai") ? "create_ai" : undefined} onClick={organizeList} disabled={loading||pendingItems.length===0}
           style={{...createPrimaryBtn,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
           {editingListId?"Salvar alterações":"✨ Organizar com IA"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
         </button>
