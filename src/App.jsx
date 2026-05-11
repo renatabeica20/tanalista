@@ -116,6 +116,7 @@ import ProductEditorModal from "./components/ProductEditorModal";
 import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
+import ShoppingListPreview from "./components/ShoppingListPreview";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -280,7 +281,6 @@ function ensureMobileViewport() {
         max-width: 100%;
         min-height: 100dvh;
         overflow-x: hidden;
-        isolation: isolate;
       }
       #root > * {
         max-width: 100%;
@@ -487,17 +487,7 @@ function setGuidedTourCompleted(value = "done") {
 
 function tourHighlightStyle(active) {
   if (!active) return {};
-  return {
-    position: "relative",
-    zIndex: 735,
-    opacity: 1,
-    filter: "brightness(1.18) saturate(1.12)",
-    outline: "3px solid rgba(255,255,255,0.98)",
-    outlineOffset: 3,
-    boxShadow: "0 0 0 6px rgba(255,255,255,0.98), 0 0 0 14px rgba(124,58,237,0.58), 0 30px 72px rgba(76,29,149,0.52)",
-    transform: "translateY(-2px) scale(1.018)",
-    transition: "box-shadow .25s ease, transform .25s ease, filter .25s ease",
-  };
+  return { filter: "brightness(1.08) saturate(1.05)" };
 }
 
 
@@ -3216,6 +3206,13 @@ function HelpIcon({ text = "" }) {
 
 export default function App(){
 
+  const TNL_USE_LOVABLE_PREVIEW = false;
+
+  if (TNL_USE_LOVABLE_PREVIEW) {
+    return <ShoppingListPreview />;
+  }
+
+
   useEffect(() => {
     ensureMobileViewport();
   }, []);
@@ -3240,6 +3237,7 @@ const [lists,setLists]=useState(()=>{
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
+  const tourItemRef=useRef(null);
   const swipeStartRef=useRef({x:0,y:0,t:0,active:false});
   const priceInputRef=useRef(null);
 
@@ -3320,6 +3318,7 @@ const [lists,setLists]=useState(()=>{
 
   // List screen
   const [search,setSearch]=useState("");
+  const [tourItemRect,setTourItemRect]=useState(null);
   const [collapsedCats,setCollapsedCats]=useState({});
 
   // Item modal
@@ -4099,6 +4098,27 @@ const [lists,setLists]=useState(()=>{
       showToast("☁️ Listas locais sincronizadas com sua conta",2200);
     }
   },[lists,persistListRecordToCloud,showToast]);
+  // Mede o primeiro ItemRow via ref quando o tour está nos passos 3/4/5
+  useEffect(() => {
+    const itemSteps = ["list_item_check", "list_item_price", "list_item_missing"];
+    if (!showGuidedTour || !guidedTourStep || !itemSteps.includes(guidedTourStep.id)) {
+      setTourItemRect(null);
+      return;
+    }
+    const measure = () => {
+      const el = tourItemRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const pad = 10;
+        setTourItemRect({ x: r.left-pad, y: r.top-pad, w: r.width+pad*2, h: r.height+pad*2, centerY: r.top+r.height/2 });
+      }
+    };
+    measure();
+    const t = setTimeout(measure, 300);
+    return () => clearTimeout(t);
+  }, [showGuidedTour, guidedTourStep?.id]);
+
   useEffect(()=>{
     const existingName=getAppUserName();
     if(existingName && isPinSessionVerified(existingName)){
@@ -6463,6 +6483,59 @@ return rebuiltHistory;
     }
   };
 
+  useEffect(()=>{
+    const handleListMenuAction=(event)=>{
+      const detail=event?.detail || {};
+      const action=detail.action;
+      const listId=detail.listId;
+      if(!action || !listId)return;
+
+      const target=(Array.isArray(lists)?lists:[]).find(l=>(
+        l?.id===listId ||
+        l?.sharedId===listId ||
+        l?.id===String(listId) ||
+        l?.sharedId===String(listId)
+      ));
+
+      if(!target){
+        showToast("⚠️ Lista não encontrada para executar a ação.",1800);
+        return;
+      }
+
+      setListMenuId(null);
+
+      if(action==="edit"){
+        openListForEdit(target);
+        return;
+      }
+
+      if(action==="share"){
+        setCurrentList(target);
+        setShareTargetList(target);
+        setShareModal(true);
+        return;
+      }
+
+      if(action==="duplicate"){
+        duplicateList(target);
+        return;
+      }
+
+      if(action==="stopSharing"){
+        stopListSharing(target);
+        return;
+      }
+
+      if(action==="delete"){
+        setConfirmDelete(target.id);
+        return;
+      }
+    };
+
+    window.addEventListener("tnl:list-menu-action",handleListMenuAction);
+    return()=>window.removeEventListener("tnl:list-menu-action",handleListMenuAction);
+  },[lists,currentList]);
+
   const closeFinishedModal=()=>{
     markActivePantryAsCompleted(currentList);
     setShowFinished(false);
@@ -6986,6 +7059,32 @@ return rebuiltHistory;
 
 
   // ─────────────────────────────────────────────────────────────────────
+  const globalFirstPendingKey = (() => {
+    if (!currentList?.categories) return null;
+    const sortedCats = [...currentList.categories]
+      .map((cat, oi) => ({ cat, oi }))
+      .sort((a, b) => {
+        const aX = normalizePlainText(a.cat.name) === "itens extras";
+        const bX = normalizePlainText(b.cat.name) === "itens extras";
+        if (aX !== bX) return aX ? 1 : -1;
+        const aD = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
+        const bD = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
+        if (aD === bD) return a.oi - b.oi;
+        return aD ? 1 : -1;
+      });
+    for (const { cat } of sortedCats) {
+      const items = [...cat.items].sort((a, b) => {
+        const aD = !!(a.checked || a.notFound);
+        const bD = !!(b.checked || b.notFound);
+        if (aD === bD) return !aD ? String(a.name||"").localeCompare(String(b.name||""),"pt-BR") : 0;
+        return aD ? 1 : -1;
+      });
+      const first = items.find(i => !i.checked && !i.notFound);
+      if (first) return `${first.name}||${first.unit}||${first.qty}`;
+    }
+    return null;
+  })();
+
   if(showNotificationsScreen) return (
     <NotificationsPanel
       notifications={notifications}
@@ -7110,7 +7209,7 @@ return rebuiltHistory;
     <div
       onTouchStart={handleSwipeStart}
       onTouchEnd={handleSwipeEnd}
-      style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",isolation:"isolate",touchAction:"pan-y"}}
+      style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box",touchAction:"pan-y"}}
     >
       <AppHeader
         userName={getAppUserName()}
@@ -7176,6 +7275,7 @@ return rebuiltHistory;
       <GuidedTourController
         show={showGuidedTour}
         step={guidedTourStep}
+        externalRect={tourItemRect}
         userNameModal={userNameModal}
         index={guidedTourLocalIndex}
         total={guidedTourLocalTotal}
@@ -7261,88 +7361,133 @@ return rebuiltHistory;
           HOME
       ════════════════════════════════════ */}
       {listMenuId&&screen==="home"&&<div onClick={()=>setListMenuId(null)} style={{position:"fixed",inset:0,zIndex:298}}/>}
-      {screen==="home"&&(
+           {screen==="home"&&(
 <HomeScreen>
-        <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(180deg,#FAFAFF 0%,#FFFFFF 44%,#F8FAFC 100%)",position:"relative"}}>
-          <div style={{background:"linear-gradient(180deg,#FFFFFF 0%,#F5F3FF 100%)",paddingTop:24,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:28,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",borderBottom:"1px solid #E9D5FF",boxShadow:"0 14px 38px rgba(109,40,217,0.10)"}}>
-            <div style={{position:"absolute",top:-70,right:-70,width:250,height:250,background:"rgba(109,40,217,0.08)",borderRadius:"50%"}}/>
-            <div style={{position:"absolute",bottom:-44,left:-44,width:180,height:180,background:"rgba(139,92,246,0.09)",borderRadius:"50%"}}/>
+        <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(160deg,#f5f0ff 0%,#faf8ff 40%,#f0f4ff 100%)",position:"relative"}}>
+
+          {/* ── BANNER SUPERIOR ── */}
+          <div style={{background:"linear-gradient(135deg,#6d28d9 0%,#7c3aed 54%,#9f67fa 100%)",paddingTop:28,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:32,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",boxShadow:"0 16px 48px rgba(109,40,217,0.28)"}}>
+            {/* Orbes decorativos */}
+            <div style={{position:"absolute",top:-80,right:-60,width:240,height:240,background:"radial-gradient(circle,rgba(255,255,255,0.14),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",bottom:-50,left:-40,width:180,height:180,background:"radial-gradient(circle,rgba(255,255,255,0.10),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
             <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-              <div style={{textAlign:"center",background:"rgba(255,255,255,0.58)",border:"1px solid rgba(221,214,254,0.72)",borderRadius:28,padding:"18px 18px 16px",width:"100%",boxShadow:"0 18px 42px rgba(109,40,217,0.08)",backdropFilter:"blur(8px)"}}>
+              <div style={{textAlign:"center",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:28,padding:"20px 20px 18px",width:"100%",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
                 <BrandWordmark />
-                <div style={{color:"#6B7280",fontSize:13,lineHeight:1.45,fontStyle:"italic",fontWeight:700,marginTop:14}}>Organize, compartilhe e controle o orçamento</div>
+                <div style={{color:"rgba(255,255,255,0.80)",fontSize:13,lineHeight:1.5,fontStyle:"italic",fontWeight:500,marginTop:12}}>Organize, compartilhe e controle o orçamento</div>
                 <button
                   onClick={()=>startGuidedTour("home")}
-                  style={{marginTop:14,border:"none",borderRadius:999,padding:"11px 16px",background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",color:"#FFFFFF",fontWeight:950,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 12px 26px rgba(109,40,217,0.22)"}}
+                  style={{marginTop:16,border:"1.5px solid rgba(255,255,255,0.40)",borderRadius:999,padding:"11px 20px",background:"rgba(255,255,255,0.18)",color:"#FFFFFF",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",transition:"background 0.2s"}}
                 >
                   ✨ Como usar o app
                 </button>
               </div>
             </div>
           </div>
-          <div style={{paddingTop:20,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-              <div style={{fontWeight:900,fontSize:12,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.9px"}}>Módulos</div>
-              <div style={{fontSize:12,color:"#8B5CF6",fontWeight:800}}>6 áreas integradas</div>
+
+          {/* ── GRADE DE MÓDULOS ── */}
+          <div style={{paddingTop:24,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontWeight:800,fontSize:11,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"1.2px"}}>Módulos</div>
+              <div style={{fontSize:12,color:"#7c3aed",fontWeight:700,background:"#f0ebff",padding:"3px 10px",borderRadius:999}}>6 áreas integradas</div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:30}}>
-              {[
-                {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
-                {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
-                {iconType:"conta",name:"Conta",desc:"Dividir despesas",active:false},
-                {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
-                {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
-                {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
-              ].map(m=>{
-                const inactive = !m.active;
-                return (
-                  <div
-                    key={m.name}
-                    onClick={()=>{if(m.active){setEditingListId(null);setEditingDraftCopyId(null);setPendingItems([]);setCurrentInput("");setScreen("create");}}}
-                    aria-disabled={inactive}
-                    title={inactive ? `${m.name} - módulo em breve` : "Abrir módulo Compras"}
-                    style={{
-                      background:m.active
-                        ? "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)"
-                        : "linear-gradient(180deg,#FFFFFF 0%,#F8F8F9 100%)",
-                      borderRadius:24,
-                      padding:m.active?"20px 14px":"18px 14px",
-                      cursor:m.active?"pointer":"not-allowed",
-                      boxShadow:m.active
-                        ? "0 22px 48px rgba(109,40,217,0.20), 0 4px 10px rgba(109,40,217,0.08)"
-                        : "0 8px 22px rgba(17,24,39,0.045)",
-                      border:m.active?"2px solid #B794F6":"1px solid #E5E7EB",
-                      position:"relative",
-                      overflow:"hidden",
-                      textAlign:"center",
-                      display:"flex",
-                      flexDirection:"column",
-                      alignItems:"center",
-                      justifyContent:"center",
-                      minHeight:m.active?164:154,
-                      transform:m.active?"translateY(-2px)":"none",
-                      transition:"transform .2s ease, box-shadow .2s ease, border-color .2s ease",
-                      ...(m.active ? tourHighlightStyle(isTourStep("home_compras")) : {}),
-                    }}
-                  >
-                    {m.active&&(
-                      <div style={{position:"absolute",top:10,right:10,background:"#ECFDF5",color:"#047857",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #A7F3D0",zIndex:3}}>Ativo</div>
-                    )}
-                    {inactive&&(
-                      <>
-                        <div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.42)",zIndex:1,pointerEvents:"none"}} />
-                        <div style={{position:"absolute",top:10,right:10,background:"#F3F4F6",color:"#6B7280",fontSize:9,fontWeight:900,padding:"3px 8px",borderRadius:180,textTransform:"uppercase",border:"1px solid #D1D5DB",zIndex:3}}>Em breve</div>
-                      </>
-                    )}
-                    <div style={{position:"relative",zIndex:2,display:"flex",justifyContent:"center",alignItems:"center",marginBottom:12,filter:m.active?"none":"grayscale(1) saturate(0) contrast(0.88)",opacity:m.active?1:0.54}}>
-                      <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
-                    </div>
-                    <div style={{position:"relative",zIndex:2,fontWeight:900,fontSize:m.active?16:15,color:m.active?"#111827":"#6B7280",textAlign:"center",width:"100%"}}>{m.name}</div>
-                    <div style={{position:"relative",zIndex:2,fontSize:12,color:m.active?"#6B7280":"#9CA3AF",marginTop:4,lineHeight:1.35,textAlign:"center",width:"100%",fontWeight:600}}>{m.desc}</div>
-                  </div>
-                );
-              })}
-            </div>
+  {[
+    {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
+    {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
+    {iconType:"conta",name:"Conta",desc:"Dividir despesas",active:false},
+    {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
+    {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
+    {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
+  ].map(m=>{
+    const inactive = !m.active;
+    return (
+      <div
+        key={m.name}
+        role="button"
+        tabIndex={m.active ? 0 : -1}
+        aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
+        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
+        onClick={() => {
+          if (!m.active) return;
+          setScreen("create");
+        }}
+        onKeyDown={(e) => {
+          if (!m.active) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setScreen("create");
+          }
+        }}
+        style={{
+          background: m.active
+            ? "linear-gradient(140deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)"
+            : "linear-gradient(180deg,#FFFFFF 0%,#FAFAFE 100%)",
+          borderRadius: 22,
+          padding: m.active ? "20px 14px" : "18px 14px",
+          cursor: m.active ? "pointer" : "not-allowed",
+          boxShadow: m.active
+            ? "0 22px 48px -12px rgba(109,40,217,0.55), 0 6px 18px -8px rgba(76,29,149,0.4), inset 0 1px 0 rgba(255,255,255,0.18)"
+            : "0 4px 14px rgba(17,24,39,0.04)",
+          border: m.active
+            ? "1px solid rgba(255,255,255,0.18)"
+            : "1px solid #EDE9FE",
+          position: "relative", overflow: "hidden", textAlign: "center",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          minHeight: m.active ? 164 : 154,
+          transition: "transform 180ms ease, box-shadow 220ms ease",
+        }}>
+        {m.active && (
+          <>
+            <div aria-hidden style={{
+              position:"absolute", top:-40, right:-40, width:140, height:140, borderRadius:"50%",
+              background:"radial-gradient(circle,rgba(255,255,255,0.25),rgba(255,255,255,0) 70%)",
+              pointerEvents:"none"
+            }}/>
+            <div style={{
+              position:"absolute", top:10, right:10,
+              background:"#FFFFFF", color:"#6D28D9",
+              fontSize:9, fontWeight:900, padding:"3px 9px",
+              borderRadius:180, textTransform:"uppercase",
+              letterSpacing:"0.08em",
+              boxShadow:"0 4px 10px -2px rgba(0,0,0,0.18)"
+            }}>Ativo</div>
+          </>
+        )}
+        {inactive && (
+          <div style={{
+            position:"absolute", top:10, right:10,
+            background:"#EDE9FE", color:"#7C3AED",
+            fontSize:9, fontWeight:900, padding:"3px 9px",
+            borderRadius:180, textTransform:"uppercase",
+            letterSpacing:"0.08em",
+            border:"1px solid #DDD6FE"
+          }}>Em breve</div>
+        )}
+        <div style={{
+          filter: inactive ? "grayscale(1)" : "none",
+          opacity: inactive ? 0.55 : 1,
+          transition: "filter 200ms ease, opacity 200ms ease",
+        }}>
+          <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
+        </div>
+        <div style={{
+          fontWeight: 900,
+          fontSize: m.active ? 16 : 15,
+          color: m.active ? "#FFFFFF" : "#6B7280",
+          marginTop: 4,
+          letterSpacing: "-0.01em",
+        }}>{m.name}</div>
+        <div style={{
+          fontSize: 12,
+          color: m.active ? "rgba(255,255,255,0.85)" : "#9CA3AF",
+          marginTop: 4,
+          fontWeight: 500,
+        }}>{m.desc}</div>
+      </div>
+    );
+  })}
+</div>
+
 
             <ListsSection
               lists={lists}
@@ -7377,6 +7522,7 @@ return rebuiltHistory;
         </div>
      </HomeScreen>
 )}
+
 
       {/* CONFIRM DELETE */}
       <ConfirmDeleteModal
@@ -7591,7 +7737,7 @@ return rebuiltHistory;
             const suggs = getSuggestions();
             const preview = suggs.slice(0, 3);
             return (
-              <div style={{padding:"0 20px",margin:"12px 0 10px"}}>
+              <div data-tour-step="list_budget_alert" style={{padding:"0 20px",margin:"12px 0 10px"}}>
                 <div style={{
                   background:"linear-gradient(135deg,#FFF7ED 0%,#FEF2F2 100%)",
                   border:"1px solid #FDBA74",
@@ -7786,6 +7932,7 @@ return rebuiltHistory;
             );
           })()}
 
+          <div data-tour-step="list_search">
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7793,9 +7940,10 @@ return rebuiltHistory;
             inputStyle={{ ...inp({ padding: "12px 16px 12px 42px", borderRadius: 180 }) }}
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
+          </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
+          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
@@ -7851,9 +7999,11 @@ return rebuiltHistory;
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
+                        const isFP=`${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey;
                         return(
                           <ItemRow
                             key={`${ci}-${realII}-${item.name || "item"}`}
+                            rowRef={isFP ? tourItemRef : null}
                             item={item}
                             ci={ci}
                             ii={ii}
@@ -7875,6 +8025,7 @@ return rebuiltHistory;
                             hexToRgba={hexToRgba}
                             PriceMonthBadge={PriceMonthBadge}
                             PriceMemoryLine={PriceMemoryLine}
+                            isFirstItem={`${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey}
                             priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
                             checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
                             missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
@@ -7888,10 +8039,12 @@ return rebuiltHistory;
             })}
           </div>
 
+          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
+          </div>
         </div>
       )}
 

@@ -35,25 +35,195 @@ export default function SharedListModal({
 
   return (
     <ModalSheet onClose={onClose}>
-      <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4,textAlign:"center"}}>Compartilhar lista</div>
-      <div style={{fontSize:13,color:"#6B7280",marginBottom:16,textAlign:"center"}}>Envio disponível pelo WhatsApp</div>
-      <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:12,marginBottom:12}}>
-        <label style={{display:"block",fontSize:12,fontWeight:800,color:"#4B5563",marginBottom:7}}>Seu nome</label>
-        <input
-          value={senderName}
-          onChange={(e) => onSenderNameChange?.(e.target.value)}
-          placeholder="Ex: Cadu"
-          style={{width:"100%",boxSizing:"border-box",border:"1px solid #D9DDE6",borderRadius:14,padding:"11px 12px",fontSize:14,fontWeight:700,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF"}}
+      <div style={{ position: "relative" }}>
+        {/* decorative glow */}
+        <span
+          aria-hidden
+          style={{
+            pointerEvents: "none",
+            position: "absolute",
+            top: -40,
+            right: -30,
+            width: 160,
+            height: 160,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(167,139,250,0.22) 0%, rgba(167,139,250,0) 70%)",
+            filter: "blur(6px)",
+          }}
         />
-        <div style={{fontSize:12,color:"#6B7280",fontStyle:"italic",marginTop:7}}>Quem receberá a lista verá seu nome</div>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <button
-          onClick={onShareWhatsApp}
-          style={{width:"100%",padding:16,borderRadius:20,background:"#25D366",border:"none",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:12}}
+
+        <div
+          style={{
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginBottom: 14,
+          }}
         >
-          <WhatsAppIcon size={20} /> WhatsApp
-        </button>
+          <div
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background:
+                "linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 60%,#DDD6FE 100%)",
+              border: "1px solid rgba(167,139,250,0.40)",
+              boxShadow:
+                "0 12px 26px -10px rgba(124,58,237,0.40), inset 0 1px 0 rgba(255,255,255,0.95)",
+              marginBottom: 10,
+              fontSize: 28,
+            }}
+          >
+            📤
+          </div>
+          <div
+            style={{
+              fontWeight: 900,
+              fontSize: 20,
+              letterSpacing: "-0.015em",
+              textAlign: "center",
+              background:
+                "linear-gradient(135deg,#1F2937 0%,#4C1D95 65%,#6D28D9 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            Compartilhar lista
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "#6B7280",
+              fontWeight: 600,
+              marginTop: 4,
+              textAlign: "center",
+              lineHeight: 1.45,
+            }}
+          >
+            Envio disponível pelo WhatsApp
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            background:
+              "linear-gradient(180deg,#FFFFFF 0%,#FDFBFF 60%,#F8F4FF 100%)",
+            border: "1px solid rgba(167,139,250,0.32)",
+            borderRadius: 20,
+            padding: 14,
+            marginBottom: 14,
+            boxShadow:
+              "0 8px 22px -10px rgba(124,58,237,0.18), inset 0 1px 0 rgba(255,255,255,0.95)",
+          }}
+        >
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11.5,
+              fontWeight: 900,
+              color: "#4C1D95",
+              marginBottom: 8,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            <span>👤</span> Seu nome
+          </label>
+          <input
+            value={senderName}
+            onChange={(e) => onSenderNameChange?.(e.target.value)}
+            placeholder="Ex: Cadu"
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              border: "1.5px solid rgba(167,139,250,0.45)",
+              borderRadius: 14,
+              padding: "13px 14px",
+              fontSize: 15,
+              fontWeight: 700,
+              color: "#111827",
+              outline: "none",
+              fontFamily: "inherit",
+              background:
+                "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)",
+              boxShadow:
+                "inset 0 1px 2px rgba(76,29,149,0.06), 0 1px 0 rgba(255,255,255,0.9)",
+              transition: "border-color .2s ease, box-shadow .2s ease",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "rgba(124,58,237,0.65)";
+              e.currentTarget.style.boxShadow =
+                "0 0 0 4px rgba(124,58,237,0.14), inset 0 1px 2px rgba(76,29,149,0.08)";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "rgba(167,139,250,0.45)";
+              e.currentTarget.style.boxShadow =
+                "inset 0 1px 2px rgba(76,29,149,0.06), 0 1px 0 rgba(255,255,255,0.9)";
+            }}
+          />
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6B7280",
+              fontWeight: 600,
+              marginTop: 8,
+              lineHeight: 1.45,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 13 }}>💡</span>
+            Quem receberá a lista verá seu nome
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button
+            onClick={onShareWhatsApp}
+            style={{
+              width: "100%",
+              minHeight: 56,
+              padding: "14px 16px",
+              borderRadius: 18,
+              background:
+                "linear-gradient(135deg,#128C7E 0%,#1FAD61 50%,#25D366 100%)",
+              border: "none",
+              color: "white",
+              fontWeight: 900,
+              fontSize: 15.5,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              letterSpacing: "-0.005em",
+              boxShadow:
+                "0 16px 32px -8px rgba(37,211,102,0.50), 0 6px 14px rgba(37,211,102,0.28), inset 0 1px 0 rgba(255,255,255,0.30)",
+              transition: "transform .15s ease, box-shadow .2s ease",
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
+            }}
+            onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
+            onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            onTouchStart={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
+            onTouchEnd={(e) => (e.currentTarget.style.transform = "scale(1)")}
+          >
+            <WhatsAppIcon size={22} /> Enviar pelo WhatsApp
+          </button>
+        </div>
       </div>
     </ModalSheet>
   );
