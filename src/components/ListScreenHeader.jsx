@@ -86,6 +86,7 @@ export default function ListScreenHeader({
               onClick={onBackHome}
               title="Voltar para a tela inicial"
               aria-label="Voltar"
+              data-tour-step={tour("list_back_home") ? "list_back_home" : undefined}
               style={{
                 background: "rgba(255,255,255,0.98)",
                 border: "1px solid rgba(255,255,255,0.7)",
@@ -160,6 +161,7 @@ export default function ListScreenHeader({
 
             <button
               onClick={onShare}
+              data-tour-step={tour("list_share") ? "list_share" : undefined}
               style={{
                 background: "rgba(255,255,255,0.16)",
                 border: "1px solid rgba(255,255,255,0.32)",
