@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 export default function ListCard({
   list,
   variant = "recent",
@@ -24,10 +26,7 @@ export default function ListCard({
 
   useEffect(() => {
     const handleOutside = (e) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target)
-      ) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
         setListMenuId(null);
       }
     };
@@ -53,7 +52,6 @@ export default function ListCard({
   };
 
   const originMeta = getListOriginMeta(list);
-
   const shared = list.isShared === true;
 
   const editableCopy = Boolean(
@@ -66,18 +64,13 @@ export default function ListCard({
       list?.status === "draft"
   );
 
-  const finished = editableCopy
-    ? false
-    : isListFinished(list);
-
+  const finished = editableCopy ? false : isListFinished(list);
   const canEditList = editableCopy || !finished;
 
   const stats =
     variant === "history"
       ? getListCardStats(list)
       : null;
-
-  const isHistory = variant === "history";
 
   const openList = () => {
     setCurrentList(list);
@@ -222,8 +215,6 @@ export default function ListCard({
                   "1px solid rgba(100,80,200,0.12)",
                 zIndex: 99999,
                 overflow: "hidden",
-                animation:
-                  "fadeIn .18s ease-out",
               }}
             >
               {canEditList && (
@@ -309,4 +300,3 @@ function itemStyle(color = "#111827") {
     gap: 10,
   };
 }
-```
