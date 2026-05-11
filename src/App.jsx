@@ -486,12 +486,8 @@ function setGuidedTourCompleted(value = "done") {
 }
 
 function tourHighlightStyle(active) {
-  // O destaque visual é feito pelo SVG mask no GuidedTourOverlay.
-  // Retorna apenas um leve brilho para não conflitar com o buraco do SVG.
   if (!active) return {};
-  return {
-    filter: "brightness(1.08) saturate(1.05)",
-  };
+  return { filter: "brightness(1.08) saturate(1.05)" };
 }
 
 
@@ -7834,7 +7830,6 @@ return rebuiltHistory;
           })()}
 
           <div data-tour-step="list_search">
-          <div data-tour-step="list_search" style={{padding:"0 20px",margin:"-4px 0 0"}}>
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7843,11 +7838,35 @@ return rebuiltHistory;
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
           </div>
-          </div>
 
           {/* Categorias com cores */}
           <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
-            {[...currentList.categories]
+            {(()=>{
+              // Calcula a chave do primeiro item pendente globalmente
+              // para passar isFirstItem=true apenas para esse item específico
+              let globalFirstPendingKey = null;
+              const sortedCats = [...currentList.categories]
+                .map((cat,origIdx)=>({cat,origIdx}))
+                .sort((a,b)=>{
+                  const aExtra=normalizePlainText(a.cat.name)==="itens extras";
+                  const bExtra=normalizePlainText(b.cat.name)==="itens extras";
+                  if(aExtra!==bExtra)return aExtra?1:-1;
+                  const aDone=a.cat.items.length>0&&a.cat.items.every(i=>i.checked||i.notFound);
+                  const bDone=b.cat.items.length>0&&b.cat.items.every(i=>i.checked||i.notFound);
+                  if(aDone===bDone)return a.origIdx-b.origIdx;
+                  return aDone?1:-1;
+                });
+              for(const {cat} of sortedCats){
+                const pending=[...cat.items].sort((a,b)=>{
+                  const aDone=!!(a.checked||a.notFound);
+                  const bDone=!!(b.checked||b.notFound);
+                  if(aDone===bDone) return !aDone?String(a.name||"").localeCompare(String(b.name||""),"pt-BR"):0;
+                  return aDone?1:-1;
+                });
+                const first=pending.find(i=>!i.checked&&!i.notFound);
+                if(first){ globalFirstPendingKey=`${first.name}__${first.unit}__${first.qty}`; break; }
+              }
+              return [...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
                 const aExtra=normalizePlainText(a.cat.name)==="itens extras";
@@ -7926,7 +7945,7 @@ return rebuiltHistory;
                             hexToRgba={hexToRgba}
                             PriceMonthBadge={PriceMonthBadge}
                             PriceMemoryLine={PriceMemoryLine}
-                            isFirstItem={ii===0 && !item.checked && !item.notFound}
+                            isFirstItem={`${item.name}__${item.unit}__${item.qty}`===globalFirstPendingKey}
                             priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
                             checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
                             missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
@@ -7938,15 +7957,14 @@ return rebuiltHistory;
                 </div>
               );
             })}
+          })()}
           </div>
 
-          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
-          </div>
           </div>
         </div>
       )}
