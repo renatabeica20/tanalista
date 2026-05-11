@@ -7313,6 +7313,7 @@ return rebuiltHistory;
         role="button"
         tabIndex={m.active ? 0 : -1}
         aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
+        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
         onClick={() => {
           if (!m.active) return;
           setScreen("create");
@@ -7636,7 +7637,7 @@ return rebuiltHistory;
 
           {/* Search */}
           <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
-            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
+            <button data-tour-step="list_swipe" onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
           </div>
           {/* Card integrado: orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
@@ -7838,6 +7839,7 @@ return rebuiltHistory;
             );
           })()}
 
+          <div data-tour-step="list_search">
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7845,9 +7847,10 @@ return rebuiltHistory;
             inputStyle={{ ...inp({ padding: "12px 16px 12px 42px", borderRadius: 180 }) }}
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
+          </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
+          <div ref={listRef} data-tour-step="list_items" style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
@@ -7940,10 +7943,12 @@ return rebuiltHistory;
             })}
           </div>
 
+          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
+          </div>
         </div>
       )}
 
