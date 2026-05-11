@@ -7637,7 +7637,7 @@ return rebuiltHistory;
 
           {/* Search */}
           <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
-            <button data-tour-step="list_swipe" onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
+            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
           </div>
           {/* Card integrado: orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
@@ -7850,7 +7850,7 @@ return rebuiltHistory;
           </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
+          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
