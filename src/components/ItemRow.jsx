@@ -41,21 +41,10 @@ export default function ItemRow({
         ? "linear-gradient(180deg, #FFFAF2 0%, #FFFFFF 75%)"
         : "#FFFFFF";
 
-  // Preserva scroll ao marcar/desmarcar (sem alterar o callback original).
+  // Apenas dispara o callback — sem manipular scroll do window.
   const handleToggleCheck = (e) => {
     e.stopPropagation();
-    const scroller = document.scrollingElement || document.documentElement;
-    const y = scroller ? scroller.scrollTop : window.scrollY;
     onToggleCheck?.(ci, realII);
-    const restore = () => {
-      if (scroller) scroller.scrollTop = y;
-      else window.scrollTo(0, y);
-    };
-    requestAnimationFrame(() => {
-      restore();
-      requestAnimationFrame(restore);
-      setTimeout(restore, 60);
-    });
   };
 
   return (
@@ -73,29 +62,10 @@ export default function ItemRow({
           "background 240ms ease, box-shadow 240ms ease, opacity 240ms ease",
         boxShadow: isHighlighted
           ? `inset 3px 0 0 ${accent}, 0 0 0 1px rgba(124,58,237,0.05)`
-          : checked
-            ? "inset 3px 0 0 #EF4444"
-            : "inset 0 0 0 0 transparent",
+          : "inset 0 0 0 0 transparent",
         opacity: notFound ? 0.74 : 1,
       }}
     >
-      {/* Linha vermelha riscando o item comprado */}
-      {checked && !notFound && (
-        <span
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: 70,
-            right: 64,
-            top: "50%",
-            height: 2,
-            background: "#EF4444",
-            opacity: 0.7,
-            borderRadius: 2,
-            pointerEvents: "none",
-          }}
-        />
-      )}
       {/* Checkbox premium */}
       <button
         onClick={handleToggleCheck}
