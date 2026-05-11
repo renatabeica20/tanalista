@@ -31,6 +31,7 @@ export default function BudgetProgress({
 
   return (
     <div
+      data-tour-step={highlighted ? "list_progress" : undefined}
       style={{
         position: 'relative',
         overflow: 'hidden',
