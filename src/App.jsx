@@ -6483,6 +6483,59 @@ return rebuiltHistory;
     }
   };
 
+  useEffect(()=>{
+    const handleListMenuAction=(event)=>{
+      const detail=event?.detail || {};
+      const action=detail.action;
+      const listId=detail.listId;
+      if(!action || !listId)return;
+
+      const target=(Array.isArray(lists)?lists:[]).find(l=>(
+        l?.id===listId ||
+        l?.sharedId===listId ||
+        l?.id===String(listId) ||
+        l?.sharedId===String(listId)
+      ));
+
+      if(!target){
+        showToast("⚠️ Lista não encontrada para executar a ação.",1800);
+        return;
+      }
+
+      setListMenuId(null);
+
+      if(action==="edit"){
+        openListForEdit(target);
+        return;
+      }
+
+      if(action==="share"){
+        setCurrentList(target);
+        setShareTargetList(target);
+        setShareModal(true);
+        return;
+      }
+
+      if(action==="duplicate"){
+        duplicateList(target);
+        return;
+      }
+
+      if(action==="stopSharing"){
+        stopListSharing(target);
+        return;
+      }
+
+      if(action==="delete"){
+        setConfirmDelete(target.id);
+        return;
+      }
+    };
+
+    window.addEventListener("tnl:list-menu-action",handleListMenuAction);
+    return()=>window.removeEventListener("tnl:list-menu-action",handleListMenuAction);
+  },[lists,currentList]);
+
   const closeFinishedModal=()=>{
     markActivePantryAsCompleted(currentList);
     setShowFinished(false);
