@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 export default function GuidedTourOverlay({
   step, index, total, onNext, onPrev, onClose, onSkip,
   showPrev = true, showSkip = true,
+  externalRect = null,
 }) {
   if (!step) return null;
 
@@ -26,18 +27,9 @@ export default function GuidedTourOverlay({
   const measureEl = useCallback((el) => {
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    // Aceita mesmo se width/height são pequenos — botões circulares são pequenos.
-    // Rejeita apenas se as coordenadas estão completamente fora da tela.
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    if (r.bottom < -50 || r.top > vh + 50 || r.right < -50 || r.left > vw + 50) return null;
+    if (r.width === 0 && r.height === 0) return null;
     const pad = 10;
-    const x = Math.max(0, r.left - pad);
-    const y = Math.max(0, r.top - pad);
-    const w = Math.min(vw - x, r.width + pad * 2);
-    const h = Math.min(vh - y, r.height + pad * 2);
-    if (w <= 0 || h <= 0) return null;
-    return { x, y, w, h, centerY: r.top + r.height / 2 };
+    return { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2, centerY: r.top + r.height / 2 };
   }, []);
 
   useEffect(() => {
@@ -56,20 +48,13 @@ export default function GuidedTourOverlay({
     };
 
     if (!attempt()) {
-      timers.push(setTimeout(() => {
-        if (!attempt()) {
-          timers.push(setTimeout(() => {
-            if (!attempt()) timers.push(setTimeout(attempt, 500));
-          }, 250));
-        }
-      }, 100));
+      timers.push(setTimeout(() => { if (!attempt()) timers.push(setTimeout(attempt, 350)); }, 120));
     } else {
-      // Re-mede depois que scroll containers terminam de rolar
       timers.push(setTimeout(() => {
         if (cancelled) return;
         const r = measureEl(findEl());
         if (r) setTargetRect(r);
-      }, 600));
+      }, 500));
     }
 
     const onLayout = () => { if (!cancelled) { const r = measureEl(findEl()); if (r) setTargetRect(r); } };
@@ -80,7 +65,8 @@ export default function GuidedTourOverlay({
 
   const vw = typeof window !== "undefined" ? window.innerWidth : 430;
   const vh = typeof window !== "undefined" ? window.innerHeight : 900;
-  const r = targetRect;
+  // externalRect tem prioridade (medido via ref direto no componente)
+  const r = externalRect || targetRect;
   const radius = 16;
 
   // Posiciona o card longe do elemento destacado
