@@ -1,86 +1,196 @@
-<div
-  style={{ position: "relative", flexShrink: 0 }}
-  onClick={(e) => e.stopPropagation()}
->
-  <button
-    onClick={() => setListMenuId(listMenuId === list.id ? null : list.id)}
-    style={menuButtonStyle}
-    aria-label="Mais opções"
-  >
-    ⋯
-  </button>
+```jsx
+export default function ListCard(props) {
+  const {
+    list,
+    listMenuId,
+    setListMenuId,
+    setCurrentList,
+    setScreen,
+    setSearch,
+    setCollapsedCats,
+    formatListDate,
+    openListForEdit,
+    setShareTargetList,
+    setShareModal,
+    duplicateList,
+    stopListSharing,
+    setConfirmDelete,
+    WhatsAppIcon,
+  } = props;
 
-  {listMenuId === list.id && (
+  const openList = () => {
+    setCurrentList(list);
+    setScreen("list");
+    setSearch("");
+    setCollapsedCats({});
+  };
+
+  const openShare = () => {
+    setCurrentList(list);
+    setShareTargetList(list);
+    setShareModal(true);
+    setListMenuId(null);
+  };
+
+  const menuItemStyle = (color = "#111827") => ({
+    width: "100%",
+    padding: "14px 16px",
+    border: "none",
+    background: "#FFFFFF",
+    textAlign: "left",
+    fontSize: 14,
+    fontWeight: 600,
+    color,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  });
+
+  return (
     <div
       style={{
-        position: "absolute",
-        right: 0,
-        top: 44,
         background: "#FFFFFF",
-        borderRadius: 18,
-        boxShadow:
-          "0 22px 50px -10px rgba(76, 29, 149, 0.28), 0 4px 12px rgba(15, 23, 42, 0.06)",
-        border: "1px solid rgba(100, 80, 200, 0.14)",
-        zIndex: 500,
-        minWidth: 240,
-        overflow: "hidden",
-        padding: "4px",
+        borderRadius: 20,
+        border: "1px solid rgba(100, 80, 200, 0.10)",
+        position: "relative",
+        overflow: "visible",
       }}
     >
-      {canEditList && (
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setListMenuId(null);
-            openListForEdit(list);
-          }}
-          style={{ ...menuItemStyle(), borderRadius: 12 }}
-        >
-          ✏️ Editar lista
-        </button>
-      )}
-
-      <button
-        onClick={openShare}
-        style={{ ...menuItemStyle("#25D366"), borderRadius: 12 }}
-      >
-        <WhatsAppIcon size={18} /> Enviar lista
-      </button>
-
-      <button
-        onClick={() => duplicateList(list)}
-        style={{ ...menuItemStyle(), borderRadius: 12 }}
-      >
-        📄 Fazer cópia
-      </button>
-
-      {shared && (
-        <button
-          onClick={() => stopListSharing(list)}
-          style={{ ...menuItemStyle("#6D28D9"), borderRadius: 12 }}
-        >
-          🔒 Encerrar compartilhamento
-        </button>
-      )}
-
       <div
+        onClick={openList}
         style={{
-          height: 1,
-          background: "rgba(100, 80, 200, 0.10)",
-          margin: "4px 8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: 16,
+          cursor: "pointer",
         }}
-      />
-
-      <button
-        onClick={() => {
-          setConfirmDelete(list.id);
-          setListMenuId(null);
-        }}
-        style={{ ...menuItemStyle("#DC2626"), borderRadius: 12 }}
       >
-        🗑 Excluir lista
-      </button>
+        <div>
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: 15,
+            }}
+          >
+            {list.name || "Lista sem nome"}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6B7280",
+              marginTop: 6,
+            }}
+          >
+            {formatListDate(list.createdAt)}
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() =>
+              setListMenuId(
+                listMenuId === list.id ? null : list.id
+              )
+            }
+            style={{
+              border: "none",
+              background: "#F3F4F6",
+              borderRadius: 12,
+              width: 38,
+              height: 38,
+              cursor: "pointer",
+              fontSize: 18,
+              fontWeight: 900,
+            }}
+          >
+            ⋯
+          </button>
+
+          {listMenuId === list.id && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 44,
+                background: "#FFFFFF",
+                borderRadius: 18,
+                boxShadow:
+                  "0 20px 40px rgba(0,0,0,0.18)",
+                border:
+                  "1px solid rgba(100,80,200,0.12)",
+                zIndex: 99999,
+                minWidth: 240,
+                overflow: "hidden",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setListMenuId(null);
+                  openListForEdit(list);
+                }}
+                style={menuItemStyle()}
+              >
+                ✏️ Editar lista
+              </button>
+
+              <button
+                onClick={openShare}
+                style={menuItemStyle("#25D366")}
+              >
+                <WhatsAppIcon size={18} />
+                Enviar lista
+              </button>
+
+              <button
+                onClick={() => {
+                  setListMenuId(null);
+                  duplicateList(list);
+                }}
+                style={menuItemStyle()}
+              >
+                📄 Fazer cópia
+              </button>
+
+              <button
+                onClick={() => {
+                  setListMenuId(null);
+                  stopListSharing(list);
+                }}
+                style={menuItemStyle("#6D28D9")}
+              >
+                🔒 Encerrar compartilhamento
+              </button>
+
+              <div
+                style={{
+                  height: 1,
+                  background:
+                    "rgba(100,80,200,0.12)",
+                }}
+              />
+
+              <button
+                onClick={() => {
+                  setConfirmDelete(list.id);
+                  setListMenuId(null);
+                }}
+                style={menuItemStyle("#DC2626")}
+              >
+                🗑 Excluir lista
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
-  )}
-</div>
+  );
+}
+```
