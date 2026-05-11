@@ -200,7 +200,7 @@ export default function CreateListScreen({
     </div>
     <button onClick={()=>startGuidedTour("create")} style={{border:"1px solid #DDD6FE",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",color:"#5B21B6",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 6px 14px rgba(109,40,217,0.12)",WebkitTapHighlightColor:"transparent"}}>✨ Como usar</button>
   </div>
-  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
+  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"visible",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
     <div data-tour-step="create_pantry" style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -295,7 +295,7 @@ export default function CreateListScreen({
       </div>
     </div>
 
-    <div data-tour-step="create_item_input" style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
+    <div data-tour-step="create_item_input" data-tour-also="create_item_voice create_item_paste create_item_insert" style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
       <label style={lbl}>🛒 Adicionar itens</label>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <input data-tour-step="create_item_input" value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
