@@ -19,7 +19,7 @@ export default function ItemRow({
   priceHighlightStyle = {},
   checkHighlightStyle = {},
   missingHighlightStyle = {},
-  showDivider = false,
+  isFirstItem = false,
 }) {
   const checked = Boolean(item?.checked);
   const notFound = Boolean(item?.notFound);
@@ -33,11 +33,11 @@ export default function ItemRow({
   const accent = theme?.border || "#7C3AED";
   const accentHeader = theme?.header || "#047857";
 
-  // Background: superfície limpa com distinção clara entre estados
+  // Background: surface limpa, leve tom lilás
   const rowBg = notFound
-    ? "linear-gradient(180deg, #FFF5F5 0%, #FFFFFF 75%)"
+    ? "#FAFAFC"
     : checked
-      ? "linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 75%)"
+      ? "linear-gradient(180deg, #F2FBF6 0%, #FFFFFF 75%)"
       : extra
         ? "linear-gradient(180deg, #FFFAF2 0%, #FFFFFF 75%)"
         : "#FFFFFF";
@@ -52,17 +52,13 @@ export default function ItemRow({
         alignItems: "center",
         padding: "16px 16px",
         background: rowBg,
-        borderLeft: checked
-          ? "3px solid #16A34A"
-          : notFound
-            ? "3px solid #FCA5A5"
-            : "3px solid transparent",
+        borderBottom: isLast ? "none" : "1px solid rgba(100, 80, 200, 0.07)",
         transition:
           "background 240ms ease, box-shadow 240ms ease, opacity 240ms ease",
         boxShadow: isHighlighted
           ? `inset 3px 0 0 ${accent}, 0 0 0 1px rgba(124,58,237,0.05)`
           : "inset 0 0 0 0 transparent",
-        opacity: notFound ? 0.82 : 1,
+        opacity: notFound ? 0.74 : 1,
       }}
     >
       {/* Checkbox premium */}
@@ -72,6 +68,7 @@ export default function ItemRow({
           onToggleCheck?.(ci, realII);
         }}
         aria-label={checked ? "Desmarcar item" : "Marcar item comprado"}
+        data-tour-step={isFirstItem ? "list_item_check" : undefined}
         style={{
           width: 32,
           height: 32,
@@ -116,6 +113,7 @@ export default function ItemRow({
       {/* Body */}
       <button
         onClick={() => onOpenItem?.(ci, realII)}
+        data-tour-step={isFirstItem ? "list_item_price" : undefined}
         style={{
           border: "none",
           background: "transparent",
@@ -143,10 +141,10 @@ export default function ItemRow({
               fontSize: 15.5,
               fontWeight: 700,
               letterSpacing: -0.15,
-              color: notFound ? "#9CA3AF" : checked ? "#6B7280" : "#0F172A",
-              textDecoration: (checked || notFound) ? "line-through" : "none",
-              textDecorationColor: checked ? "#DC2626" : notFound ? "#CBD5E1" : undefined,
-              textDecorationThickness: checked ? "2px" : notFound ? "1.5px" : undefined,
+              color: notFound ? "#9CA3AF" : "#0F172A",
+              textDecoration: notFound ? "line-through" : "none",
+              textDecorationColor: notFound ? "#CBD5E1" : undefined,
+              textDecorationThickness: notFound ? "1.5px" : undefined,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -188,7 +186,7 @@ export default function ItemRow({
             flexWrap: "wrap",
             fontSize: 12,
             fontWeight: 600,
-            color: (notFound || checked) ? "#9CA3AF" : "#6B7280",
+            color: notFound ? "#9CA3AF" : "#6B7280",
             lineHeight: 1.35,
           }}
         >
@@ -272,6 +270,7 @@ export default function ItemRow({
           onToggleNotFound?.(ci, realII);
         }}
         aria-label={notFound ? "Retirar item de falta" : "Marcar item em falta"}
+        data-tour-step={isFirstItem ? "list_item_missing" : undefined}
         style={{
           width: 36,
           height: 36,
