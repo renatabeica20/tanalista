@@ -4269,9 +4269,8 @@ const [lists,setLists]=useState(()=>{
     setTimeout(()=>searchRef.current?.focus?.(),180);
   },[]);
 
-  const returnToSearch=useCallback((delay=120, opts={})=>{
+  const returnToSearch=useCallback((delay=120)=>{
     setSearch("");
-    if(opts.noScroll)return;
     setTimeout(()=>{
       scrollToListTop();
       setTimeout(()=>searchRef.current?.focus?.(),160);
@@ -6608,7 +6607,7 @@ return rebuiltHistory;
     const item=currentList.categories[ci].items[ii];
     if(item.notFound){
       showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
-      returnToSearch(120,{noScroll:true});
+      returnToSearch();
       return;
     }
     if(item.checked){
@@ -6616,7 +6615,7 @@ return rebuiltHistory;
       l.categories[ci].items[ii].checked=false;
       l.categories[ci].items[ii].price=null;
       updateList(l);
-      returnToSearch(120,{noScroll:true});
+      returnToSearch();
       return;
     }
     setCheckPopup({ci,ii});
@@ -6633,7 +6632,7 @@ return rebuiltHistory;
       list_name: l.name || "",
       item_name: item.name || "",
     });
-    updateList(l); returnToSearch(120,{noScroll:true});
+    updateList(l); returnToSearch();
     showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
   };
 
@@ -7315,6 +7314,7 @@ return rebuiltHistory;
         role="button"
         tabIndex={m.active ? 0 : -1}
         aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
+        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
         onClick={() => {
           if (!m.active) return;
           setScreen("create");
@@ -7869,7 +7869,7 @@ return rebuiltHistory;
               const sub=getCatSubtotal(cat);
               const isCollapsed=collapsedCats[ci];
               const isExtraCat=normalizePlainText(cat.name)==="itens extras";
-              const filtered=search?cat.items.filter(i=>normalizePlainText(i.name).includes(normalizePlainText(search))):cat.items;
+              const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
               if(search&&filtered.length===0)return null;
               const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
                 const aDone=!!(a.checked||a.notFound);
@@ -7898,46 +7898,41 @@ return rebuiltHistory;
 
                   {/* Itens da categoria */}
                   {!isCollapsed&&(
-                    <div style={{background:allDone?"#F0FFF4":"white",display:"flex",flexDirection:"column"}}>
+                    <div style={{background:allDone?"#F9FFF9":"white",display:"flex",flexDirection:"column"}}>
                       {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
-                        const hl=search&&normalizePlainText(item.name).includes(normalizePlainText(search));
+                        const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
                         return(
-                          <div key={`${ci}-${realII}-${item.name || "item"}`}>
-                            {!isLast && <div style={{height:1,background:allDone?"rgba(134,239,172,0.45)":"rgba(229,231,235,0.9)",margin:"0 14px"}}/>}
-                            <ItemRow
-                              item={item}
-                              ci={ci}
-                              ii={ii}
-                              realII={realII}
-                              theme={theme}
-                              isExtra={isExtra}
-                              isHighlighted={hl}
-                              isLast={isLast}
-                              showDivider={false}
-                              currentList={currentList}
-                              searchActive={Boolean(search)}
-                              onOpenItem={(catIndex,itemIndex)=>{openItemModal(catIndex,itemIndex);if(search)setSearch("");}}
-                              onToggleCheck={(catIndex,itemIndex)=>{toggleCheck(catIndex,itemIndex);if(search)setSearch("");}}
-                              onToggleNotFound={toggleNotFound}
-                              showToast={showToast}
-                              formatQtyUnit={formatQtyUnit}
-                              getItemLineTotal={getItemLineTotal}
-                              getCompactUnitPriceLabel={getCompactUnitPriceLabel}
-                              fmtR={fmtR}
-                              hexToRgba={hexToRgba}
-                              PriceMonthBadge={PriceMonthBadge}
-                              PriceMemoryLine={PriceMemoryLine}
-                              priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
-                              checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
-                              missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
-                              checkedLineStyle={item.checked && !item.notFound ? {textDecoration:"line-through",textDecorationColor:"#DC2626",textDecorationThickness:2,color:"#6B7280",opacity:0.75} : {}}
-                              notFoundLineStyle={item.notFound ? {textDecoration:"line-through",textDecorationColor:"#9CA3AF",textDecorationThickness:1,color:"#9CA3AF",opacity:0.65,fontStyle:"italic"} : {}}
-                            />
-                          </div>
+                          <ItemRow
+                            key={`${ci}-${realII}-${item.name || "item"}`}
+                            item={item}
+                            ci={ci}
+                            ii={ii}
+                            realII={realII}
+                            theme={theme}
+                            isExtra={isExtra}
+                            isHighlighted={hl}
+                            isLast={isLast}
+                            currentList={currentList}
+                            searchActive={Boolean(search)}
+                            onOpenItem={(catIndex,itemIndex)=>{openItemModal(catIndex,itemIndex);if(search)setSearch("");}}
+                            onToggleCheck={(catIndex,itemIndex)=>{toggleCheck(catIndex,itemIndex);if(search)setSearch("");}}
+                            onToggleNotFound={toggleNotFound}
+                            showToast={showToast}
+                            formatQtyUnit={formatQtyUnit}
+                            getItemLineTotal={getItemLineTotal}
+                            getCompactUnitPriceLabel={getCompactUnitPriceLabel}
+                            fmtR={fmtR}
+                            hexToRgba={hexToRgba}
+                            PriceMonthBadge={PriceMonthBadge}
+                            PriceMemoryLine={PriceMemoryLine}
+                            priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
+                            checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
+                            missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
+                          />
                         );
                       })}
                     </div>
@@ -8200,6 +8195,7 @@ return rebuiltHistory;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checkedAt=new Date().toISOString();
                   updateList(l);setCheckPopup(null);setSearch("");
+                  setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
                 }} style={{flex:1,padding:14,borderRadius:20,background:"#F9FAFB",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
