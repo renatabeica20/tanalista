@@ -7118,7 +7118,7 @@ return rebuiltHistory;
     <div
       onTouchStart={handleSwipeStart}
       onTouchEnd={handleSwipeEnd}
-      style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"clip",boxSizing:"border-box",isolation:"isolate",touchAction:"pan-y"}}
+      style={{width:"100%",maxWidth:430,minWidth:0,margin:"0 auto",minHeight:"100vh",background:"linear-gradient(180deg,#EEF2FF 0%,#F8FAFC 34%,#FFFFFF 100%)",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",position:"relative",overflowX:"hidden",boxSizing:"border-box",touchAction:"pan-y"}}
     >
       <AppHeader
         userName={getAppUserName()}
@@ -7314,7 +7314,6 @@ return rebuiltHistory;
         role="button"
         tabIndex={m.active ? 0 : -1}
         aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
-        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
         onClick={() => {
           if (!m.active) return;
           setScreen("create");
