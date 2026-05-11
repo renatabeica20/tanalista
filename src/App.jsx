@@ -4098,6 +4098,27 @@ const [lists,setLists]=useState(()=>{
       showToast("☁️ Listas locais sincronizadas com sua conta",2200);
     }
   },[lists,persistListRecordToCloud,showToast]);
+  // Mede o primeiro ItemRow via ref quando o tour está nos passos 3/4/5
+  useEffect(() => {
+    const itemSteps = ["list_item_check", "list_item_price", "list_item_missing"];
+    if (!showGuidedTour || !guidedTourStep || !itemSteps.includes(guidedTourStep.id)) {
+      setTourItemRect(null);
+      return;
+    }
+    const measure = () => {
+      const el = tourItemRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const pad = 10;
+        setTourItemRect({ x: r.left-pad, y: r.top-pad, w: r.width+pad*2, h: r.height+pad*2, centerY: r.top+r.height/2 });
+      }
+    };
+    measure();
+    const t = setTimeout(measure, 300);
+    return () => clearTimeout(t);
+  }, [showGuidedTour, guidedTourStep?.id]);
+
   useEffect(()=>{
     const existingName=getAppUserName();
     if(existingName && isPinSessionVerified(existingName)){
@@ -6985,6 +7006,32 @@ return rebuiltHistory;
 
 
   // ─────────────────────────────────────────────────────────────────────
+  const globalFirstPendingKey = (() => {
+    if (!currentList?.categories) return null;
+    const sortedCats = [...currentList.categories]
+      .map((cat, oi) => ({ cat, oi }))
+      .sort((a, b) => {
+        const aX = normalizePlainText(a.cat.name) === "itens extras";
+        const bX = normalizePlainText(b.cat.name) === "itens extras";
+        if (aX !== bX) return aX ? 1 : -1;
+        const aD = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
+        const bD = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
+        if (aD === bD) return a.oi - b.oi;
+        return aD ? 1 : -1;
+      });
+    for (const { cat } of sortedCats) {
+      const items = [...cat.items].sort((a, b) => {
+        const aD = !!(a.checked || a.notFound);
+        const bD = !!(b.checked || b.notFound);
+        if (aD === bD) return !aD ? String(a.name||"").localeCompare(String(b.name||""),"pt-BR") : 0;
+        return aD ? 1 : -1;
+      });
+      const first = items.find(i => !i.checked && !i.notFound);
+      if (first) return `${first.name}||${first.unit}||${first.qty}`;
+    }
+    return null;
+  })();
+
   if(showNotificationsScreen) return (
     <NotificationsPanel
       notifications={notifications}
@@ -7104,63 +7151,6 @@ return rebuiltHistory;
     if(dx>0)goBackBySwipe();
     else goForwardBySwipe();
   };
-
-
-  const globalFirstPendingKey = (() => {
-    if (!currentList?.categories) return null;
-    const sortedCats = [...currentList.categories]
-      .map((cat, oi) => ({ cat, oi }))
-      .sort((a, b) => {
-        const aX = normalizePlainText(a.cat.name) === "itens extras";
-        const bX = normalizePlainText(b.cat.name) === "itens extras";
-        if (aX !== bX) return aX ? 1 : -1;
-        const aD = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
-        const bD = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
-        if (aD === bD) return a.oi - b.oi;
-        return aD ? 1 : -1;
-      });
-    for (const { cat } of sortedCats) {
-      const items = [...cat.items].sort((a, b) => {
-        const aD = !!(a.checked || a.notFound);
-        const bD = !!(b.checked || b.notFound);
-        if (aD === bD) return !aD ? String(a.name||"").localeCompare(String(b.name||""),"pt-BR") : 0;
-        return aD ? 1 : -1;
-      });
-      const first = items.find(i => !i.checked && !i.notFound);
-      if (first) return `${first.name}||${first.unit}||${first.qty}`;
-    }
-    return null;
-  })();
-
-    // Mede o primeiro ItemRow quando o tour está nos passos de item (3/4/5)
-  // e passa as coordenadas diretamente para o overlay, evitando problemas
-  // com querySelector dentro de scroll containers.
-  useEffect(() => {
-    const itemSteps = ["list_item_check", "list_item_price", "list_item_missing"];
-    if (!showGuidedTour || !guidedTourStep || !itemSteps.includes(guidedTourStep.id)) {
-      setTourItemRect(null);
-      return;
-    }
-    const measure = () => {
-      const el = tourItemRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 || r.height > 0) {
-        const pad = 10;
-        setTourItemRect({
-          x: r.left - pad,
-          y: r.top - pad,
-          w: r.width + pad * 2,
-          h: r.height + pad * 2,
-          centerY: r.top + r.height / 2,
-        });
-      }
-    };
-    measure();
-    const t = setTimeout(measure, 300);
-    return () => clearTimeout(t);
-  }, [showGuidedTour, guidedTourStep?.id]);
-
 
   return(
     <div
@@ -7956,7 +7946,7 @@ return rebuiltHistory;
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
-                        const isFP = `${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey;
+                        const isFP=`${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey;
                         return(
                           <ItemRow
                             key={`${ci}-${realII}-${item.name || "item"}`}
