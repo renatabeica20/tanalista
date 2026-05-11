@@ -217,6 +217,7 @@ export default function PantrySection({
                 />
                 <button
                   onClick={handleAddPantryItem}
+                  data-tour-step={isTourStep("create_item_insert") ? "create_item_insert" : undefined}
                   style={{ ...insertBtn(true), ...tourHighlightStyle(isTourStep("create_item_insert")) }}
                 >
                   Inserir
@@ -246,6 +247,7 @@ export default function PantrySection({
 
             {pantryPendingItems.length > 0 && (
               <div
+                data-tour-step={isTourStep("create_items_preview") ? "create_items_preview" : undefined}
                 style={{
                   background: "linear-gradient(180deg,#FFFFFF 0%, #FDFBFF 100%)",
                   borderRadius: 22,
