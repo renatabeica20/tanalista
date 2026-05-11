@@ -23,16 +23,14 @@ export default function ListScreenHeader({
   const tour = typeof isTourStep === "function" ? isTourStep : () => false;
   const SafeWhatsAppIcon = WhatsAppIcon || (() => <span>📤</span>);
 
-  const tourActive =
-    tour("list_back_home") || tour("list_share") || tour("list_progress");
+
 
   return (
     <div style={{ padding: "16px 16px 22px" }}>
       <div
         style={{
           position: "relative",
-          overflow: tourActive ? "visible" : "hidden",
-          zIndex: tourActive ? 636 : "auto",
+          overflow: "hidden",
           background:
             "linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)",
           borderRadius: 28,
@@ -71,7 +69,6 @@ export default function ListScreenHeader({
         <div
           style={{
             position: "relative",
-            zIndex: tourActive ? 637 : 1,
           }}
         >
           <div
@@ -86,7 +83,7 @@ export default function ListScreenHeader({
               onClick={onBackHome}
               title="Voltar para a tela inicial"
               aria-label="Voltar"
-              data-tour-step={tour("list_back_home") ? "list_back_home" : undefined}
+              data-tour-step="list_back_home"
               style={{
                 background: "rgba(255,255,255,0.98)",
                 border: "1px solid rgba(255,255,255,0.7)",
@@ -161,7 +158,7 @@ export default function ListScreenHeader({
 
             <button
               onClick={onShare}
-              data-tour-step={tour("list_share") ? "list_share" : undefined}
+              data-tour-step="list_share"
               style={{
                 background: "rgba(255,255,255,0.16)",
                 border: "1px solid rgba(255,255,255,0.32)",
@@ -195,6 +192,7 @@ export default function ListScreenHeader({
             </button>
           </div>
 
+          <div data-tour-step="list_progress">
           <BudgetProgress
             checkedItems={checkedItems}
             totalItems={totalItems}
@@ -208,6 +206,7 @@ export default function ListScreenHeader({
             highlighted={tour("list_progress")}
             highlightStyle={highlight(tour("list_progress"))}
           />
+          </div>
         </div>
       </div>
     </div>
