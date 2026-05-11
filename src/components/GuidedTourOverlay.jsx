@@ -67,9 +67,14 @@ export default function GuidedTourOverlay({
   const r = targetRect;
   const radius = 16;
 
-  // Posiciona o card longe do elemento destacado
+  // Posiciona o card longe do elemento destacado.
+  // Sem elemento: centraliza verticalmente.
   const elementInBottomHalf = r ? r.centerY > vh / 2 : false;
-  const cardPos = elementInBottomHalf ? { top: 88 } : { bottom: 88 };
+  const cardPos = !r
+    ? { top: "50%", transform: "translateY(-50%)" }
+    : elementInBottomHalf
+      ? { top: 88 }
+      : { bottom: 88 };
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:620, pointerEvents:"none" }}>
