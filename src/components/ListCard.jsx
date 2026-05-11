@@ -1,6 +1,3 @@
-```jsx
-import { useEffect, useRef } from "react";
-
 export default function ListCard({
   list,
   variant = "recent",
