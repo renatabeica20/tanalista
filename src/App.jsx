@@ -281,7 +281,6 @@ function ensureMobileViewport() {
         max-width: 100%;
         min-height: 100dvh;
         overflow-x: hidden;
-        isolation: isolate;
       }
       #root > * {
         max-width: 100%;
