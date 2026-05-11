@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export default function GuidedTourOverlay({
   step,
   index,
@@ -14,6 +16,67 @@ export default function GuidedTourOverlay({
   const topPosition = step.position === "top";
   const primaryLabel = isLast ? "Fechar" : "Próximo";
   const progress = ((index + 1) / Math.max(total, 1)) * 100;
+
+  // Identificador do alvo a destacar.
+  // Suportamos: step.id (preferencial), step.targetId, step.target (selector CSS).
+  const targetId = step?.id || step?.targetId || null;
+  const targetSelector = step?.target || step?.selector || null;
+
+  // Garante que o elemento alvo receba os atributos/posicionamento necessários
+  // para ficar acima do overlay, mesmo quando o consumidor define apenas
+  // tourHighlightStyle (sem z-index/position).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const selectors = [];
+    if (targetId) selectors.push(`[data-tour-step="${targetId}"]`);
+    if (targetSelector) selectors.push(targetSelector);
+    if (!selectors.length) return;
+
+    const nodes = [];
+    selectors.forEach((sel) => {
+      try {
+        document.querySelectorAll(sel).forEach((el) => {
+          if (!nodes.includes(el)) nodes.push(el);
+        });
+      } catch (_) {
+        /* selector inválido — ignora */
+      }
+    });
+    if (!nodes.length) return;
+
+    const prev = nodes.map((el) => ({
+      el,
+      position: el.style.position,
+      zIndex: el.style.zIndex,
+      pointerEvents: el.style.pointerEvents,
+      hadAttr: el.hasAttribute("data-tour-active"),
+    }));
+
+    nodes.forEach((el) => {
+      const cs =
+        typeof window !== "undefined" ? window.getComputedStyle(el) : null;
+      if (!cs || cs.position === "static") {
+        el.style.position = "relative";
+      }
+      el.style.zIndex = "640";
+      el.style.pointerEvents = "auto";
+      el.setAttribute("data-tour-active", "true");
+      try {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      } catch (_) {
+        /* ignora */
+      }
+    });
+
+    return () => {
+      prev.forEach((s) => {
+        s.el.style.position = s.position || "";
+        s.el.style.zIndex = s.zIndex || "";
+        s.el.style.pointerEvents = s.pointerEvents || "";
+        if (!s.hadAttr) s.el.removeAttribute("data-tour-active");
+      });
+    };
+  }, [targetId, targetSelector]);
 
   return (
     <div
@@ -40,6 +103,22 @@ export default function GuidedTourOverlay({
           0% { transform: translateX(-100%); }
           100% { transform: translateX(220%); }
         }
+        @keyframes tnl-tour-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(255,255,255,0.95), 0 0 0 7px rgba(124,58,237,0.55), 0 22px 44px -8px rgba(76,29,149,0.55); }
+          50%      { box-shadow: 0 0 0 4px rgba(255,255,255,1),    0 0 0 10px rgba(124,58,237,0.75), 0 26px 52px -8px rgba(76,29,149,0.65); }
+        }
+        /* Destaque universal do passo atual do tour.
+           Aplica-se a qualquer elemento marcado com data-tour-step="<id>"
+           ou com data-tour-active="true" (definido via useEffect acima). */
+        [data-tour-active="true"] {
+          position: relative !important;
+          z-index: 640 !important;
+          border-radius: 18px;
+          animation: tnl-tour-pulse 1.7s ease-in-out infinite !important;
+          pointer-events: auto !important;
+          transition: box-shadow .2s ease;
+        }
+        ${targetId ? `[data-tour-step="${targetId}"]{position:relative !important;z-index:640 !important;border-radius:18px;animation:tnl-tour-pulse 1.7s ease-in-out infinite !important;pointer-events:auto !important;}` : ""}
       `}</style>
 
       <div
@@ -50,6 +129,7 @@ export default function GuidedTourOverlay({
             "radial-gradient(120% 80% at 50% 0%, rgba(76,29,149,0.55) 0%, rgba(17,24,39,0.72) 55%, rgba(15,23,42,0.78) 100%)",
           backdropFilter: "blur(8px) saturate(135%)",
           WebkitBackdropFilter: "blur(8px) saturate(135%)",
+          pointerEvents: "none",
         }}
       />
 
