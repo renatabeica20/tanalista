@@ -7644,7 +7644,7 @@ return rebuiltHistory;
             const suggs = getSuggestions();
             const preview = suggs.slice(0, 3);
             return (
-              <div style={{padding:"0 20px",margin:"12px 0 10px"}}>
+              <div data-tour-step="list_budget_alert" style={{padding:"0 20px",margin:"12px 0 10px"}}>
                 <div style={{
                   background:"linear-gradient(135deg,#FFF7ED 0%,#FEF2F2 100%)",
                   border:"1px solid #FDBA74",
@@ -7850,7 +7850,7 @@ return rebuiltHistory;
           </div>
 
           {/* Categorias com cores */}
-          <div ref={listRef} data-tour-step="list_items" style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
+          <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto",...tourHighlightStyle(isTourStep("list_items"))}}>
             {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
@@ -7930,6 +7930,7 @@ return rebuiltHistory;
                             hexToRgba={hexToRgba}
                             PriceMonthBadge={PriceMonthBadge}
                             PriceMemoryLine={PriceMemoryLine}
+                            isFirstItem={ii===0}
                             priceHighlightStyle={isTourStep("list_item_price") && ii===0 ? tourHighlightStyle(true) : {}}
                             checkHighlightStyle={isTourStep("list_item_check") && ii===0 ? tourHighlightStyle(true) : {}}
                             missingHighlightStyle={isTourStep("list_item_missing") && ii===0 ? tourHighlightStyle(true) : {}}
