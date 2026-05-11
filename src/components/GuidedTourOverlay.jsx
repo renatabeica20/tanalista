@@ -1,15 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 
 export default function GuidedTourOverlay({
-  step,
-  index,
-  total,
-  onNext,
-  onPrev,
-  onClose,
-  onSkip,
-  showPrev = true,
-  showSkip = true,
+  step, index, total, onNext, onPrev, onClose, onSkip,
+  showPrev = true, showSkip = true,
 }) {
   if (!step) return null;
 
@@ -25,7 +18,7 @@ export default function GuidedTourOverlay({
     let el = document.querySelector(`[data-tour-step="${targetId}"]`);
     if (el) return el;
     el = Array.from(document.querySelectorAll("[data-tour-also]")).find(
-      (node) => (node.getAttribute("data-tour-also") || "").split(" ").includes(targetId)
+      n => (n.getAttribute("data-tour-also") || "").split(" ").includes(targetId)
     );
     return el || null;
   }, [targetId]);
@@ -35,13 +28,7 @@ export default function GuidedTourOverlay({
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return null;
     const pad = 10;
-    return {
-      x: r.left - pad,
-      y: r.top - pad,
-      w: r.width + pad * 2,
-      h: r.height + pad * 2,
-      centerY: r.top + r.height / 2,
-    };
+    return { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2, centerY: r.top + r.height / 2 };
   }, []);
 
   useEffect(() => {
@@ -60,11 +47,8 @@ export default function GuidedTourOverlay({
     };
 
     if (!attempt()) {
-      timers.push(setTimeout(() => {
-        if (!attempt()) timers.push(setTimeout(() => attempt(), 350));
-      }, 120));
+      timers.push(setTimeout(() => { if (!attempt()) timers.push(setTimeout(attempt, 350)); }, 120));
     } else {
-      // Re-mede após scroll terminar
       timers.push(setTimeout(() => {
         if (cancelled) return;
         const r = measureEl(findEl());
@@ -72,83 +56,93 @@ export default function GuidedTourOverlay({
       }, 500));
     }
 
-    const onLayout = () => {
-      if (cancelled) return;
-      const r = measureEl(findEl());
-      if (r) setTargetRect(r);
-    };
+    const onLayout = () => { if (!cancelled) { const r = measureEl(findEl()); if (r) setTargetRect(r); } };
     window.addEventListener("resize", onLayout);
     window.addEventListener("scroll", onLayout, true);
-
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-      window.removeEventListener("resize", onLayout);
-      window.removeEventListener("scroll", onLayout, true);
-    };
+    return () => { cancelled = true; timers.forEach(clearTimeout); window.removeEventListener("resize", onLayout); window.removeEventListener("scroll", onLayout, true); };
   }, [targetId, findEl, measureEl]);
 
-  const screenH = typeof window !== "undefined" ? window.innerHeight : 900;
-  const elementInBottomHalf = targetRect ? targetRect.centerY > screenH / 2 : false;
-  const cardPosition = elementInBottomHalf ? { top: 88 } : { bottom: 88 };
+  const vw = typeof window !== "undefined" ? window.innerWidth : 430;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+  const r = targetRect;
+  const radius = 16;
+
+  // Posiciona o card longe do elemento destacado
+  const elementInBottomHalf = r ? r.centerY > vh / 2 : false;
+  const cardPos = elementInBottomHalf ? { top: 88 } : { bottom: 88 };
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:620, pointerEvents:"none" }}>
       <style>{`
-        @keyframes tnl-tour-pop  { from{transform:translateY(12px) scale(0.97);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
-        @keyframes tnl-tour-icon { 0%{transform:scale(0.6) rotate(-8deg);opacity:0} 60%{transform:scale(1.08) rotate(2deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
-        @keyframes tnl-tour-shine{ 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
-        @keyframes tnl-tour-glow {
-          0%,100%{ box-shadow: 0 0 0 9999px rgba(15,23,42,0.75), 0 0 0 3px rgba(255,255,255,0.9), 0 0 0 6px rgba(124,58,237,0.8); }
-          50%    { box-shadow: 0 0 0 9999px rgba(15,23,42,0.75), 0 0 0 4px rgba(255,255,255,1),   0 0 0 9px rgba(124,58,237,1); }
+        @keyframes tnl-pop  { from{transform:translateY(12px) scale(0.97);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+        @keyframes tnl-icon { 0%{transform:scale(0.6) rotate(-8deg);opacity:0} 60%{transform:scale(1.08) rotate(2deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
+        @keyframes tnl-shine{ 0%{transform:translateX(-100%)} 100%{transform:translateX(220%)} }
+        @keyframes tnl-ring {
+          0%,100%{ stroke-width:3; opacity:0.9; }
+          50%    { stroke-width:5; opacity:1; }
         }
       `}</style>
 
-      {/* Backdrop escuro apenas quando não há elemento para destacar */}
-      {!targetRect && (
-        <div style={{
-          position:"absolute", inset:0,
-          background:"rgba(15,23,42,0.75)",
-          pointerEvents:"none",
-        }} />
-      )}
-
-      {/* Spotlight: div transparente na posição do elemento.
-          O box-shadow escurece TUDO AO REDOR dele, deixando o elemento visível. */}
-      {targetRect && (
-        <div style={{
-          position:"fixed",
-          left: targetRect.x,
-          top: targetRect.y,
-          width: targetRect.w,
-          height: targetRect.h,
-          borderRadius: 16,
-          background: "transparent",
-          animation: "tnl-tour-glow 1.8s ease-in-out infinite",
-          pointerEvents: "none",
-          zIndex: 621,
-        }} />
-      )}
+      {/* SVG backdrop: retângulo escuro com buraco recortado pelo <mask> */}
+      <svg
+        style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none" }}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <mask id="tnl-tour-mask">
+            {/* Branco = visível, preto = transparente */}
+            <rect width={vw} height={vh} fill="white" />
+            {r && (
+              <rect
+                x={r.x} y={r.y} width={r.w} height={r.h}
+                rx={radius} ry={radius}
+                fill="black"
+              />
+            )}
+          </mask>
+        </defs>
+        {/* Backdrop escuro com buraco */}
+        <rect width={vw} height={vh} fill="rgba(15,23,42,0.78)" mask="url(#tnl-tour-mask)" />
+        {/* Anel pulsante ao redor do elemento */}
+        {r && (
+          <rect
+            x={r.x} y={r.y} width={r.w} height={r.h}
+            rx={radius} ry={radius}
+            fill="none"
+            stroke="rgba(124,58,237,0.9)"
+            strokeWidth="3"
+            style={{ animation:"tnl-ring 1.6s ease-in-out infinite" }}
+          />
+        )}
+        {/* Borda branca interna */}
+        {r && (
+          <rect
+            x={r.x + 3} y={r.y + 3} width={r.w - 6} height={r.h - 6}
+            rx={radius - 2} ry={radius - 2}
+            fill="none"
+            stroke="rgba(255,255,255,0.7)"
+            strokeWidth="1.5"
+          />
+        )}
+      </svg>
 
       {/* Card do passo */}
       <div style={{
-        position:"absolute", left:14, right:14,
-        ...cardPosition,
+        position:"absolute", left:14, right:14, ...cardPos,
         margin:"0 auto", maxWidth:400,
         background:"linear-gradient(180deg,#FFFFFF 0%,#FDFBFF 60%,#F8F4FF 100%)",
         borderRadius:28, padding:"20px 20px 18px",
         boxShadow:"0 30px 80px -12px rgba(76,29,149,0.45),0 12px 28px -10px rgba(17,24,39,0.28),inset 0 1px 0 rgba(255,255,255,0.95)",
         border:"1px solid rgba(167,139,250,0.32)",
         pointerEvents:"auto", overflow:"hidden",
-        animation:"tnl-tour-pop 320ms cubic-bezier(0.22,1,0.36,1)",
-        WebkitTapHighlightColor:"transparent",
-        zIndex: 622,
+        animation:"tnl-pop 320ms cubic-bezier(0.22,1,0.36,1)",
+        WebkitTapHighlightColor:"transparent", zIndex:622,
       }}>
         <span aria-hidden style={{pointerEvents:"none",position:"absolute",top:-60,right:-50,width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,rgba(167,139,250,0.28) 0%,rgba(167,139,250,0) 70%)",filter:"blur(6px)"}}/>
         <span aria-hidden style={{pointerEvents:"none",position:"absolute",bottom:-70,left:-50,width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,rgba(124,58,237,0.20) 0%,rgba(124,58,237,0) 70%)",filter:"blur(8px)"}}/>
 
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",gap:12,marginBottom:12}}>
-          <div style={{width:50,height:50,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,background:"linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 60%,#DDD6FE 100%)",border:"1px solid rgba(167,139,250,0.35)",boxShadow:"0 10px 22px -8px rgba(124,58,237,0.40),inset 0 1px 0 rgba(255,255,255,0.9)",flexShrink:0,animation:"tnl-tour-icon 420ms cubic-bezier(0.22,1,0.36,1)"}}>
+          <div style={{width:50,height:50,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,background:"linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 60%,#DDD6FE 100%)",border:"1px solid rgba(167,139,250,0.35)",boxShadow:"0 10px 22px -8px rgba(124,58,237,0.40),inset 0 1px 0 rgba(255,255,255,0.9)",flexShrink:0,animation:"tnl-icon 420ms cubic-bezier(0.22,1,0.36,1)"}}>
             {step.icon}
           </div>
           <div style={{flex:1,minWidth:0}}>
@@ -166,7 +160,7 @@ export default function GuidedTourOverlay({
 
         <div style={{position:"relative",height:8,background:"linear-gradient(180deg,#F1EEFB 0%,#EDE9FE 100%)",borderRadius:999,overflow:"hidden",margin:"10px 0 18px",boxShadow:"inset 0 1px 2px rgba(76,29,149,0.10)"}}>
           <div style={{position:"relative",height:"100%",width:`${progress}%`,background:"linear-gradient(90deg,#4C1D95 0%,#7C3AED 50%,#9F67FA 100%)",borderRadius:999,transition:"width 500ms cubic-bezier(0.22,1,0.36,1)",overflow:"hidden"}}>
-            <span aria-hidden style={{position:"absolute",top:0,left:0,width:"40%",height:"100%",background:"linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.55) 50%,rgba(255,255,255,0) 100%)",animation:"tnl-tour-shine 1.8s ease-in-out infinite"}}/>
+            <span aria-hidden style={{position:"absolute",top:0,left:0,width:"40%",height:"100%",background:"linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.55) 50%,rgba(255,255,255,0) 100%)",animation:"tnl-shine 1.8s ease-in-out infinite"}}/>
           </div>
         </div>
 
