@@ -7103,6 +7103,35 @@ return rebuiltHistory;
     else goForwardBySwipe();
   };
 
+  // Calcula a chave do primeiro item pendente globalmente na lista atual
+  // para que apenas UM ItemRow receba isFirstItem=true (para o tour)
+  const globalFirstPendingKey = (() => {
+    if (!currentList?.categories) return null;
+    const sorted = [...currentList.categories]
+      .map((cat, origIdx) => ({ cat, origIdx }))
+      .sort((a, b) => {
+        const aExtra = normalizePlainText(a.cat.name) === "itens extras";
+        const bExtra = normalizePlainText(b.cat.name) === "itens extras";
+        if (aExtra !== bExtra) return aExtra ? 1 : -1;
+        const aDone = a.cat.items.length > 0 && a.cat.items.every(i => i.checked || i.notFound);
+        const bDone = b.cat.items.length > 0 && b.cat.items.every(i => i.checked || i.notFound);
+        if (aDone === bDone) return a.origIdx - b.origIdx;
+        return aDone ? 1 : -1;
+      });
+    for (const { cat } of sorted) {
+      const pending = [...cat.items].sort((a, b) => {
+        const aDone = !!(a.checked || a.notFound);
+        const bDone = !!(b.checked || b.notFound);
+        if (aDone === bDone) return !aDone ? String(a.name || "").localeCompare(String(b.name || ""), "pt-BR") : 0;
+        return aDone ? 1 : -1;
+      });
+      const first = pending.find(i => !i.checked && !i.notFound);
+      if (first) return `${first.name}__${first.unit}__${first.qty}`;
+    }
+    return null;
+  })();
+
+
   return(
     <div
       onTouchStart={handleSwipeStart}
@@ -7830,6 +7859,7 @@ return rebuiltHistory;
           })()}
 
           <div data-tour-step="list_search">
+          <div data-tour-step="list_search">
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7838,35 +7868,11 @@ return rebuiltHistory;
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
           </div>
+          </div>
 
           {/* Categorias com cores */}
           <div ref={listRef} style={{flex:1,padding:"14px 20px 110px",overflowY:"auto"}}>
-            {(()=>{
-              // Calcula a chave do primeiro item pendente globalmente
-              // para passar isFirstItem=true apenas para esse item específico
-              let globalFirstPendingKey = null;
-              const sortedCats = [...currentList.categories]
-                .map((cat,origIdx)=>({cat,origIdx}))
-                .sort((a,b)=>{
-                  const aExtra=normalizePlainText(a.cat.name)==="itens extras";
-                  const bExtra=normalizePlainText(b.cat.name)==="itens extras";
-                  if(aExtra!==bExtra)return aExtra?1:-1;
-                  const aDone=a.cat.items.length>0&&a.cat.items.every(i=>i.checked||i.notFound);
-                  const bDone=b.cat.items.length>0&&b.cat.items.every(i=>i.checked||i.notFound);
-                  if(aDone===bDone)return a.origIdx-b.origIdx;
-                  return aDone?1:-1;
-                });
-              for(const {cat} of sortedCats){
-                const pending=[...cat.items].sort((a,b)=>{
-                  const aDone=!!(a.checked||a.notFound);
-                  const bDone=!!(b.checked||b.notFound);
-                  if(aDone===bDone) return !aDone?String(a.name||"").localeCompare(String(b.name||""),"pt-BR"):0;
-                  return aDone?1:-1;
-                });
-                const first=pending.find(i=>!i.checked&&!i.notFound);
-                if(first){ globalFirstPendingKey=`${first.name}__${first.unit}__${first.qty}`; break; }
-              }
-              return [...currentList.categories]
+            {[...currentList.categories]
               .map((cat,origIdx)=>({cat,origIdx}))
               .sort((a,b)=>{
                 const aExtra=normalizePlainText(a.cat.name)==="itens extras";
@@ -7957,14 +7963,15 @@ return rebuiltHistory;
                 </div>
               );
             })}
-          })()}
           </div>
 
+          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
+          </div>
           </div>
         </div>
       )}
