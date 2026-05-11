@@ -20,6 +20,7 @@ export default function ItemRow({
   checkHighlightStyle = {},
   missingHighlightStyle = {},
   isFirstItem = false,
+  rowRef = null,
 }) {
   const checked = Boolean(item?.checked);
   const notFound = Boolean(item?.notFound);
@@ -44,6 +45,7 @@ export default function ItemRow({
 
   return (
     <div
+      ref={rowRef}
       style={{
         position: "relative",
         display: "grid",
