@@ -3237,6 +3237,7 @@ const [lists,setLists]=useState(()=>{
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
+  const tourItemRef=useRef(null);
   const swipeStartRef=useRef({x:0,y:0,t:0,active:false});
   const priceInputRef=useRef(null);
 
@@ -3317,6 +3318,7 @@ const [lists,setLists]=useState(()=>{
 
   // List screen
   const [search,setSearch]=useState("");
+  const [tourItemRect,setTourItemRect]=useState(null);
   const [collapsedCats,setCollapsedCats]=useState({});
 
   // Item modal
@@ -7103,8 +7105,7 @@ return rebuiltHistory;
     else goForwardBySwipe();
   };
 
-  // Chave do primeiro item pendente (não marcado, não em falta) na lista atual.
-  // Garante que apenas UM ItemRow receba isFirstItem=true para o tour guiado.
+
   const globalFirstPendingKey = (() => {
     if (!currentList?.categories) return null;
     const sortedCats = [...currentList.categories]
@@ -7130,6 +7131,35 @@ return rebuiltHistory;
     }
     return null;
   })();
+
+    // Mede o primeiro ItemRow quando o tour está nos passos de item (3/4/5)
+  // e passa as coordenadas diretamente para o overlay, evitando problemas
+  // com querySelector dentro de scroll containers.
+  useEffect(() => {
+    const itemSteps = ["list_item_check", "list_item_price", "list_item_missing"];
+    if (!showGuidedTour || !guidedTourStep || !itemSteps.includes(guidedTourStep.id)) {
+      setTourItemRect(null);
+      return;
+    }
+    const measure = () => {
+      const el = tourItemRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 || r.height > 0) {
+        const pad = 10;
+        setTourItemRect({
+          x: r.left - pad,
+          y: r.top - pad,
+          w: r.width + pad * 2,
+          h: r.height + pad * 2,
+          centerY: r.top + r.height / 2,
+        });
+      }
+    };
+    measure();
+    const t = setTimeout(measure, 300);
+    return () => clearTimeout(t);
+  }, [showGuidedTour, guidedTourStep?.id]);
 
 
   return(
@@ -7202,6 +7232,7 @@ return rebuiltHistory;
       <GuidedTourController
         show={showGuidedTour}
         step={guidedTourStep}
+        externalRect={tourItemRect}
         userNameModal={userNameModal}
         index={guidedTourLocalIndex}
         total={guidedTourLocalTotal}
@@ -7859,7 +7890,6 @@ return rebuiltHistory;
           })()}
 
           <div data-tour-step="list_search">
-          <div data-tour-step="list_search">
           <SearchBar
             searchRef={searchRef}
             search={search}
@@ -7867,7 +7897,6 @@ return rebuiltHistory;
             inputStyle={{ ...inp({ padding: "12px 16px 12px 42px", borderRadius: 180 }) }}
             highlightStyle={tourHighlightStyle(isTourStep("list_search"))}
           />
-          </div>
           </div>
 
           {/* Categorias com cores */}
@@ -7927,9 +7956,11 @@ return rebuiltHistory;
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
+                        const isFP = `${item.name}||${item.unit}||${item.qty}`===globalFirstPendingKey;
                         return(
                           <ItemRow
                             key={`${ci}-${realII}-${item.name || "item"}`}
+                            rowRef={isFP ? tourItemRef : null}
                             item={item}
                             ci={ci}
                             ii={ii}
@@ -7966,12 +7997,10 @@ return rebuiltHistory;
           </div>
 
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
-          <div data-tour-step="list_extra_item" style={{position:"relative"}}>
           <FloatingActions
             onAddExtraItem={() => setExtraModal(true)}
             highlightExtraItem={isTourStep("list_extra_item")}
           />
-          </div>
           </div>
         </div>
       )}
