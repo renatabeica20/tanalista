@@ -122,7 +122,8 @@ import {
   getListTypeConfig,
   getListTypePromptContext,
 } from "./config/listTypeConfigs";
-// Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
+import { getListTypeSuggestions } from "./config/listTypeSuggestions";
+// Etapa 7.70 - Sugestões inteligentes por tipo de lista e modal contextual
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -7651,6 +7652,7 @@ return rebuiltHistory;
           setListType={setListType}
           LIST_TYPES={LIST_TYPES}
           listTypeConfig={getListTypeConfig(listType)}
+          listTypeSuggestions={getListTypeSuggestions(listType)}
           currentInput={currentInput}
           handleAddItem={handleAddItem}
           setPasteTarget={setPasteTarget}
@@ -7757,6 +7759,7 @@ return rebuiltHistory;
         parseBRL={parseBRL}
         getExtraPriceInputLabel={getExtraPriceInputLabel}
         getCategoryForExtraItem={getCategoryForExtraItem}
+        listType={currentList?.type || listType}
       />
 
       {/* ════════════════════════════════════
