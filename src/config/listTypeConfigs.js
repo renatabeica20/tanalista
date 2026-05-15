@@ -3,9 +3,18 @@ export const LIST_TYPE_CONFIGS = {
     id: "mercado",
     label: "Supermercado",
     icon: "🛒",
-    placeholder: "Digite itens de supermercado, como arroz, leite, carne...",
+    placeholder: "Digite os itens da sua compra...",
     defaultUnit: "unidade",
-    units: ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "garrafa", "lata"],
+    units: [
+      "unidade",
+      "pacote",
+      "kg",
+      "litro",
+      "caixa",
+      "fardo",
+      "garrafa",
+      "lata"
+    ],
     categories: [
       "Hortifruti",
       "Padaria e Matinais",
@@ -23,16 +32,24 @@ export const LIST_TYPE_CONFIGS = {
     id: "festa",
     label: "Eventos",
     icon: "🎉",
-    placeholder: "Digite itens para evento, como descartáveis, bebidas, decoração...",
+    placeholder: "Digite os itens do evento...",
     defaultUnit: "unidade",
-    units: ["unidade", "pacote", "caixa", "fardo", "kg", "litro", "garrafa"],
+    units: [
+      "unidade",
+      "pacote",
+      "caixa",
+      "fardo",
+      "kg",
+      "litro",
+      "garrafa",
+      "lata"
+    ],
     categories: [
+      "Carnes e Aves",
       "Bebidas",
-      "Alimentos",
-      "Descartáveis",
+      "Descartáveis e Embalagens",
       "Decoração",
-      "Limpeza",
-      "Equipamentos",
+      "Gelo e Apoio",
       "Outros"
     ]
   },
@@ -41,16 +58,29 @@ export const LIST_TYPE_CONFIGS = {
     id: "construcao",
     label: "Construção",
     icon: "🏗️",
-    placeholder: "Digite materiais de construção, como cimento, areia, tijolo...",
+    placeholder: "Digite materiais de construção...",
     defaultUnit: "unidade",
-    units: ["unidade", "saco", "metro", "m²", "m³", "kg", "litro", "barra", "rolo"],
+    units: [
+      "unidade",
+      "saco",
+      "metro",
+      "m²",
+      "kg",
+      "litro",
+      "barra",
+      "rolo",
+      "lata",
+      "caixa",
+      "mileiro"
+    ],
     categories: [
       "Materiais Básicos",
       "Acabamento",
       "Hidráulica",
       "Ferragens",
       "Ferramentas",
-      "Tintas",
+      "Tintas e Pintura",
+      "Elétrica",
       "Outros"
     ]
   },
@@ -59,9 +89,16 @@ export const LIST_TYPE_CONFIGS = {
     id: "eletrico",
     label: "Elétrico",
     icon: "⚡",
-    placeholder: "Digite itens elétricos, como fio, tomada, disjuntor...",
+    placeholder: "Digite materiais elétricos...",
     defaultUnit: "unidade",
-    units: ["unidade", "metro", "rolo", "caixa", "barra", "kit"],
+    units: [
+      "unidade",
+      "metro",
+      "rolo",
+      "caixa",
+      "barra",
+      "kit"
+    ],
     categories: [
       "Fios e Cabos",
       "Tomadas e Interruptores",
@@ -77,16 +114,20 @@ export const LIST_TYPE_CONFIGS = {
     id: "escolar",
     label: "Escolar",
     icon: "🏫",
-    placeholder: "Digite materiais escolares, como caderno, lápis, mochila...",
+    placeholder: "Digite os materiais escolares...",
     defaultUnit: "unidade",
-    units: ["unidade", "caixa", "pacote", "kit"],
+    units: [
+      "unidade",
+      "caixa",
+      "pacote",
+      "kit"
+    ],
     categories: [
+      "Cadernos",
+      "Material de Escrita",
       "Papelaria",
-      "Escrita",
-      "Cadernos e Papéis",
       "Artes",
       "Mochilas e Estojos",
-      "Uniformes",
       "Outros"
     ]
   },
@@ -95,16 +136,22 @@ export const LIST_TYPE_CONFIGS = {
     id: "farmacia",
     label: "Farmácia",
     icon: "💊",
-    placeholder: "Digite itens de farmácia, como fralda, sabonete, curativo...",
+    placeholder: "Digite itens de farmácia...",
     defaultUnit: "unidade",
-    units: ["unidade", "caixa", "pacote", "frasco", "tubo", "cartela"],
+    units: [
+      "unidade",
+      "caixa",
+      "pacote",
+      "frasco",
+      "tubo",
+      "cartela"
+    ],
     categories: [
       "Medicamentos",
       "Higiene Pessoal",
       "Curativos",
-      "Bebê",
+      "Bebês",
       "Dermocosméticos",
-      "Suplementos",
       "Outros"
     ]
   },
@@ -113,16 +160,23 @@ export const LIST_TYPE_CONFIGS = {
     id: "condominio",
     label: "Condomínio",
     icon: "🏢",
-    placeholder: "Digite itens para condomínio, como limpeza, manutenção, escritório...",
+    placeholder: "Digite itens do condomínio...",
     defaultUnit: "unidade",
-    units: ["unidade", "pacote", "caixa", "litro", "galão", "kg"],
+    units: [
+      "unidade",
+      "pacote",
+      "caixa",
+      "litro",
+      "galão",
+      "kg"
+    ],
     categories: [
       "Limpeza",
+      "Higiene e Perfumaria",
+      "Elétrica",
       "Manutenção",
       "Segurança",
-      "Escritório",
       "Jardinagem",
-      "Uso Comum",
       "Outros"
     ]
   },
@@ -133,7 +187,14 @@ export const LIST_TYPE_CONFIGS = {
     icon: "📦",
     placeholder: "Digite os itens da sua lista...",
     defaultUnit: "unidade",
-    units: ["unidade", "pacote", "caixa", "kg", "litro", "metro"],
+    units: [
+      "unidade",
+      "pacote",
+      "caixa",
+      "kg",
+      "litro",
+      "metro"
+    ],
     categories: [
       "Itens Gerais",
       "Outros"
@@ -148,10 +209,17 @@ export function getListTypeConfig(type) {
 export function getListTypePromptContext(type) {
   const config = getListTypeConfig(type);
 
-  return [
-    `Tipo de lista: ${config.label}`,
-    `Categorias preferenciais: ${config.categories.join(", ")}`,
-    `Unidades preferenciais: ${config.units.join(", ")}`,
-    `Contexto: organize os itens considerando uma lista de ${config.label.toLowerCase()}.`
-  ].join("\n");
+  return `
+Tipo da lista: ${config.label}
+
+Categorias permitidas:
+${config.categories.join(", ")}
+
+Regras obrigatórias:
+- NÃO utilizar categorias de supermercado para listas técnicas.
+- Organizar itens somente dentro das categorias do tipo selecionado.
+- NÃO criar categoria "Mercearia" para Construção, Elétrica, Escolar ou Farmácia.
+- NÃO misturar categorias de supermercado com outros segmentos.
+- Use categorias coerentes com o segmento selecionado.
+`;
 }
