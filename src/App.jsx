@@ -117,6 +117,11 @@ import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ShoppingListPreview from "./components/ShoppingListPreview";
+import {
+  LIST_TYPE_CONFIGS,
+  getListTypeConfig,
+  getListTypePromptContext
+} from "./config/listTypeConfigs";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
@@ -858,16 +863,10 @@ function getListOriginMeta(list) {
   return null;
 }
 
-const LIST_TYPES = [
-  {id:"mercado",   label:"🛒 Supermercado"},
-  {id:"festa",     label:"🎉 Eventos"},
-  {id:"construcao",label:"🏗️ Construção"},
-  {id:"eletrico",  label:"⚡ Elétrico"},
-  {id:"escolar",   label:"🏫 Escolar"},
-  {id:"farmacia",  label:"💊 Farmácia"},
-  {id:"condominio",label:"🏢 Condomínio"},
-  {id:"outros",    label:"📦 Outras"},
-];
+const LIST_TYPES = Object.values(LIST_TYPE_CONFIGS).map((type) => ({
+  id: type.id,
+  label: `${type.icon} ${type.label}`,
+}));
 
 const TYPE_NAMES = {
   mercado:"supermercado", festa:"eventos", construcao:"construção",
