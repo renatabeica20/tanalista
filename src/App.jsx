@@ -124,7 +124,7 @@ import {
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
 import { getListTypeRules } from "./config/listTypeRules";
-// Etapa 7.74 - Prioridade forte do reclassificador por tipo de lista
+// Etapa 7.75 - Merge final obrigatório por categoria reclassificada
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1613,45 +1613,52 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
   const buckets = new Map();
 
-  const addItemToCategory = (categoryName, item) => {
-    const safeCategory = categoryExistsInConfig(normalizedType, categoryName)
-      ? categoryName
-      : getAllowedCategoryFallback(normalizedType);
-
-    const existing = buckets.get(safeCategory) || {
-      name: safeCategory,
-      items: [],
-    };
-
-    existing.items.push(normalizeListItem(item));
-    buckets.set(safeCategory, existing);
+  const getCanonicalAllowedCategory = (categoryName) => {
+    const found = allowedCategories.find(
+      (cat) => normalizePlainText(cat) === normalizePlainText(categoryName)
+    );
+    return found || null;
   };
 
+  const fallbackCategory =
+    getCanonicalAllowedCategory("Outros") ||
+    allowedCategories[allowedCategories.length - 1] ||
+    "Outros";
+
+  const addItemToCategory = (categoryName, item) => {
+    const canonical = getCanonicalAllowedCategory(categoryName) || fallbackCategory;
+    const current = buckets.get(canonical) || { name: canonical, items: [] };
+    current.items.push(normalizeListItem(item));
+    buckets.set(canonical, current);
+  };
+
+  const flatItems = [];
+
   (Array.isArray(categories) ? categories : []).forEach((cat) => {
-    const originalCategory = cat?.name || getAllowedCategoryFallback(normalizedType);
+    const originalCategory = cat?.name || fallbackCategory;
     const items = Array.isArray(cat?.items) ? cat.items : [];
 
     items.forEach((rawItem) => {
       const item = normalizeListItem(rawItem);
       if (!item?.name || isQuantityOnlyItemName(item.name)) return;
-
-      const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
-
-      if (keywordCategory) {
-        addItemToCategory(keywordCategory, item);
-        return;
-      }
-
-      if (isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory)) {
-        addItemToCategory(getAllowedCategoryFallback(normalizedType), item);
-        return;
-      }
-
-      addItemToCategory(originalCategory, item);
+      flatItems.push({ item, originalCategory });
     });
   });
 
-  // Ordena categorias conforme a ordem do tipo selecionado e, dentro delas, ordena itens.
+  flatItems.forEach(({ item, originalCategory }) => {
+    const directCategory = getDirectCategoryOverride(normalizedType, item);
+    const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
+    const originalAllowed = getCanonicalAllowedCategory(originalCategory);
+
+    const finalCategory =
+      getCanonicalAllowedCategory(directCategory) ||
+      getCanonicalAllowedCategory(keywordCategory) ||
+      (!isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory) ? originalAllowed : null) ||
+      fallbackCategory;
+
+    addItemToCategory(finalCategory, item);
+  });
+
   const result = allowedCategories
     .map((categoryName) => buckets.get(categoryName))
     .filter(Boolean)
@@ -1659,25 +1666,14 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
       ...cat,
       items: (Array.isArray(cat.items) ? cat.items : [])
         .filter((item) => item?.name)
-        .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")),
+        .sort((a, b) =>
+          normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")
+        ),
     }))
     .filter((cat) => cat.items.length > 0);
 
-  // Garante que nenhuma categoria válida criada fora da ordem se perca.
-  Array.from(buckets.values()).forEach((cat) => {
-    if (!result.some((r) => normalizePlainText(r.name) === normalizePlainText(cat.name))) {
-      result.push({
-        ...cat,
-        items: (Array.isArray(cat.items) ? cat.items : [])
-          .filter((item) => item?.name)
-          .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")),
-      });
-    }
-  });
-
   return result.length ? result : sanitizeCategories(categories);
 }
-
 
 function loadUserItemMemory() {
   try {
