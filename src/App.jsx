@@ -124,7 +124,7 @@ import {
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
 import { getListTypeRules } from "./config/listTypeRules";
-// Etapa 7.75 - Merge final obrigatório por categoria reclassificada
+// Etapa 7.76 - Override final rígido por item e categorias permitidas
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1625,6 +1625,74 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
     allowedCategories[allowedCategories.length - 1] ||
     "Outros";
 
+  const hasAllowedCategory = (categoryName) => Boolean(getCanonicalAllowedCategory(categoryName));
+
+  const inferFinalCategoryByItem = (item) => {
+    const text = normalizeTextForCategory([
+      item?.name,
+      item?.detail,
+      item?.marca,
+      item?.tipo,
+      item?.embalagem,
+      item?.peso,
+      item?.volume,
+    ].filter(Boolean).join(" "));
+
+    const has = (words) => words.some((word) => text.includes(normalizeTextForCategory(word)));
+    const pick = (categoryName) => hasAllowedCategory(categoryName) ? categoryName : null;
+
+    // Eventos
+    if (normalizedType === "festa" || hasAllowedCategory("Gelo e Apoio")) {
+      if (has(["cerveja", "heineken", "skol", "brahma", "antarctica", "refrigerante", "coca", "guarana", "água", "agua", "suco", "energético", "energetico"])) {
+        return pick("Bebidas");
+      }
+      if (has(["gelo", "gelo 5kg", "gelo 12kg", "carvão", "carvao", "carvão 12kg", "carvao 12kg", "fósforo", "fosforo", "acendedor"])) {
+        return pick("Gelo e Apoio") || pick("Outros");
+      }
+      if (has(["copo", "prato", "guardanapo", "talher", "descartável", "descartavel"])) {
+        return pick("Descartáveis e Embalagens");
+      }
+      if (has(["picanha", "linguiça", "linguica", "coxinha da asa", "carne", "frango", "costela"])) {
+        return pick("Carnes e Aves");
+      }
+    }
+
+    // Construção
+    if (normalizedType === "construcao" || hasAllowedCategory("Materiais Básicos")) {
+      if (has(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
+        return pick("Materiais Básicos");
+      }
+      if (has(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) {
+        return pick("Acabamento");
+      }
+      if (has(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "barra", "arame"])) {
+        return pick("Ferragens");
+      }
+      if (has(["tinta", "rolo", "pincel", "lixa", "selador"])) {
+        return pick("Tintas e Pintura");
+      }
+    }
+
+    // Mercado
+    if (normalizedType === "mercado") {
+      if (has(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) {
+        return pick("Frios e Laticínios");
+      }
+      if (has(["carne moída", "carne moida", "carne moi", "coxão mole", "coxao mole", "colchão mole", "colchao mole", "picanha", "linguiça", "linguica", "frango"])) {
+        return pick("Carnes e Aves");
+      }
+    }
+
+    // Farmácia
+    if (normalizedType === "farmacia") {
+      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return pick("Medicamentos");
+      if (has(["gaze", "algodão", "algodao", "curativo", "atadura"])) return pick("Curativos");
+      if (has(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return pick("Bebês");
+    }
+
+    return null;
+  };
+
   const addItemToCategory = (categoryName, item) => {
     const canonical = getCanonicalAllowedCategory(categoryName) || fallbackCategory;
     const current = buckets.get(canonical) || { name: canonical, items: [] };
@@ -1646,11 +1714,13 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
   });
 
   flatItems.forEach(({ item, originalCategory }) => {
+    const hardCategory = inferFinalCategoryByItem(item);
     const directCategory = getDirectCategoryOverride(normalizedType, item);
     const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
     const originalAllowed = getCanonicalAllowedCategory(originalCategory);
 
     const finalCategory =
+      getCanonicalAllowedCategory(hardCategory) ||
       getCanonicalAllowedCategory(directCategory) ||
       getCanonicalAllowedCategory(keywordCategory) ||
       (!isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory) ? originalAllowed : null) ||
