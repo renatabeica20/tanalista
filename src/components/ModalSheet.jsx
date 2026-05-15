@@ -1,4 +1,37 @@
+import { useEffect, useRef } from "react";
+
 export default function ModalSheet({ onClose, children }) {
+  const sheetRef = useRef(null);
+
+  // Impede que a página por trás role enquanto o modal está aberto
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Quando o teclado virtual abre no iPhone, o visualViewport encolhe.
+  // Reposicionamos o sheet para ficar logo acima do teclado.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const reposition = () => {
+      if (!sheetRef.current) return;
+      const offsetY = window.innerHeight - vv.height - vv.offsetTop;
+      sheetRef.current.style.transform = `translateY(-${Math.max(0, offsetY)}px)`;
+    };
+
+    vv.addEventListener("resize", reposition);
+    vv.addEventListener("scroll", reposition);
+    return () => {
+      vv.removeEventListener("resize", reposition);
+      vv.removeEventListener("scroll", reposition);
+    };
+  }, []);
+
   return (
     <div
       onClick={(event) => {
@@ -34,6 +67,7 @@ export default function ModalSheet({ onClose, children }) {
         }
       `}</style>
       <div
+        ref={sheetRef}
         className="tnl-modal-sheet"
         style={{
           position: "relative",
@@ -54,6 +88,8 @@ export default function ModalSheet({ onClose, children }) {
           maxHeight: "92vh",
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
+          transition: "transform 120ms ease-out",
+          willChange: "transform",
         }}
       >
         {/* drag handle */}
