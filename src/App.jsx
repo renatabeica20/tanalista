@@ -123,7 +123,7 @@ import {
   getListTypePromptContext,
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
-// Etapa 7.70 - Sugestões inteligentes por tipo de lista e modal contextual
+// Etapa 7.71 - Tipos de lista sem sugestões visíveis, unidades ajustadas e IA contextual reforçada
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -973,7 +973,11 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
 - coxão mole, fígado, bucho, acém, músculo e cortes/miúdos devem ficar em Carnes e Aves;
 - bombom, amendoim, castanhas e doces devem ficar em Snacks e Doces;
 - lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita;
-- quando a lista não for de supermercado, priorize as categorias preferenciais do tipo selecionado e evite classificar tudo como mercado.`;
+- quando a lista não for de supermercado, priorize as categorias preferenciais do tipo selecionado e evite classificar tudo como mercado;
+- para construção, nunca use Mercearia, Hortifruti, Cafés e Chás ou categorias de supermercado; use Materiais Básicos, Acabamento, Hidráulica, Ferragens, Ferramentas, Tintas ou Outros;
+- para elétrico, use Fios e Cabos, Tomadas e Interruptores, Disjuntores e Proteção, Iluminação, Conduítes e Eletrodutos, Ferramentas ou Outros;
+- para escolar, não use Hortifruti, Cafés e Chás ou Mercearia; use Papelaria, Escrita, Cadernos e Papéis, Artes, Mochilas e Estojos, Uniformes ou Outros;
+- para farmácia, classifique medicamentos pelo nome comercial ou princípio ativo em Medicamentos, itens infantis em Bebê e materiais de cuidado em Curativos/Higiene Pessoal.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -990,7 +994,7 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
       i.notFound = false;
     });
   });
-  return enforceKnownCategoryRules(sanitizeCategories(categories));
+  return enforceKnownCategoryRules(sanitizeCategories(categories), type);
 }
 
 
@@ -1181,7 +1185,13 @@ function normalizeUnitValue(unit) {
   if (/^m3$|^m³$|^metro cubico|^metro cúbico|^metros cubicos|^metros cúbicos/.test(raw)) return "m³";
   if (/^quilo|^kg$|^grama|^g$/.test(raw)) return "kg";
   if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
-  if (/^unidade|^un$|^lata|^garrafa|^duzia|^peca|^peça|^par/.test(raw)) return "unidade";
+  if (/^lata/.test(raw)) return "lata";
+  if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^duzia|^dúzia/.test(raw)) return "dúzia";
+  if (/^peca|^peça/.test(raw)) return "peça";
+  if (/^par/.test(raw)) return "par";
+  if (/^mileiro/.test(raw)) return "mileiro";
+  if (/^unidade|^un$/.test(raw)) return "unidade";
   return "unidade";
 }
 
@@ -1209,7 +1219,8 @@ function formatUnitForQuantity(qty, unit) {
     "unidade":"unidades",
     "dúzia":"dúzias",
     "peça":"peças",
-    "par":"pares"
+    "par":"pares",
+    "mileiro":"mileiros"
   };
   if (u === "kg") return "kg";
   return n > 1 ? (plural[u] || u) : u;
@@ -1760,12 +1771,79 @@ function inferPreferredCategoryForItem(item) {
   return "";
 }
 
-function enforceKnownCategoryRules(categories) {
+
+function inferPreferredCategoryForItemByType(item, type = "mercado") {
+  const normalizedType = String(type || "mercado");
+  const n = normalizeTextForCategory([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
+  const has = (...keys) => keys.some(k => n.includes(normalizeTextForCategory(k)));
+  const hasWord = (...keys) => keys.some((k) => {
+    const escaped = normalizeTextForCategory(k).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(n);
+  });
+
+  if (normalizedType === "construcao") {
+    if (has("cimento", "areia", "brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
+    if (has("piso", "porcelanato", "azulejo", "ceramica", "cerâmica", "rodape", "rodapé", "soleira", "revestimento")) return "Acabamento";
+    if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas";
+    if (has("cano", "tubo", "pvc", "joelho", "luva", "registro", "torneira", "sifao", "sifão", "ralo")) return "Hidráulica";
+    if (has("prego", "parafuso", "bucha", "porca", "arruela", "dobradica", "dobradiça", "fechadura")) return "Ferragens";
+    if (has("martelo", "alicate", "trena", "nivel", "nível", "furadeira", "parafusadeira", "serra", "desempenadeira", "colher de pedreiro")) return "Ferramentas";
+    return "Outros";
+  }
+
+  if (normalizedType === "eletrico") {
+    if (has("fio", "cabo", "flexivel", "flexível", "bitola", "2,5", "4mm", "6mm")) return "Fios e Cabos";
+    if (has("tomada", "interruptor", "placa", "espelho")) return "Tomadas e Interruptores";
+    if (has("disjuntor", "dr", "dps", "quadro de distribuição", "quadro distribuicao", "barramento")) return "Disjuntores e Proteção";
+    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor")) return "Iluminação";
+    if (has("conduite", "conduíte", "eletroduto", "canaleta", "caixa de passagem", "caixa 4x2", "caixa 4x4")) return "Conduítes e Eletrodutos";
+    if (has("alicate", "chave teste", "multimetro", "multímetro", "fita isolante")) return "Ferramentas";
+    return "Outros";
+  }
+
+  if (normalizedType === "escolar") {
+    if (has("caderno", "agenda", "fichario", "fichário")) return "Cadernos e Papéis";
+    if (has("lapis", "lápis", "caneta", "borracha", "apontador", "lapiseira", "grafite", "marca texto", "marca-texto", "regua", "régua", "canetinha", "lapis de cor", "lápis de cor")) return "Escrita";
+    if (has("cola", "tesoura", "tinta guache", "pincel", "cartolina", "eva", "giz de cera")) return "Artes";
+    if (has("mochila", "estojo", "lancheira")) return "Mochilas e Estojos";
+    if (has("uniforme", "camiseta", "calça", "bermuda", "meia", "tenis", "tênis")) return "Uniformes";
+    if (has("papel sulfite", "sulfite", "papel almaço", "papel almaco", "folha")) return "Cadernos e Papéis";
+    return "Papelaria";
+  }
+
+  if (normalizedType === "farmacia") {
+    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento")) return "Medicamentos";
+    if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta")) return "Bebê";
+    if (has("curativo", "algodão", "algodao", "gaze", "esparadrapo", "soro fisiológico", "soro fisiologico", "alcool 70", "álcool 70")) return "Curativos";
+    if (has("sabonete", "shampoo", "condicionador", "escova", "creme dental", "fio dental", "desodorante")) return "Higiene Pessoal";
+    if (has("protetor solar", "repelente", "hidratante", "pomada dermatologica", "pomada dermatológica")) return "Dermocosméticos";
+    if (has("vitamina", "suplemento", "whey", "colageno", "colágeno")) return "Suplementos";
+    return "Outros";
+  }
+
+  if (normalizedType === "festa") {
+    if (has("carne", "frango", "linguica", "linguiça", "pao de alho", "pão de alho")) return "Carnes e Aves";
+    if (has("agua", "água", "refrigerante", "suco", "cerveja", "energetico", "energético")) return "Bebidas";
+    if (has("copo", "prato", "talher", "guardanapo", "toalha de mesa", "descartavel", "descartável")) return "Descartáveis e Embalagens";
+    if (has("balao", "balão", "decoracao", "decoração", "vela", "faixa")) return "Decoração";
+    if (has("bolo", "doce", "salgado", "salgadinho", "carvão", "carvao", "gelo")) return "Alimentos";
+    return "Outros";
+  }
+
+  if (normalizedType === "condominio") {
+    const generic = inferPreferredCategoryForItem(item);
+    return generic || "Outros";
+  }
+
+  return inferPreferredCategoryForItem(item);
+}
+
+function enforceKnownCategoryRules(categories, type = "mercado") {
   const buckets = {};
   (Array.isArray(categories) ? categories : []).forEach((cat) => {
     (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
       if (isQuantityOnlyItemName(item.name)) return;
-      const preferred = inferPreferredCategoryForItem(item) || cat.name || "Outros";
+      const preferred = inferPreferredCategoryForItemByType(item, type) || cat.name || "Outros";
       if (!buckets[preferred]) buckets[preferred] = [];
       buckets[preferred].push(item);
     });
@@ -3937,10 +4015,10 @@ const [lists,setLists]=useState(()=>{
   }, [pantryReviewReadOnly, pantryReviewDirty, resetPantryFlow, showToast]);
 
   const getManualDialogUnits = useCallback(() => {
-    return ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"];
+    return ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco", "metro", "m²", "lata", "garrafa", "rolo", "barra", "kit", "frasco", "tubo", "cartela", "galão", "mileiro"];
   }, []);
 
-  const isDecimalManualUnit = useCallback((unit) => ["kg", "litro"].includes(normalizeUnitValue(unit)), []);
+  const isDecimalManualUnit = useCallback((unit) => ["kg", "litro", "metro", "m²"].includes(normalizeUnitValue(unit)), []);
 
   const getManualQtyStep = useCallback((unit = dlgUnit) => isDecimalManualUnit(unit) ? 0.5 : 1, [dlgUnit, isDecimalManualUnit]);
 
