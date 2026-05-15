@@ -120,7 +120,7 @@ import ShoppingListPreview from "./components/ShoppingListPreview";
 import {
   LIST_TYPE_CONFIGS,
   getListTypeConfig,
-  getListTypePromptContext
+  getListTypePromptContext,
 } from "./config/listTypeConfigs";
 // Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
 
@@ -946,23 +946,33 @@ function maskBRLInput(value) {
 
 // ── AI ─────────────────────────────────────────────────────────────────────
 async function aiOrganize(items, type) {
-  const typeName = TYPE_NAMES[type] || "geral";
+  const typeConfig = getListTypeConfig(type);
+  const typeName = typeConfig?.label || TYPE_NAMES[type] || "geral";
+  const typePromptContext = getListTypePromptContext(type);
+  const preferredCategories = Array.isArray(typeConfig?.categories) ? typeConfig.categories.join(", ") : "";
+  const preferredUnits = Array.isArray(typeConfig?.units) ? typeConfig.units.join(", ") : "";
   const list = items
     .map((i) => `${[i.marca, i.tipo, i.name, i.embalagem || i.peso || i.volume].filter(Boolean).join(" ")} - ${i.qty} ${i.unit}`)
     .join("\n");
 
-  const prompt = `Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
+  const prompt = `${typePromptContext}
+
+Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
 {"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}
 
 ITENS:
 ${list}
+
+Categorias preferenciais para este tipo de lista: ${preferredCategories}.
+Unidades preferenciais para este tipo de lista: ${preferredUnits}.
 
 Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos. Antes de classificar, corrija nomes digitados de forma aproximada, como 'lápi de cor' para 'lápis de cor', 'lustra móvei' para 'lustra-móveis' e 'bom bom' para 'bombom'.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior;
 - itens como abóbora, rúcula, caqui, flores comestíveis/verduras e legumes devem ficar em Hortifruti;
 - álcool, lustra móvel, brilho alumínio, limpa alumínio, sapólio, bucha/esponja e produtos de limpeza devem ficar em Limpeza;
 - coxão mole, fígado, bucho, acém, músculo e cortes/miúdos devem ficar em Carnes e Aves;
 - bombom, amendoim, castanhas e doces devem ficar em Snacks e Doces;
-- lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita.`;
+- lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita;
+- quando a lista não for de supermercado, priorize as categorias preferenciais do tipo selecionado e evite classificar tudo como mercado.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -1158,6 +1168,16 @@ function normalizeUnitValue(unit) {
   if (/^caixa/.test(raw)) return "caixa";
   if (/^fardo/.test(raw)) return "fardo";
   if (/^saco/.test(raw)) return "saco";
+  if (/^rolo/.test(raw)) return "rolo";
+  if (/^barra/.test(raw)) return "barra";
+  if (/^kit/.test(raw)) return "kit";
+  if (/^frasco/.test(raw)) return "frasco";
+  if (/^tubo/.test(raw)) return "tubo";
+  if (/^cartela/.test(raw)) return "cartela";
+  if (/^galao|^galão/.test(raw)) return "galão";
+  if (/^metro$|^metros$|^m$/.test(raw)) return "metro";
+  if (/^m2$|^m²$|^metro quadrado|^metros quadrados/.test(raw)) return "m²";
+  if (/^m3$|^m³$|^metro cubico|^metro cúbico|^metros cubicos|^metros cúbicos/.test(raw)) return "m³";
   if (/^quilo|^kg$|^grama|^g$/.test(raw)) return "kg";
   if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
   if (/^unidade|^un$|^lata|^garrafa|^duzia|^peca|^peça|^par/.test(raw)) return "unidade";
@@ -1175,6 +1195,16 @@ function formatUnitForQuantity(qty, unit) {
     "garrafa":"garrafas",
     "litro":"litros",
     "saco":"sacos",
+    "rolo":"rolos",
+    "barra":"barras",
+    "kit":"kits",
+    "frasco":"frascos",
+    "tubo":"tubos",
+    "cartela":"cartelas",
+    "galão":"galões",
+    "metro":"metros",
+    "m²":"m²",
+    "m³":"m³",
     "unidade":"unidades",
     "dúzia":"dúzias",
     "peça":"peças",
@@ -4856,8 +4886,17 @@ const [lists,setLists]=useState(()=>{
 
   const openProductDialog = async (name, existing=null, options={}) => {
     const mode = options?.mode || "pending";
+    const activeTypeConfig = getListTypeConfig(options?.listType || currentList?.type || listType);
+    const mergeTypeUnits = (cfg) => ({
+      ...(cfg || {}),
+      unidades: Array.from(new Set([
+        ...((Array.isArray(cfg?.unidades) && cfg.unidades.length) ? cfg.unidades : []),
+        ...((Array.isArray(activeTypeConfig?.units) && activeTypeConfig.units.length) ? activeTypeConfig.units : []),
+      ])).filter(Boolean),
+    });
+
     if (existing) {
-      const cfg = getProductConfig(name);
+      const cfg = mergeTypeUnits(getProductConfig(name));
       setDlgConfig(cfg);
       setDlgMarca("");
       setDlgTipo("");
@@ -4870,11 +4909,13 @@ const [lists,setLists]=useState(()=>{
       return;
     }
     // Novo item manual: abre diálogo simples e rápido, sem marca/tipo.
-    const cfg = getProductConfig(name);
+    const cfg = mergeTypeUnits(getProductConfig(name));
     setDlgLoading(false);
     setDlgConfig(cfg);
     setDlgMarca(""); setDlgTipo("");
-    const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || "unidade");
+    const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes(activeTypeConfig?.defaultUnit)
+      ? activeTypeConfig.defaultUnit
+      : (Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || activeTypeConfig?.defaultUnit || "unidade"));
     setDlgUnit(normalizeUnitValue(preferredUnit));
     setDlgQty(1);
     setDlgPeso("");
@@ -6112,7 +6153,12 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
     return "unit";
   };
 
-  const getAllowedPurchaseUnits=()=>["unidade","pacote","kg","litro","caixa","fardo","saco"];
+  const getAllowedPurchaseUnits=()=>{
+    const activeType = currentList?.type || listType || "mercado";
+    const typeUnits = getListTypeConfig(activeType)?.units || [];
+    const baseUnits = ["unidade","pacote","kg","litro","caixa","fardo","saco"];
+    return Array.from(new Set([...typeUnits, ...baseUnits])).filter(Boolean);
+  };
 
   const inferPriceModeForUnit=(unit,item={})=>{
     const normalized=normalizeUnitValue(unit || item?.unit || "unidade");
@@ -7604,6 +7650,7 @@ return rebuiltHistory;
           listType={listType}
           setListType={setListType}
           LIST_TYPES={LIST_TYPES}
+          listTypeConfig={getListTypeConfig(listType)}
           currentInput={currentInput}
           handleAddItem={handleAddItem}
           setPasteTarget={setPasteTarget}
@@ -8112,7 +8159,7 @@ return rebuiltHistory;
             {mShowEditDetails && (
               <div style={{marginBottom:14,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12}}>
                 <label style={lbl}>Nome do item</label>
-                <input className="tnl-keyboard-safe-field" value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder="Nome do item" style={inp({height:50,fontWeight:800})} />
+                <input className="tnl-keyboard-safe-field" value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder={`Nome do item de ${getListTypeConfig(currentList?.type || listType).label.toLowerCase()}`} style={inp({height:50,fontWeight:800})} />
 
                 <div style={{height:12}} />
 
@@ -8221,7 +8268,7 @@ return rebuiltHistory;
             <label style={lbl}>Item</label>
             <input value={exName} onChange={e=>setExName(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){startExtraFlow();}}}
-              placeholder="Ex: cenoura, arroz, detergente..."
+              placeholder={getListTypeConfig(currentList?.type || listType).placeholder}
               style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
             {showCorrection&&(
               <button
@@ -8334,7 +8381,9 @@ return rebuiltHistory;
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📋 Colar lista de texto</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
           <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
-            placeholder={"- Arroz\n- Feijão\n- Leite\n- Detergente"}
+            placeholder={pasteTarget === "pantry"
+              ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
+              : getListTypeConfig(listType).placeholder}
             style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
           <button onClick={parsePastedText} disabled={!pasteText.trim()}
             style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
