@@ -124,7 +124,7 @@ import {
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
 import { getListTypeRules } from "./config/listTypeRules";
-// Etapa 7.73 - Reclassificação local definitiva após IA por tipo de lista
+// Etapa 7.74 - Prioridade forte do reclassificador por tipo de lista
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1303,20 +1303,52 @@ function sanitizeCategories(categories) {
 }
 
 
+function normalizeListTypeIdForRules(type) {
+  const raw = normalizePlainText(type || "mercado");
+  const aliases = {
+    "supermercado": "mercado",
+    "mercado": "mercado",
+    "evento": "festa",
+    "eventos": "festa",
+    "festa": "festa",
+    "festas": "festa",
+    "construcao": "construcao",
+    "construção": "construcao",
+    "obra": "construcao",
+    "reforma": "construcao",
+    "eletrico": "eletrico",
+    "elétrico": "eletrico",
+    "eletrica": "eletrico",
+    "elétrica": "eletrico",
+    "material eletrico": "eletrico",
+    "material elétrico": "eletrico",
+    "escolar": "escolar",
+    "farmacia": "farmacia",
+    "farmácia": "farmacia",
+    "condominio": "condominio",
+    "condomínio": "condominio",
+    "outros": "outros",
+    "outras": "outros"
+  };
+  return aliases[raw] || type || "mercado";
+}
+
 function categoryExistsInConfig(type, categoryName) {
-  const cfg = getListTypeConfig(type);
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const cfg = getListTypeConfig(normalizedType);
   const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
   return allowed.some((c) => normalizePlainText(c) === normalizePlainText(categoryName));
 }
 
 function getAllowedCategoryFallback(type) {
-  const cfg = getListTypeConfig(type);
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const cfg = getListTypeConfig(normalizedType);
   const allowed = Array.isArray(cfg?.categories) && cfg.categories.length ? cfg.categories : ["Outros"];
   return allowed.includes("Outros") ? "Outros" : allowed[allowed.length - 1];
 }
 
-function getKeywordCategoryForItem(type, item) {
-  const rules = getListTypeRules(type);
+function getDirectCategoryOverride(type, item) {
+  const normalizedType = normalizeListTypeIdForRules(type);
   const text = normalizeTextForCategory([
     item?.name,
     item?.detail,
@@ -1329,15 +1361,87 @@ function getKeywordCategoryForItem(type, item) {
 
   if (!text) return null;
 
+  const includesAny = (words) => words.some((w) => text.includes(normalizeTextForCategory(w)));
+
+  if (normalizedType === "festa") {
+    if (includesAny(["cerveja", "heineken", "refrigerante", "água", "agua", "suco", "energético", "energetico"])) return "Bebidas";
+    if (includesAny(["gelo", "carvão", "carvao", "fósforo", "fosforo", "acendedor"])) return "Gelo e Apoio";
+    if (includesAny(["picanha", "linguiça", "linguica", "coxinha da asa", "frango", "carne"])) return "Carnes e Aves";
+    if (includesAny(["copo", "prato", "guardanapo", "talher", "descartável", "descartavel"])) return "Descartáveis e Embalagens";
+  }
+
+  if (normalizedType === "construcao") {
+    if (includesAny(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
+    if (includesAny(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) return "Acabamento";
+    if (includesAny(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "arame", "barra"])) return "Ferragens";
+    if (includesAny(["tinta", "rolo", "pincel", "lixa", "selador"])) return "Tintas e Pintura";
+  }
+
+  if (normalizedType === "eletrico") {
+    if (includesAny(["fio", "cabo", "1,5mm", "2,5mm", "4mm"])) return "Fios e Cabos";
+    if (includesAny(["disjuntor", "bipolar", "monopolar", "dps", "dr"])) return "Disjuntores e Proteção";
+    if (includesAny(["aterramento", "haste", "conector", "barra"])) return "Conectores";
+    if (includesAny(["tomada", "interruptor"])) return "Tomadas e Interruptores";
+    if (includesAny(["lâmpada", "lampada", "luminária", "luminaria", "spot", "bocal"])) return "Iluminação";
+    if (includesAny(["fita isolante", "alicate", "multímetro", "multimetro"])) return "Ferramentas";
+  }
+
+  if (normalizedType === "mercado") {
+    if (includesAny(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) return "Frios e Laticínios";
+    if (includesAny(["carne moída", "carne moida", "carne moi", "coxão mole", "coxao mole", "colchão mole", "colchao mole", "picanha", "linguiça", "linguica", "frango"])) return "Carnes e Aves";
+    if (includesAny(["detergente", "sabão", "sabao", "desinfetante", "água sanitária", "agua sanitaria"])) return "Limpeza";
+  }
+
+  if (normalizedType === "farmacia") {
+    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return "Medicamentos";
+    if (includesAny(["gaze", "algodão", "algodao", "curativo", "atadura"])) return "Curativos";
+    if (includesAny(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return "Bebês";
+  }
+
+  if (normalizedType === "condominio") {
+    if (includesAny(["pano de chão", "pano de chao", "pano", "flanela", "rodo", "vassoura", "detergente", "água sanitária", "agua sanitaria"])) return "Limpeza";
+    if (includesAny(["papel toalha", "saco de lixo"])) return "Descartáveis e Embalagens";
+    if (includesAny(["papel higiênico", "papel higienico"])) return "Higiene e Perfumaria";
+  }
+
+  if (normalizedType === "escolar") {
+    if (includesAny(["lápis", "lapis", "caneta", "borracha", "apontador", "canetinha", "régua", "regua"])) return "Material de Escrita";
+    if (includesAny(["fita durex", "durex", "cola", "papel sulfite", "sulfite", "tesoura", "luva descartável", "luva descartavel"])) return "Papelaria";
+    if (includesAny(["caderno"])) return "Cadernos";
+  }
+
+  return null;
+}
+
+function getKeywordCategoryForItem(type, item) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const rules = getListTypeRules(normalizedType);
+  const text = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+    item?.peso,
+    item?.volume,
+  ].filter(Boolean).join(" "));
+
+  if (!text) return null;
+
+  const directCategory = getDirectCategoryOverride(normalizedType, item);
+  if (directCategory && categoryExistsInConfig(normalizedType, directCategory)) {
+    return directCategory;
+  }
+
   // Regras locais de alta prioridade por tipo de lista.
   const strongRules = {
     mercado: {
       "Carnes e Aves": [
-        "carne", "carne moi", "carne moida", "coxao", "coxao mole", "colchao mole",
+        "carne", "carne moi", "carne moida", "coxao", "coxao mole", "colchao mole", "colchão mole",
         "picanha", "linguica", "frango", "coxinha da asa", "costela", "figado", "bucho"
       ],
       "Frios e Laticínios": [
-        "leite", "manteiga", "margarina", "queijo", "presunto", "iogurte", "requeijao", "ovo", "ovos"
+        "leite", "manteiga", "mateiga", "margarina", "queijo", "presunto", "iogurte", "requeijao", "ovo", "ovos"
       ],
       "Hortifruti": [
         "batata", "tomate", "cebola", "alface", "banana", "maca", "maça", "laranja", "cenoura", "mamao"
@@ -1352,7 +1456,7 @@ function getKeywordCategoryForItem(type, item) {
 
     festa: {
       "Bebidas": [
-        "cerveja", "heineken", "refrigerante", "coca", "guarana", "agua", "suco", "energetico"
+        "cerveja", "heineken", "skol", "brahma", "antarctica", "refrigerante", "coca", "guarana", "agua", "água", "suco", "energetico", "energético"
       ],
       "Carnes e Aves": [
         "picanha", "carne", "linguica", "frango", "coxinha da asa", "costela", "asa"
@@ -1361,7 +1465,7 @@ function getKeywordCategoryForItem(type, item) {
         "copo", "prato", "talher", "garfo", "faca", "colher", "guardanapo", "descartavel", "toalha"
       ],
       "Gelo e Apoio": [
-        "gelo", "carvao", "fosforo", "acendedor"
+        "gelo", "gelo 12kg", "carvao", "carvão", "carvao 12kg", "carvão 12kg", "fosforo", "fósforo", "acendedor"
       ]
     },
 
@@ -1458,10 +1562,10 @@ function getKeywordCategoryForItem(type, item) {
     }
   };
 
-  const typeRules = strongRules[type] || {};
+  const typeRules = strongRules[normalizedType] || {};
 
   for (const [category, keywords] of Object.entries(typeRules)) {
-    if (!categoryExistsInConfig(type, category)) continue;
+    if (!categoryExistsInConfig(normalizedType, category)) continue;
     if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
       return category;
     }
@@ -1470,7 +1574,7 @@ function getKeywordCategoryForItem(type, item) {
   // Regras importadas do arquivo listTypeRules.js.
   if (rules?.keywords && typeof rules.keywords === "object") {
     for (const [category, keywords] of Object.entries(rules.keywords)) {
-      if (!categoryExistsInConfig(type, category)) continue;
+      if (!categoryExistsInConfig(normalizedType, category)) continue;
       if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
         return category;
       }
@@ -1481,18 +1585,19 @@ function getKeywordCategoryForItem(type, item) {
 }
 
 function isInvalidCategoryForTypeAdvanced(type, categoryName) {
+  const normalizedType = normalizeListTypeIdForRules(type);
   const plain = normalizePlainText(categoryName);
-  const rules = getListTypeRules(type);
+  const rules = getListTypeRules(normalizedType);
   const invalidByRules = Array.isArray(rules?.invalidCategories)
     ? rules.invalidCategories.some((c) => normalizePlainText(c) === plain)
     : false;
 
-  const cfg = getListTypeConfig(type);
+  const cfg = getListTypeConfig(normalizedType);
   const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
 
   // Para listas técnicas, qualquer categoria fora da configuração do tipo é inválida.
   const strictTypes = ["festa", "construcao", "eletrico", "escolar", "farmacia", "condominio"];
-  const outsideAllowed = strictTypes.includes(type)
+  const outsideAllowed = strictTypes.includes(normalizedType)
     ? !allowed.some((c) => normalizePlainText(c) === plain)
     : false;
 
@@ -1500,7 +1605,7 @@ function isInvalidCategoryForTypeAdvanced(type, categoryName) {
 }
 
 function postProcessOrganizedCategories(categories, type = "mercado") {
-  const normalizedType = type || "mercado";
+  const normalizedType = normalizeListTypeIdForRules(type || "mercado");
   const cfg = getListTypeConfig(normalizedType);
   const allowedCategories = Array.isArray(cfg?.categories) && cfg.categories.length
     ? cfg.categories
