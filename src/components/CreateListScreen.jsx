@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import AppLogo from "./AppLogo";
 import VoiceInput from "./VoiceInput";
-import { getListTypeSuggestions } from "../config/listTypeSuggestions";
 
 const inp = (extra = {}) => ({
   width: "100%",
@@ -308,38 +307,6 @@ export default function CreateListScreen({
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginTop: 14,
-        }}
-      >
-        {(getListTypeSuggestions?.(listType) || [])
-          .slice(0, 10)
-          .map((suggestion) => (
-            <button
-              key={suggestion}
-              onClick={() => setCurrentInput(suggestion)}
-              style={{
-                border: "1px solid #DDD6FE",
-                background: "linear-gradient(135deg,#FFFFFF,#F5F3FF)",
-                color: "#5B21B6",
-                borderRadius: 999,
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 800,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                boxShadow: "0 4px 10px rgba(109,40,217,0.08)",
-                WebkitTapHighlightColor: "transparent",
-              }}
-            >
-              {suggestion}
-            </button>
-          ))}
-      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
         <button data-tour-step="create_item_paste" onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
           style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
