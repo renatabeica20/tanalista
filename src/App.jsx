@@ -123,7 +123,8 @@ import {
   getListTypePromptContext,
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
-// Etapa 7.71 - Tipos de lista sem sugestões visíveis, unidades ajustadas e IA contextual reforçada
+import { getListTypeRules } from "./config/listTypeRules";
+// Etapa 7.72 - Motor local de reclassificação por tipo de lista
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -1784,7 +1785,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   if (normalizedType === "construcao") {
     if (has("cimento", "areia", "brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
     if (has("piso", "porcelanato", "azulejo", "ceramica", "cerâmica", "rodape", "rodapé", "soleira", "revestimento")) return "Acabamento";
-    if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas";
+    if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas e Pintura";
     if (has("cano", "tubo", "pvc", "joelho", "luva", "registro", "torneira", "sifao", "sifão", "ralo")) return "Hidráulica";
     if (has("prego", "parafuso", "bucha", "porca", "arruela", "dobradica", "dobradiça", "fechadura")) return "Ferragens";
     if (has("martelo", "alicate", "trena", "nivel", "nível", "furadeira", "parafusadeira", "serra", "desempenadeira", "colher de pedreiro")) return "Ferramentas";
@@ -1796,24 +1797,25 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     if (has("tomada", "interruptor", "placa", "espelho")) return "Tomadas e Interruptores";
     if (has("disjuntor", "dr", "dps", "quadro de distribuição", "quadro distribuicao", "barramento")) return "Disjuntores e Proteção";
     if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor")) return "Iluminação";
+    if (has("barra de aterramento", "aterramento", "conector", "conectores")) return "Conectores";
     if (has("conduite", "conduíte", "eletroduto", "canaleta", "caixa de passagem", "caixa 4x2", "caixa 4x4")) return "Conduítes e Eletrodutos";
     if (has("alicate", "chave teste", "multimetro", "multímetro", "fita isolante")) return "Ferramentas";
     return "Outros";
   }
 
   if (normalizedType === "escolar") {
-    if (has("caderno", "agenda", "fichario", "fichário")) return "Cadernos e Papéis";
-    if (has("lapis", "lápis", "caneta", "borracha", "apontador", "lapiseira", "grafite", "marca texto", "marca-texto", "regua", "régua", "canetinha", "lapis de cor", "lápis de cor")) return "Escrita";
+    if (has("caderno", "agenda", "fichario", "fichário")) return "Cadernos";
+    if (has("lapis", "lápis", "caneta", "borracha", "apontador", "lapiseira", "grafite", "marca texto", "marca-texto", "regua", "régua", "canetinha", "lapis de cor", "lápis de cor")) return "Material de Escrita";
     if (has("cola", "tesoura", "tinta guache", "pincel", "cartolina", "eva", "giz de cera")) return "Artes";
     if (has("mochila", "estojo", "lancheira")) return "Mochilas e Estojos";
     if (has("uniforme", "camiseta", "calça", "bermuda", "meia", "tenis", "tênis")) return "Uniformes";
-    if (has("papel sulfite", "sulfite", "papel almaço", "papel almaco", "folha")) return "Cadernos e Papéis";
+    if (has("papel sulfite", "sulfite", "papel almaço", "papel almaco", "folha")) return "Cadernos";
     return "Papelaria";
   }
 
   if (normalizedType === "farmacia") {
     if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento")) return "Medicamentos";
-    if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta")) return "Bebê";
+    if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta", "nan", "fórmula", "formula")) return "Bebês";
     if (has("curativo", "algodão", "algodao", "gaze", "esparadrapo", "soro fisiológico", "soro fisiologico", "alcool 70", "álcool 70")) return "Curativos";
     if (has("sabonete", "shampoo", "condicionador", "escova", "creme dental", "fio dental", "desodorante")) return "Higiene Pessoal";
     if (has("protetor solar", "repelente", "hidratante", "pomada dermatologica", "pomada dermatológica")) return "Dermocosméticos";
@@ -1822,11 +1824,12 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   }
 
   if (normalizedType === "festa") {
-    if (has("carne", "frango", "linguica", "linguiça", "pao de alho", "pão de alho")) return "Carnes e Aves";
+    if (has("carne", "frango", "linguica", "linguiça", "pao de alho", "pão de alho", "coxinha da asa", "asa")) return "Carnes e Aves";
     if (has("agua", "água", "refrigerante", "suco", "cerveja", "energetico", "energético")) return "Bebidas";
     if (has("copo", "prato", "talher", "guardanapo", "toalha de mesa", "descartavel", "descartável")) return "Descartáveis e Embalagens";
     if (has("balao", "balão", "decoracao", "decoração", "vela", "faixa")) return "Decoração";
-    if (has("bolo", "doce", "salgado", "salgadinho", "carvão", "carvao", "gelo")) return "Alimentos";
+    if (has("gelo", "carvão", "carvao", "fosforo", "fósforo")) return "Gelo e Apoio";
+    if (has("bolo", "doce", "salgado", "salgadinho")) return "Outros";
     return "Outros";
   }
 
@@ -1838,17 +1841,156 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   return inferPreferredCategoryForItem(item);
 }
 
+
+function normalizeCategoryAliasForType(categoryName, type = "mercado", item = null) {
+  const category = String(categoryName || "").trim();
+  const normalizedType = String(type || "mercado");
+
+  if (normalizedType === "construcao") {
+    if (normalizePlainText(category) === normalizePlainText("Tintas")) return "Tintas e Pintura";
+    if (normalizePlainText(category) === normalizePlainText("Elétrica")) return "Elétrica";
+    return category;
+  }
+
+  if (normalizedType === "eletrico") {
+    if (normalizePlainText(category) === normalizePlainText("Elétrica")) return "Outros";
+    return category;
+  }
+
+  if (normalizedType === "escolar") {
+    const plain = normalizePlainText(category);
+    if (plain === normalizePlainText("Escrita")) return "Material de Escrita";
+    if (plain === normalizePlainText("Cadernos e Papéis")) return "Cadernos";
+    if (plain === normalizePlainText("Material de Escrita")) return "Material de Escrita";
+    return category;
+  }
+
+  if (normalizedType === "farmacia") {
+    const plain = normalizePlainText(category);
+    if (plain === normalizePlainText("Bebê")) return "Bebês";
+    if (plain === normalizePlainText("Bebes")) return "Bebês";
+    return category;
+  }
+
+  if (normalizedType === "festa") {
+    const itemText = normalizeTextForCategory([
+      item?.name,
+      item?.detail,
+      item?.marca,
+      item?.tipo,
+      item?.embalagem,
+    ].filter(Boolean).join(" "));
+    if (normalizePlainText(category) === normalizePlainText("Alimentos")) {
+      if (["gelo", "carvao", "carvão", "fosforo", "fósforo"].some((k) => itemText.includes(normalizeTextForCategory(k)))) {
+        return "Gelo e Apoio";
+      }
+      if (["bolo", "doce", "salgado", "salgadinho"].some((k) => itemText.includes(normalizeTextForCategory(k)))) {
+        return "Outros";
+      }
+    }
+    return category;
+  }
+
+  return category;
+}
+
+function inferCategoryFromListTypeRules(item, type = "mercado") {
+  const rules = getListTypeRules(type);
+  if (!rules?.keywords) return null;
+
+  const itemText = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+  ].filter(Boolean).join(" "));
+
+  for (const [categoryName, keywords] of Object.entries(rules.keywords || {})) {
+    if (!Array.isArray(keywords)) continue;
+    const matched = keywords.some((keyword) => {
+      const normalizedKeyword = normalizeTextForCategory(keyword);
+      if (!normalizedKeyword) return false;
+      return itemText.includes(normalizedKeyword);
+    });
+    if (matched) return categoryName;
+  }
+
+  return null;
+}
+
+function isInvalidCategoryForType(categoryName, type = "mercado") {
+  const rules = getListTypeRules(type);
+  if (!rules?.invalidCategories) return false;
+  const plain = normalizePlainText(categoryName || "");
+  return rules.invalidCategories.some((cat) => normalizePlainText(cat) === plain);
+}
+
+function isAllowedCategoryForType(categoryName, type = "mercado") {
+  const config = getListTypeConfig(type);
+  const allowed = Array.isArray(config?.categories) ? config.categories : [];
+  if (!allowed.length) return true;
+  const plain = normalizePlainText(categoryName || "");
+  return allowed.some((cat) => normalizePlainText(cat) === plain);
+}
+
+function pickSafeCategoryForType({ item, originalCategory, type = "mercado" }) {
+  const normalizedType = String(type || "mercado");
+
+  const ruleCategory = inferCategoryFromListTypeRules(item, normalizedType);
+  if (ruleCategory) return normalizeCategoryAliasForType(ruleCategory, normalizedType, item);
+
+  const legacyCategory = inferPreferredCategoryForItemByType(item, normalizedType);
+  const normalizedLegacy = normalizeCategoryAliasForType(legacyCategory, normalizedType, item);
+  if (
+    normalizedLegacy &&
+    !isInvalidCategoryForType(normalizedLegacy, normalizedType) &&
+    isAllowedCategoryForType(normalizedLegacy, normalizedType)
+  ) {
+    return normalizedLegacy;
+  }
+
+  const normalizedOriginal = normalizeCategoryAliasForType(originalCategory, normalizedType, item);
+  if (
+    normalizedOriginal &&
+    !isInvalidCategoryForType(normalizedOriginal, normalizedType) &&
+    isAllowedCategoryForType(normalizedOriginal, normalizedType)
+  ) {
+    return normalizedOriginal;
+  }
+
+  const config = getListTypeConfig(normalizedType);
+  if (Array.isArray(config?.categories) && config.categories.some((cat) => normalizePlainText(cat) === normalizePlainText("Outros"))) {
+    return "Outros";
+  }
+
+  return "Outros";
+}
+
 function enforceKnownCategoryRules(categories, type = "mercado") {
   const buckets = {};
+
   (Array.isArray(categories) ? categories : []).forEach((cat) => {
     (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
       if (isQuantityOnlyItemName(item.name)) return;
-      const preferred = inferPreferredCategoryForItemByType(item, type) || cat.name || "Outros";
-      if (!buckets[preferred]) buckets[preferred] = [];
-      buckets[preferred].push(item);
+
+      const safeCategory = pickSafeCategoryForType({
+        item,
+        originalCategory: cat?.name || "Outros",
+        type,
+      });
+
+      if (!buckets[safeCategory]) buckets[safeCategory] = [];
+      buckets[safeCategory].push(item);
     });
   });
-  return sanitizeCategories(Object.entries(buckets).map(([name, items]) => ({ name, items })));
+
+  return sanitizeCategories(
+    Object.entries(buckets).map(([name, items]) => ({
+      name,
+      items,
+    }))
+  );
 }
 
 
