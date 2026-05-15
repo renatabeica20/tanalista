@@ -41,10 +41,15 @@ export default function ProductEditorModal({
 
   const typeConfig = getListTypeConfig(listType);
 
-  const dynamicUnits =
+  const rawDynamicUnits =
     typeConfig?.units?.length
       ? typeConfig.units
       : getManualDialogUnits();
+
+  const dynamicUnits = rawDynamicUnits.filter((unit, index, arr) => {
+    const normalized = normalizeUnitValue(unit);
+    return arr.findIndex((candidate) => normalizeUnitValue(candidate) === normalized) === index;
+  });
 
   const isExtra = itemDialogMode === "extra";
   const isPantryReview = itemDialogMode === "pantryReview";
@@ -119,6 +124,10 @@ export default function ProductEditorModal({
               <button onClick={() => changeManualQty(1)} style={qBtn}>
                 +
               </button>
+            </div>
+
+            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 10, lineHeight: 1.4, fontWeight: 600 }}>
+              Para kg, litro, metro e m², os botões avançam de 0,5 em 0,5. Nas demais unidades, avançam de 1 em 1.
             </div>
           </div>
 
