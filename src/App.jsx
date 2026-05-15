@@ -298,6 +298,16 @@ function ensureMobileViewport() {
         -webkit-user-select: text;
         user-select: text;
       }
+      .tnl-keyboard-safe-modal {
+        max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - var(--tnl-keyboard-offset, 0px));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        scroll-margin-bottom: calc(var(--tnl-keyboard-offset, 0px) + 32px);
+      }
+      .tnl-keyboard-safe-field {
+        scroll-margin-bottom: calc(var(--tnl-keyboard-offset, 0px) + 110px);
+      }
       img, svg, video, canvas {
         max-width: 100%;
       }
@@ -3217,6 +3227,25 @@ export default function App(){
     ensureMobileViewport();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return undefined;
+    const vv = window.visualViewport;
+    const updateKeyboardOffset = () => {
+      try {
+        const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        document.documentElement.style.setProperty("--tnl-keyboard-offset", `${Math.round(offset)}px`);
+      } catch {}
+    };
+    updateKeyboardOffset();
+    vv.addEventListener("resize", updateKeyboardOffset);
+    vv.addEventListener("scroll", updateKeyboardOffset);
+    return () => {
+      vv.removeEventListener("resize", updateKeyboardOffset);
+      vv.removeEventListener("scroll", updateKeyboardOffset);
+      try { document.documentElement.style.removeProperty("--tnl-keyboard-offset"); } catch {}
+    };
+  }, []);
+
 
   const [screen,setScreen]=useState("home");
   
@@ -4281,13 +4310,15 @@ const [lists,setLists]=useState(()=>{
     setTimeout(()=>searchRef.current?.focus?.(),180);
   },[]);
 
-  const returnToSearch=useCallback((delay=120)=>{
+  const returnToSearch=useCallback((delay=0)=>{
+    const y = typeof window !== "undefined" ? window.scrollY : 0;
+    const listY = listRef.current?.scrollTop ?? null;
     setSearch("");
     setTimeout(()=>{
-      scrollToListTop();
-      setTimeout(()=>searchRef.current?.focus?.(),160);
-    },delay);
-  },[scrollToListTop]);
+      try { window.scrollTo({ top: y, behavior: "auto" }); } catch {}
+      try { if (listRef.current && listY != null) listRef.current.scrollTop = listY; } catch {}
+    }, delay);
+  },[]);
 
   const getPublicAppUrl=()=>APP_PUBLIC_URL;
 
@@ -6672,7 +6703,6 @@ return rebuiltHistory;
     const item=currentList.categories[ci].items[ii];
     if(item.notFound){
       showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
-      returnToSearch();
       return;
     }
     if(item.checked){
@@ -6680,7 +6710,6 @@ return rebuiltHistory;
       l.categories[ci].items[ii].checked=false;
       l.categories[ci].items[ii].price=null;
       updateList(l);
-      returnToSearch();
       return;
     }
     setCheckPopup({ci,ii});
@@ -6697,7 +6726,7 @@ return rebuiltHistory;
       list_name: l.name || "",
       item_name: item.name || "",
     });
-    updateList(l); returnToSearch();
+    updateList(l);
     showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
   };
 
@@ -6723,23 +6752,16 @@ return rebuiltHistory;
 
   useEffect(()=>{
     if(!itemModal)return;
-    const timers=[
-      setTimeout(()=>{
-        try{
-          priceInputRef.current?.focus?.();
-          const len=String(priceInputRef.current?.value || "").length;
-          priceInputRef.current?.setSelectionRange?.(len,len);
-        }catch{}
-      },80),
-      setTimeout(()=>{
-        try{
-          priceInputRef.current?.focus?.();
-          const len=String(priceInputRef.current?.value || "").length;
-          priceInputRef.current?.setSelectionRange?.(len,len);
-        }catch{}
-      },260),
-    ];
-    return()=>timers.forEach(clearTimeout);
+    const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+    if (isTouchDevice) return undefined;
+    const timer=setTimeout(()=>{
+      try{
+        priceInputRef.current?.focus?.();
+        const len=String(priceInputRef.current?.value || "").length;
+        priceInputRef.current?.setSelectionRange?.(len,len);
+      }catch{}
+    },120);
+    return()=>clearTimeout(timer);
   },[itemModal]);
 
   const confirmItem=()=>{
@@ -6754,11 +6776,12 @@ return rebuiltHistory;
     item.qty=confirmedQty;
     item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     item.notFound=mNotFound;
+    const hasTypedPrice = Boolean(String(mPriceText || "").trim());
     if(mNotFound){
       item.checked=false;item.price=null;
     } else {
       const p=parseBRL(mPriceText);
-      if(p!=null&&p>=0){
+      if(hasTypedPrice && p!=null&&p>=0){
         item.price=p;
         item.priceRecordedAt=new Date().toISOString();
         item.priceMode=normalizePriceMode(mPriceMode) || inferPriceModeForUnit(item.unit,item) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
@@ -6783,8 +6806,8 @@ return rebuiltHistory;
           delete item.estimatedWeightRangeKg;
         }
       }
-      item.checked=true;
-      try {
+      if (hasTypedPrice) item.checked=true;
+      if (hasTypedPrice) try {
         const totalForHistory = getItemLineTotal(item);
         addPriceHistoryEntry({
           itemName: item.name,
@@ -8066,6 +8089,7 @@ return rebuiltHistory;
         const unitLabel=getPriceLabelForModeAndUnit(inferredMode,effectiveItem.unit);
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
+            <div className="tnl-keyboard-safe-modal">
             <div style={{textAlign:"center",marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap",fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>
                 <span>{item.extra || item.addedDuringPurchase ? "➕" : "🛒"}</span>
@@ -8089,7 +8113,7 @@ return rebuiltHistory;
             {mShowEditDetails && (
               <div style={{marginBottom:14,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12}}>
                 <label style={lbl}>Nome do item</label>
-                <input value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder="Nome do item" style={inp({height:50,fontWeight:800})} />
+                <input className="tnl-keyboard-safe-field" value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder="Nome do item" style={inp({height:50,fontWeight:800})} />
 
                 <div style={{height:12}} />
 
@@ -8148,8 +8172,8 @@ return rebuiltHistory;
               <label style={lbl}>{unitLabel}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-                <input ref={priceInputRef} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
-                  placeholder="0,00" inputMode="numeric" autoFocus
+                <input className="tnl-keyboard-safe-field" ref={priceInputRef} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
+                  placeholder="0,00" inputMode="numeric"
                   style={inp({paddingLeft:44,fontWeight:900,fontSize:18,textAlign:"left",caretColor:theme.header})}
                   onFocus={e=>{e.target.style.borderColor=theme.border;try{e.target.setSelectionRange(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}}} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
@@ -8170,10 +8194,10 @@ return rebuiltHistory;
                 });
               }} style={{padding:"14px 18px",borderRadius:18,background:"#FEE2E2",border:"none",color:"#B91C1C",fontWeight:800,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
-                disabled={!mPriceText.trim()}
-                style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mPriceText.trim())?0.5:1,cursor:(!mPriceText.trim())?"not-allowed":"pointer"}}>
-                {!mPriceText.trim()?"Informe o preço":"Confirmar"}
+                style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",cursor:"pointer"}}>
+                {mPriceText.trim()?"Confirmar compra":"Salvar alterações"}
               </button>
+            </div>
             </div>
           </ModalSheet>
         );
@@ -8294,7 +8318,6 @@ return rebuiltHistory;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checkedAt=new Date().toISOString();
                   updateList(l);setCheckPopup(null);setSearch("");
-                  setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
                 }} style={{flex:1,padding:14,borderRadius:20,background:"#F9FAFB",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
