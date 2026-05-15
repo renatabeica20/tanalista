@@ -1480,7 +1480,7 @@ function getKeywordCategoryForItem(type, item) {
   return null;
 }
 
-function isInvalidCategoryForType(type, categoryName) {
+function isInvalidCategoryForTypeAdvanced(type, categoryName) {
   const plain = normalizePlainText(categoryName);
   const rules = getListTypeRules(type);
   const invalidByRules = Array.isArray(rules?.invalidCategories)
@@ -1537,7 +1537,7 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
         return;
       }
 
-      if (isInvalidCategoryForType(normalizedType, originalCategory)) {
+      if (isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory)) {
         addItemToCategory(getAllowedCategoryFallback(normalizedType), item);
         return;
       }
