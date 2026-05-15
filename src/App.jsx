@@ -124,7 +124,7 @@ import {
 } from "./config/listTypeConfigs";
 import { getListTypeSuggestions } from "./config/listTypeSuggestions";
 import { getListTypeRules } from "./config/listTypeRules";
-// Etapa 7.72 - Motor local de reclassificação por tipo de lista
+// Etapa 7.73 - Reclassificação local definitiva após IA por tipo de lista
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -995,7 +995,7 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
       i.notFound = false;
     });
   });
-  return enforceKnownCategoryRules(sanitizeCategories(categories), type);
+  return postProcessOrganizedCategories(sanitizeCategories(categories), type);
 }
 
 
@@ -1301,6 +1301,278 @@ function sanitizeCategories(categories) {
       return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR");
     });
 }
+
+
+function categoryExistsInConfig(type, categoryName) {
+  const cfg = getListTypeConfig(type);
+  const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
+  return allowed.some((c) => normalizePlainText(c) === normalizePlainText(categoryName));
+}
+
+function getAllowedCategoryFallback(type) {
+  const cfg = getListTypeConfig(type);
+  const allowed = Array.isArray(cfg?.categories) && cfg.categories.length ? cfg.categories : ["Outros"];
+  return allowed.includes("Outros") ? "Outros" : allowed[allowed.length - 1];
+}
+
+function getKeywordCategoryForItem(type, item) {
+  const rules = getListTypeRules(type);
+  const text = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+    item?.peso,
+    item?.volume,
+  ].filter(Boolean).join(" "));
+
+  if (!text) return null;
+
+  // Regras locais de alta prioridade por tipo de lista.
+  const strongRules = {
+    mercado: {
+      "Carnes e Aves": [
+        "carne", "carne moi", "carne moida", "coxao", "coxao mole", "colchao mole",
+        "picanha", "linguica", "frango", "coxinha da asa", "costela", "figado", "bucho"
+      ],
+      "Frios e Laticínios": [
+        "leite", "manteiga", "margarina", "queijo", "presunto", "iogurte", "requeijao", "ovo", "ovos"
+      ],
+      "Hortifruti": [
+        "batata", "tomate", "cebola", "alface", "banana", "maca", "maça", "laranja", "cenoura", "mamao"
+      ],
+      "Limpeza": [
+        "detergente", "sabao", "desinfetante", "agua sanitaria", "alcool", "pano", "bucha", "esponja"
+      ],
+      "Mercearia": [
+        "arroz", "feijao", "macarrao", "sal", "acucar", "oleo", "farinha", "cafe"
+      ]
+    },
+
+    festa: {
+      "Bebidas": [
+        "cerveja", "heineken", "refrigerante", "coca", "guarana", "agua", "suco", "energetico"
+      ],
+      "Carnes e Aves": [
+        "picanha", "carne", "linguica", "frango", "coxinha da asa", "costela", "asa"
+      ],
+      "Descartáveis e Embalagens": [
+        "copo", "prato", "talher", "garfo", "faca", "colher", "guardanapo", "descartavel", "toalha"
+      ],
+      "Gelo e Apoio": [
+        "gelo", "carvao", "fosforo", "acendedor"
+      ]
+    },
+
+    construcao: {
+      "Materiais Básicos": [
+        "cimento", "cimento 50kg", "areia", "brita", "pedra brita", "argamassa", "rejunte",
+        "massa corrida", "cal", "gesso"
+      ],
+      "Acabamento": [
+        "piso", "porcelanato", "azulejo", "rodape", "ceramica", "revestimento"
+      ],
+      "Ferragens": [
+        "ferro", "vergalhao", "prego", "parafuso", "barra", "arame", "dobradica"
+      ],
+      "Tintas e Pintura": [
+        "tinta", "rolo", "pincel", "lixa", "selador", "massa acrilica"
+      ],
+      "Hidráulica": [
+        "cano", "tubo pvc", "joelho", "conexao", "registro", "torneira"
+      ],
+      "Elétrica": [
+        "fio", "cabo", "tomada", "interruptor", "disjuntor", "conduite"
+      ]
+    },
+
+    eletrico: {
+      "Fios e Cabos": [
+        "fio", "cabo", "1,5mm", "2,5mm", "4mm", "6mm"
+      ],
+      "Disjuntores e Proteção": [
+        "disjuntor", "dr", "dps", "bipolar", "monopolar"
+      ],
+      "Conectores": [
+        "conector", "barra de aterramento", "aterramento", "haste", "borne"
+      ],
+      "Tomadas e Interruptores": [
+        "tomada", "interruptor", "espelho"
+      ],
+      "Iluminação": [
+        "lampada", "luminaria", "spot", "refletor", "bocal"
+      ],
+      "Conduítes e Eletrodutos": [
+        "conduite", "eletroduto", "canaleta"
+      ],
+      "Ferramentas": [
+        "alicate", "chave teste", "multimetro", "fita isolante"
+      ]
+    },
+
+    escolar: {
+      "Material de Escrita": [
+        "lapis", "caneta", "borracha", "apontador", "canetinha", "lapis de cor", "regua", "marca texto"
+      ],
+      "Papelaria": [
+        "papel", "sulfite", "fita", "durex", "cola", "tesoura", "luva descartavel"
+      ],
+      "Cadernos": [
+        "caderno"
+      ],
+      "Artes": [
+        "giz", "tinta guache", "pincel", "cartolina", "eva"
+      ]
+    },
+
+    farmacia: {
+      "Medicamentos": [
+        "dipirona", "histamin", "donaren", "torsilax", "paracetamol", "ibuprofeno", "remedio", "medicamento"
+      ],
+      "Curativos": [
+        "gaze", "algodao", "curativo", "esparadrapo", "micropore", "atadura"
+      ],
+      "Bebês": [
+        "fralda", "lenco umedecido", "nan", "formula", "formula nan", "mamadeira", "chupeta"
+      ],
+      "Higiene Pessoal": [
+        "sabonete", "shampoo", "condicionador", "creme dental", "escova"
+      ]
+    },
+
+    condominio: {
+      "Limpeza": [
+        "pano", "pano de chao", "flanela", "rodo", "vassoura", "agua sanitaria", "detergente",
+        "desinfetante", "sabao", "luva", "balde"
+      ],
+      "Descartáveis e Embalagens": [
+        "papel toalha", "saco de lixo", "copo descartavel", "guardanapo"
+      ],
+      "Higiene e Perfumaria": [
+        "papel higienico", "sabonete", "alcool gel"
+      ],
+      "Elétrica": [
+        "lampada", "fio", "tomada", "fita isolante"
+      ]
+    }
+  };
+
+  const typeRules = strongRules[type] || {};
+
+  for (const [category, keywords] of Object.entries(typeRules)) {
+    if (!categoryExistsInConfig(type, category)) continue;
+    if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
+      return category;
+    }
+  }
+
+  // Regras importadas do arquivo listTypeRules.js.
+  if (rules?.keywords && typeof rules.keywords === "object") {
+    for (const [category, keywords] of Object.entries(rules.keywords)) {
+      if (!categoryExistsInConfig(type, category)) continue;
+      if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
+        return category;
+      }
+    }
+  }
+
+  return null;
+}
+
+function isInvalidCategoryForType(type, categoryName) {
+  const plain = normalizePlainText(categoryName);
+  const rules = getListTypeRules(type);
+  const invalidByRules = Array.isArray(rules?.invalidCategories)
+    ? rules.invalidCategories.some((c) => normalizePlainText(c) === plain)
+    : false;
+
+  const cfg = getListTypeConfig(type);
+  const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
+
+  // Para listas técnicas, qualquer categoria fora da configuração do tipo é inválida.
+  const strictTypes = ["festa", "construcao", "eletrico", "escolar", "farmacia", "condominio"];
+  const outsideAllowed = strictTypes.includes(type)
+    ? !allowed.some((c) => normalizePlainText(c) === plain)
+    : false;
+
+  return invalidByRules || outsideAllowed;
+}
+
+function postProcessOrganizedCategories(categories, type = "mercado") {
+  const normalizedType = type || "mercado";
+  const cfg = getListTypeConfig(normalizedType);
+  const allowedCategories = Array.isArray(cfg?.categories) && cfg.categories.length
+    ? cfg.categories
+    : ["Outros"];
+
+  const buckets = new Map();
+
+  const addItemToCategory = (categoryName, item) => {
+    const safeCategory = categoryExistsInConfig(normalizedType, categoryName)
+      ? categoryName
+      : getAllowedCategoryFallback(normalizedType);
+
+    const existing = buckets.get(safeCategory) || {
+      name: safeCategory,
+      items: [],
+    };
+
+    existing.items.push(normalizeListItem(item));
+    buckets.set(safeCategory, existing);
+  };
+
+  (Array.isArray(categories) ? categories : []).forEach((cat) => {
+    const originalCategory = cat?.name || getAllowedCategoryFallback(normalizedType);
+    const items = Array.isArray(cat?.items) ? cat.items : [];
+
+    items.forEach((rawItem) => {
+      const item = normalizeListItem(rawItem);
+      if (!item?.name || isQuantityOnlyItemName(item.name)) return;
+
+      const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
+
+      if (keywordCategory) {
+        addItemToCategory(keywordCategory, item);
+        return;
+      }
+
+      if (isInvalidCategoryForType(normalizedType, originalCategory)) {
+        addItemToCategory(getAllowedCategoryFallback(normalizedType), item);
+        return;
+      }
+
+      addItemToCategory(originalCategory, item);
+    });
+  });
+
+  // Ordena categorias conforme a ordem do tipo selecionado e, dentro delas, ordena itens.
+  const result = allowedCategories
+    .map((categoryName) => buckets.get(categoryName))
+    .filter(Boolean)
+    .map((cat) => ({
+      ...cat,
+      items: (Array.isArray(cat.items) ? cat.items : [])
+        .filter((item) => item?.name)
+        .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")),
+    }))
+    .filter((cat) => cat.items.length > 0);
+
+  // Garante que nenhuma categoria válida criada fora da ordem se perca.
+  Array.from(buckets.values()).forEach((cat) => {
+    if (!result.some((r) => normalizePlainText(r.name) === normalizePlainText(cat.name))) {
+      result.push({
+        ...cat,
+        items: (Array.isArray(cat.items) ? cat.items : [])
+          .filter((item) => item?.name)
+          .sort((a, b) => normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")),
+      });
+    }
+  });
+
+  return result.length ? result : sanitizeCategories(categories);
+}
+
 
 function loadUserItemMemory() {
   try {
