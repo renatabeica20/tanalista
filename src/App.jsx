@@ -1679,6 +1679,14 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Mercado
     if (normalizedType === "mercado") {
+      // Bebidas PRIMEIRO — antes de qualquer regra que possa capturar "álcool"
+      if (has(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull"])) {
+        return pick("Bebidas") || "Bebidas";
+      }
+      // Descartáveis
+      if (has(["copo", "guardanapo", "talher", "prato descartavel", "prato descartável", "papel toalha", "papel aluminio", "papel alumínio", "papel filme", "saco freezer"])) {
+        return pick("Descartáveis e Embalagens") || "Descartáveis e Embalagens";
+      }
       if (has(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) {
         return pick("Frios e Laticínios");
       }
@@ -1723,9 +1731,12 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
     const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
     const originalAllowed = getCanonicalAllowedCategory(originalCategory);
 
+    // hardCategory e directCategory são overrides rígidos — usados diretamente mesmo
+    // que a categoria não esteja em allowedCategories (ex: "Bebidas" em listTypeConfigs).
+    // Sem isso, cerveja/heineken classificada em Limpeza pela IA nunca era corrigida.
     const finalCategory =
-      getCanonicalAllowedCategory(hardCategory) ||
-      getCanonicalAllowedCategory(directCategory) ||
+      hardCategory ||
+      directCategory ||
       getCanonicalAllowedCategory(keywordCategory) ||
       (!isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory) ? originalAllowed : null) ||
       fallbackCategory;
