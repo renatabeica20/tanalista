@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import AppLogo from "./AppLogo";
 import VoiceInput from "./VoiceInput";
+import { getListTypeSuggestions } from "../config/listTypeSuggestions";
 
 const inp = (extra = {}) => ({
   width: "100%",
@@ -300,12 +301,45 @@ export default function CreateListScreen({
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <input data-tour-step="create_item_input" value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
-          placeholder="Digite um item da lista"
+          placeholder={`Digite itens de ${listType}`}
           style={{...inp({height:56}),...tourHighlightStyle(isTourStep("create_item_input"))}} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
         <button data-tour-step="create_item_insert" onClick={handleAddItem}
           style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 12px 24px rgba(109,40,217,0.28), inset 0 1px 0 rgba(255,255,255,0.18)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginTop: 14,
+        }}
+      >
+        {(getListTypeSuggestions?.(listType) || [])
+          .slice(0, 10)
+          .map((suggestion) => (
+            <button
+              key={suggestion}
+              onClick={() => setCurrentInput(suggestion)}
+              style={{
+                border: "1px solid #DDD6FE",
+                background: "linear-gradient(135deg,#FFFFFF,#F5F3FF)",
+                color: "#5B21B6",
+                borderRadius: 999,
+                padding: "8px 12px",
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                boxShadow: "0 4px 10px rgba(109,40,217,0.08)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
         <button data-tour-step="create_item_paste" onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
           style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
