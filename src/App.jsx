@@ -2296,6 +2296,43 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     return generic || "Outros";
   }
 
+  // Mercado: regras explícitas ANTES do fallback genérico
+  // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
+  if (normalizedType === "mercado") {
+    // Bebidas — DEVE vir antes de qualquer regra de Limpeza para evitar conflito com "álcool"
+    if (has("cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava",
+            "crystal", "amstel", "corona", "stella", "becks", "refrigerante", "coca cola",
+            "pepsi", "guarana", "guaraná", "suco", "energetico", "energético", "monster",
+            "redbull", "red bull")) return "Bebidas";
+    // Descartáveis
+    if (has("copo", "guardanapo", "talher", "prato descartavel", "prato descartável",
+            "papel toalha", "papel aluminio", "papel alumínio", "papel filme",
+            "saco freezer", "saco plastico", "saco plástico")) return "Descartáveis e Embalagens";
+    // Carnes — colchão mole = coxão mole (erro de digitação)
+    if (has("carne", "frango", "picanha", "linguiça", "linguica", "coxao mole", "coxão mole",
+            "colchao mole", "colchão mole", "costela", "filé", "file", "salsicha",
+            "hamburguer", "hambúrguer", "bacon", "peixe")) return "Carnes e Aves";
+    // Frios
+    if (has("leite", "queijo", "manteiga", "margarina", "iogurte", "requeijao", "requeijão",
+            "presunto", "mortadela", "ovo", "ovos", "creme de leite")) return "Frios e Laticínios";
+    // Hortifruti
+    if (has("alface", "tomate", "cebola", "alho", "batata", "cenoura", "banana", "maca", "maçã",
+            "laranja", "limao", "limão", "manga", "abacaxi", "uva", "pera", "pêra",
+            "melancia", "abacate", "mamao", "mamão", "abobrinha", "beterraba", "pepino",
+            "repolho", "couve", "berinjela", "mandioca")) return "Hortifruti";
+    // Limpeza
+    if (has("detergente", "sabão", "sabao", "desinfetante", "agua sanitaria", "água sanitária",
+            "amaciante", "lava roupa", "omo", "coala", "bombril", "esponja", "vassoura",
+            "rodo", "balde", "pano de chao", "pano de chão")) return "Limpeza";
+    // Mercearia
+    if (has("arroz", "feijao", "feijão", "macarrao", "macarrão", "farinha", "acucar", "açúcar",
+            "sal", "oleo", "óleo", "azeite", "vinagre", "molho", "extrato", "milho",
+            "atum", "sardinha", "aveia", "granola")) return "Mercearia";
+    // Higiene
+    if (has("shampoo", "sabonete", "condicionador", "desodorante", "creme dental",
+            "escova", "fio dental", "absorvente", "papel higienico", "papel higiênico")) return "Higiene e Perfumaria";
+  }
+
   return inferPreferredCategoryForItem(item);
 }
 
@@ -2385,10 +2422,22 @@ function isInvalidCategoryForType(categoryName, type = "mercado") {
 }
 
 function isAllowedCategoryForType(categoryName, type = "mercado") {
+  // Categorias universais de supermercado — aceitas mesmo que não estejam em listTypeConfigs
+  const UNIVERSAL_MERCADO_CATEGORIES = [
+    "bebidas", "cervejas", "bebidas alcoolicas", "bebidas alcolicas",
+    "descartaveis e embalagens", "descartaveis", "embalagens",
+    "carnes e aves", "frios e laticinios", "frios e laticınios",
+    "hortifruti", "mercearia", "limpeza", "higiene e perfumaria",
+    "snacks e doces", "temperos e condimentos", "congelados",
+    "cafes e chas", "padaria e matinais", "utilidades domesticas",
+    "itens extras", "outros",
+  ];
+  const plain = normalizePlainText(categoryName || "");
+  if (normalizePlainText(type) === "mercado" && UNIVERSAL_MERCADO_CATEGORIES.includes(plain)) return true;
+
   const config = getListTypeConfig(type);
   const allowed = Array.isArray(config?.categories) ? config.categories : [];
   if (!allowed.length) return true;
-  const plain = normalizePlainText(categoryName || "");
   return allowed.some((cat) => normalizePlainText(cat) === plain);
 }
 
@@ -5751,7 +5800,7 @@ const [lists,setLists]=useState(()=>{
       }
 
       cat.items.push(extraItem);
-      l.categories = enforceKnownCategoryRules(l.categories);
+      l.categories = enforceKnownCategoryRules(l.categories, currentList?.type || listType);
       updateList(l);
 
       if (hasExtraPrice) {
@@ -6212,7 +6261,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
 
   showToast("⚠️ IA indisponível — organização básica");
 }
-      categories=enforceKnownCategoryRules(categories);
+      categories=enforceKnownCategoryRules(categories, listType);
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
