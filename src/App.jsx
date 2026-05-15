@@ -1387,6 +1387,10 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "mercado") {
+    // Bebidas ANTES de Limpeza — "heineken" e "cerveja" não podem cair em Limpeza por causa de "álcool"
+    if (includesAny(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "crystal", "amstel", "corona", "stella", "becks", "brahma duplo malte", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull", "agua", "água", "agua com gas", "água com gás"])) return "Bebidas";
+    // Descartáveis — copo e guardanapo iam parar em "Outros" sem este override
+    if (includesAny(["copo descartavel", "copo descartável", "copo", "prato descartavel", "prato descartável", "guardanapo", "talher descartavel", "talher descartável", "talher", "papel aluminio", "papel alumínio", "papel filme", "saco freezer", "saco plastico", "saco plástico", "papel toalha"])) return "Descartáveis e Embalagens";
     if (includesAny(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) return "Frios e Laticínios";
     if (includesAny(["carne moída", "carne moida", "carne moi", "coxão mole", "coxao mole", "colchão mole", "colchao mole", "picanha", "linguiça", "linguica", "frango"])) return "Carnes e Aves";
     if (includesAny(["detergente", "sabão", "sabao", "desinfetante", "água sanitária", "agua sanitaria"])) return "Limpeza";
@@ -2474,10 +2478,20 @@ function getExtraPriceInputLabel(item, categoryName = "") {
 
 
 
-function demoOrganize(items) {
+function demoOrganize(items, type = "mercado") {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
+  // ATENÇÃO: ordem importa — cervejas/bebidas DEVEM vir antes de Limpeza
+  // para evitar que "álcool" em Limpeza capture "cerveja" e "heineken".
   const map = [
-
+    // ── BEBIDAS: prioridade máxima ────────────────────────────────────────────
+    [["cerveja","heineken","skol","brahma","antarctica","budweiser","itaipava","crystal","amstel","corona","stella","becks","brahma duplo malte"],"Bebidas"],
+    [["refrigerante","coca cola","coca-cola","pepsi","guaraná","guarana","sprite","fanta","schweppes","kuat","totem"],"Bebidas"],
+    [["suco","nectar","néctar","del valle","tampico","maguary","sufresh","dafruta"],"Bebidas"],
+    [["energetico","energético","monster","redbull","red bull","burn","vibe","baly","charge"],"Bebidas"],
+    // ── DESCARTÁVEIS: antes de "Outros" ─────────────────────────────────────
+    [["copo descartavel","copo descartável","copo","prato descartavel","prato descartável","guardanapo","talher descartavel","talher descartável","talher","papel toalha","papel aluminio","papel alumínio","papel filme","saco freezer","saco plastico","saco plástico","saco zip"],"Descartáveis e Embalagens"],
+    // ── GELO E APOIO / CARVÃO ────────────────────────────────────────────────
+    [["carvao","carvão","carvao 12kg","carvão 12kg","carvao vegetal","carvão vegetal","gelo","fosforo","fósforo","acendedor","isqueiro"],"Gelo e Apoio"],
 
     [["bombom","bom bom","bombon","bala","chiclete","paçoca","pacoca"],"Snacks e Doces"],
     [["lápis de cor","lapis de cor","lapi de cor","lapiz de cor","canetinha","giz de cera","hidrocor"],"Material de Escrita"],
@@ -6179,7 +6193,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
      catch(err){
   console.error("Erro IA:", err);
 
-  categories = demoOrganize(itemsWithMemory) || [];
+  categories = demoOrganize(itemsWithMemory, listType) || [];
 
   if (!Array.isArray(categories)) {
     categories = [];
