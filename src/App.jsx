@@ -5619,7 +5619,7 @@ const [lists,setLists]=useState(()=>{
     setPantryReviewDirty(true);
     setPantryReviewCategories((prev) => {
       const next = JSON.parse(JSON.stringify(Array.isArray(prev) ? prev : []));
-      const organized = enforceKnownCategoryRules(demoOrganize(normalizedItems));
+      const organized = enforceKnownCategoryRules(demoOrganize(normalizedItems, "mercado"));
 
       (organized || []).forEach((cat) => {
         const catName = cat?.name || "Outros";
@@ -5848,7 +5848,7 @@ const [lists,setLists]=useState(()=>{
       let categories;
       const itemsWithMemory = applyUserMemoryToItems(pantryPendingItems);
       try { categories = await aiOrganize(itemsWithMemory, "mercado"); }
-      catch { categories = demoOrganize(itemsWithMemory); }
+      catch { categories = demoOrganize(itemsWithMemory, "mercado"); }
       categories = enforceKnownCategoryRules(categories);
       setPantryReviewCategories(categories);
       setPantryReviewDirty(true);
