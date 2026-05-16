@@ -7509,7 +7509,7 @@ return rebuiltHistory;
     // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
     // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
     if(updated.sharedId){
-      syncSharedListToCloud(updated,{silent:true,force:!isRealSharedList(updated)});
+     syncSharedListToCloud(updated,{silent:true,force:true});
     }
   };
 
