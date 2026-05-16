@@ -5622,6 +5622,9 @@ const [lists,setLists]=useState(()=>{
           clearSharedUrlFromAddressBar();
           return;
         }
+        // Preview: mostra o modal de escolha que já existe no app
+        setSharedPreviewExpanded(false);
+        setSharedLandingRecord(record);
         clearSharedUrlFromAddressBar();
         return;
       }
