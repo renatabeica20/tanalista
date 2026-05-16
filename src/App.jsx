@@ -117,7 +117,14 @@ import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ShoppingListPreview from "./components/ShoppingListPreview";
-// Etapa 7.69 - Hortifruti por unidade, cópias desbloqueadas e importação persistente
+import {
+  LIST_TYPE_CONFIGS,
+  getListTypeConfig,
+  getListTypePromptContext,
+} from "./config/listTypeConfigs";
+import { getListTypeSuggestions } from "./config/listTypeSuggestions";
+import { getListTypeRules } from "./config/listTypeRules";
+// Etapa 7.76 - Override final rígido por item e categorias permitidas
 
 // ── API Anthropic via função segura do Vercel ─────────────────────────────
 // O navegador chama /api/anthropic; a chave fica protegida no servidor.
@@ -297,6 +304,16 @@ function ensureMobileViewport() {
       input, textarea, select {
         -webkit-user-select: text;
         user-select: text;
+      }
+      .tnl-keyboard-safe-modal {
+        max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - var(--tnl-keyboard-offset, 0px));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        scroll-margin-bottom: calc(var(--tnl-keyboard-offset, 0px) + 32px);
+      }
+      .tnl-keyboard-safe-field {
+        scroll-margin-bottom: calc(var(--tnl-keyboard-offset, 0px) + 110px);
       }
       img, svg, video, canvas {
         max-width: 100%;
@@ -848,16 +865,10 @@ function getListOriginMeta(list) {
   return null;
 }
 
-const LIST_TYPES = [
-  {id:"mercado",   label:"🛒 Supermercado"},
-  {id:"festa",     label:"🎉 Eventos"},
-  {id:"construcao",label:"🏗️ Construção"},
-  {id:"eletrico",  label:"⚡ Elétrico"},
-  {id:"escolar",   label:"🏫 Escolar"},
-  {id:"farmacia",  label:"💊 Farmácia"},
-  {id:"condominio",label:"🏢 Condomínio"},
-  {id:"outros",    label:"📦 Outras"},
-];
+const LIST_TYPES = Object.values(LIST_TYPE_CONFIGS).map((type) => ({
+  id: type.id,
+  label: `${type.icon} ${type.label}`,
+}));
 
 const TYPE_NAMES = {
   mercado:"supermercado", festa:"eventos", construcao:"construção",
@@ -937,23 +948,37 @@ function maskBRLInput(value) {
 
 // ── AI ─────────────────────────────────────────────────────────────────────
 async function aiOrganize(items, type) {
-  const typeName = TYPE_NAMES[type] || "geral";
+  const typeConfig = getListTypeConfig(type);
+  const typeName = typeConfig?.label || TYPE_NAMES[type] || "geral";
+  const typePromptContext = getListTypePromptContext(type);
+  const preferredCategories = Array.isArray(typeConfig?.categories) ? typeConfig.categories.join(", ") : "";
+  const preferredUnits = Array.isArray(typeConfig?.units) ? typeConfig.units.join(", ") : "";
   const list = items
     .map((i) => `${[i.marca, i.tipo, i.name, i.embalagem || i.peso || i.volume].filter(Boolean).join(" ")} - ${i.qty} ${i.unit}`)
     .join("\n");
 
-  const prompt = `Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
+  const prompt = `${typePromptContext}
+
+Organize em categorias para lista de "${typeName}". Retorne APENAS JSON válido, sem markdown:
 {"categories":[{"name":"Categoria","items":[{"name":"Nome","detail":"tipo e tamanho","qty":1,"unit":"un","price":null,"checked":false}]}]}
 
 ITENS:
 ${list}
+
+Categorias preferenciais para este tipo de lista: ${preferredCategories}.
+Unidades preferenciais para este tipo de lista: ${preferredUnits}.
 
 Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e unit exatos. Antes de classificar, corrija nomes digitados de forma aproximada, como 'lápi de cor' para 'lápis de cor', 'lustra móvei' para 'lustra-móveis' e 'bom bom' para 'bombom'.\nRegras de categoria obrigatórias:\n- frutas, legumes e verduras (mamão, manga, pera, maçã, banana, tomate, alface etc.) devem ficar em Hortifruti;\n- cerveja, refrigerante, água, suco e energético devem ficar em Bebidas ou Cervejas;\n- carne bovina, frango, peixe, linguiça e similares devem ficar em Carnes e Aves;\n- não crie item separado apenas para quantidade, como "24 unidades"; trate isso como detalhe/embalagem do item anterior;
 - itens como abóbora, rúcula, caqui, flores comestíveis/verduras e legumes devem ficar em Hortifruti;
 - álcool, lustra móvel, brilho alumínio, limpa alumínio, sapólio, bucha/esponja e produtos de limpeza devem ficar em Limpeza;
 - coxão mole, fígado, bucho, acém, músculo e cortes/miúdos devem ficar em Carnes e Aves;
 - bombom, amendoim, castanhas e doces devem ficar em Snacks e Doces;
-- lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita.`;
+- lápis de cor, canetinha, giz de cera e material escolar devem ficar em Material de Escrita;
+- quando a lista não for de supermercado, priorize as categorias preferenciais do tipo selecionado e evite classificar tudo como mercado;
+- para construção, nunca use Mercearia, Hortifruti, Cafés e Chás ou categorias de supermercado; use Materiais Básicos, Acabamento, Hidráulica, Ferragens, Ferramentas, Tintas ou Outros;
+- para elétrico, use Fios e Cabos, Tomadas e Interruptores, Disjuntores e Proteção, Iluminação, Conduítes e Eletrodutos, Ferramentas ou Outros;
+- para escolar, não use Hortifruti, Cafés e Chás ou Mercearia; use Papelaria, Escrita, Cadernos e Papéis, Artes, Mochilas e Estojos, Uniformes ou Outros;
+- para farmácia, classifique medicamentos pelo nome comercial ou princípio ativo em Medicamentos, itens infantis em Bebê e materiais de cuidado em Curativos/Higiene Pessoal.`;
 
   const parsed = await callAnthropicJSON({
     prompt,
@@ -970,7 +995,7 @@ Regras: categorias em português do Brasil, máximo 8 categorias, preserve qty e
       i.notFound = false;
     });
   });
-  return enforceKnownCategoryRules(sanitizeCategories(categories));
+  return postProcessOrganizedCategories(sanitizeCategories(categories), type);
 }
 
 
@@ -1149,9 +1174,25 @@ function normalizeUnitValue(unit) {
   if (/^caixa/.test(raw)) return "caixa";
   if (/^fardo/.test(raw)) return "fardo";
   if (/^saco/.test(raw)) return "saco";
+  if (/^rolo/.test(raw)) return "rolo";
+  if (/^barra/.test(raw)) return "barra";
+  if (/^kit/.test(raw)) return "kit";
+  if (/^frasco/.test(raw)) return "frasco";
+  if (/^tubo/.test(raw)) return "tubo";
+  if (/^cartela/.test(raw)) return "cartela";
+  if (/^galao|^galão/.test(raw)) return "galão";
+  if (/^metro$|^metros$|^m$/.test(raw)) return "metro";
+  if (/^m2$|^m²$|^metro quadrado|^metros quadrados/.test(raw)) return "m²";
+  if (/^m3$|^m³$|^metro cubico|^metro cúbico|^metros cubicos|^metros cúbicos/.test(raw)) return "m³";
   if (/^quilo|^kg$|^grama|^g$/.test(raw)) return "kg";
   if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
-  if (/^unidade|^un$|^lata|^garrafa|^duzia|^peca|^peça|^par/.test(raw)) return "unidade";
+  if (/^lata/.test(raw)) return "lata";
+  if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^duzia|^dúzia/.test(raw)) return "dúzia";
+  if (/^peca|^peça/.test(raw)) return "peça";
+  if (/^par/.test(raw)) return "par";
+  if (/^mileiro/.test(raw)) return "mileiro";
+  if (/^unidade|^un$/.test(raw)) return "unidade";
   return "unidade";
 }
 
@@ -1166,10 +1207,21 @@ function formatUnitForQuantity(qty, unit) {
     "garrafa":"garrafas",
     "litro":"litros",
     "saco":"sacos",
+    "rolo":"rolos",
+    "barra":"barras",
+    "kit":"kits",
+    "frasco":"frascos",
+    "tubo":"tubos",
+    "cartela":"cartelas",
+    "galão":"galões",
+    "metro":"metros",
+    "m²":"m²",
+    "m³":"m³",
     "unidade":"unidades",
     "dúzia":"dúzias",
     "peça":"peças",
-    "par":"pares"
+    "par":"pares",
+    "mileiro":"mileiros"
   };
   if (u === "kg") return "kg";
   return n > 1 ? (plural[u] || u) : u;
@@ -1248,6 +1300,471 @@ function sanitizeCategories(categories) {
       if (oa !== ob) return oa - ob;
       return String(a.name || "").localeCompare(String(b.name || ""), "pt-BR");
     });
+}
+
+
+function normalizeListTypeIdForRules(type) {
+  const raw = normalizePlainText(type || "mercado");
+  const aliases = {
+    "supermercado": "mercado",
+    "mercado": "mercado",
+    "evento": "festa",
+    "eventos": "festa",
+    "festa": "festa",
+    "festas": "festa",
+    "construcao": "construcao",
+    "construção": "construcao",
+    "obra": "construcao",
+    "reforma": "construcao",
+    "eletrico": "eletrico",
+    "elétrico": "eletrico",
+    "eletrica": "eletrico",
+    "elétrica": "eletrico",
+    "material eletrico": "eletrico",
+    "material elétrico": "eletrico",
+    "escolar": "escolar",
+    "farmacia": "farmacia",
+    "farmácia": "farmacia",
+    "condominio": "condominio",
+    "condomínio": "condominio",
+    "outros": "outros",
+    "outras": "outros"
+  };
+  return aliases[raw] || type || "mercado";
+}
+
+function categoryExistsInConfig(type, categoryName) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const cfg = getListTypeConfig(normalizedType);
+  const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
+  return allowed.some((c) => normalizePlainText(c) === normalizePlainText(categoryName));
+}
+
+function getAllowedCategoryFallback(type) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const cfg = getListTypeConfig(normalizedType);
+  const allowed = Array.isArray(cfg?.categories) && cfg.categories.length ? cfg.categories : ["Outros"];
+  return allowed.includes("Outros") ? "Outros" : allowed[allowed.length - 1];
+}
+
+function getDirectCategoryOverride(type, item) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const text = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+    item?.peso,
+    item?.volume,
+  ].filter(Boolean).join(" "));
+
+  if (!text) return null;
+
+  const includesAny = (words) => words.some((w) => text.includes(normalizeTextForCategory(w)));
+
+  if (normalizedType === "festa") {
+    if (includesAny(["cerveja", "heineken", "refrigerante", "água", "agua", "suco", "energético", "energetico"])) return "Bebidas";
+    if (includesAny(["gelo", "carvão", "carvao", "fósforo", "fosforo", "acendedor"])) return "Gelo e Apoio";
+    if (includesAny(["picanha", "linguiça", "linguica", "coxinha da asa", "frango", "carne"])) return "Carnes e Aves";
+    if (includesAny(["copo", "prato", "guardanapo", "talher", "descartável", "descartavel"])) return "Descartáveis e Embalagens";
+  }
+
+  if (normalizedType === "construcao") {
+    if (includesAny(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
+    if (includesAny(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) return "Acabamento";
+    if (includesAny(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "arame", "barra"])) return "Ferragens";
+    if (includesAny(["tinta", "rolo", "pincel", "lixa", "selador"])) return "Tintas e Pintura";
+  }
+
+  if (normalizedType === "eletrico") {
+    if (includesAny(["fio", "cabo", "1,5mm", "2,5mm", "4mm"])) return "Fios e Cabos";
+    if (includesAny(["disjuntor", "bipolar", "monopolar", "dps", "dr"])) return "Disjuntores e Proteção";
+    if (includesAny(["aterramento", "haste", "conector", "barra"])) return "Conectores";
+    if (includesAny(["tomada", "interruptor"])) return "Tomadas e Interruptores";
+    if (includesAny(["lâmpada", "lampada", "luminária", "luminaria", "spot", "bocal"])) return "Iluminação";
+    if (includesAny(["fita isolante", "alicate", "multímetro", "multimetro"])) return "Ferramentas";
+  }
+
+  if (normalizedType === "mercado") {
+    if (includesAny(["macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel"])) return "Mercearia";
+
+    // Bebidas ANTES de Limpeza — "heineken" e "cerveja" não podem cair em Limpeza por causa de "álcool"
+    if (includesAny(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "crystal", "amstel", "corona", "stella", "becks", "brahma duplo malte", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull", "agua", "água", "agua com gas", "água com gás"])) return "Bebidas";
+    // Descartáveis — copo e guardanapo iam parar em "Outros" sem este override
+    if (includesAny(["copo descartavel", "copo descartável", "copo", "prato descartavel", "prato descartável", "guardanapo", "talher descartavel", "talher descartável", "talher", "papel aluminio", "papel alumínio", "papel filme", "saco freezer", "saco plastico", "saco plástico", "papel toalha"])) return "Descartáveis e Embalagens";
+    if (includesAny(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) return "Frios e Laticínios";
+    if (includesAny(["carne moída", "carne moida", "carne moi", "coxão mole", "coxao mole", "colchão mole", "colchao mole", "picanha", "linguiça", "linguica", "frango"])) return "Carnes e Aves";
+    if (includesAny(["detergente", "sabão", "sabao", "desinfetante", "água sanitária", "agua sanitaria"])) return "Limpeza";
+  }
+
+  if (normalizedType === "farmacia") {
+    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return "Medicamentos";
+    if (includesAny(["gaze", "algodão", "algodao", "curativo", "atadura"])) return "Curativos";
+    if (includesAny(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return "Bebês";
+  }
+
+  if (normalizedType === "condominio") {
+    if (includesAny(["pano de chão", "pano de chao", "pano", "flanela", "rodo", "vassoura", "detergente", "água sanitária", "agua sanitaria"])) return "Limpeza";
+    if (includesAny(["papel toalha", "saco de lixo"])) return "Descartáveis e Embalagens";
+    if (includesAny(["papel higiênico", "papel higienico"])) return "Higiene e Perfumaria";
+  }
+
+  if (normalizedType === "escolar") {
+    if (includesAny(["lápis", "lapis", "caneta", "borracha", "apontador", "canetinha", "régua", "regua"])) return "Material de Escrita";
+    if (includesAny(["fita durex", "durex", "cola", "papel sulfite", "sulfite", "tesoura", "luva descartável", "luva descartavel"])) return "Papelaria";
+    if (includesAny(["caderno"])) return "Cadernos";
+  }
+
+  return null;
+}
+
+function getKeywordCategoryForItem(type, item) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const rules = getListTypeRules(normalizedType);
+  const text = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+    item?.peso,
+    item?.volume,
+  ].filter(Boolean).join(" "));
+
+  if (!text) return null;
+
+  const directCategory = getDirectCategoryOverride(normalizedType, item);
+  if (directCategory && categoryExistsInConfig(normalizedType, directCategory)) {
+    return directCategory;
+  }
+
+  // Regras locais de alta prioridade por tipo de lista.
+  const strongRules = {
+    mercado: {
+      "Carnes e Aves": [
+        "carne", "carne moi", "carne moida", "coxao", "coxao mole", "colchao mole", "colchão mole",
+        "picanha", "linguica", "frango", "coxinha da asa", "costela", "figado", "bucho"
+      ],
+      "Frios e Laticínios": [
+        "leite", "manteiga", "mateiga", "margarina", "queijo", "presunto", "iogurte", "requeijao", "ovo", "ovos"
+      ],
+      "Hortifruti": [
+        "batata", "tomate", "cebola", "alface", "banana", "maca", "maça", "laranja", "cenoura", "mamao"
+      ],
+      "Limpeza": [
+        "detergente", "sabao", "desinfetante", "agua sanitaria", "alcool", "pano", "bucha", "esponja"
+      ],
+      "Mercearia": [
+        "arroz", "feijao", "macarrao", "sal", "acucar", "oleo", "farinha", "cafe"
+      ]
+    },
+
+    festa: {
+      "Bebidas": [
+        "cerveja", "heineken", "skol", "brahma", "antarctica", "refrigerante", "coca", "guarana", "agua", "água", "suco", "energetico", "energético"
+      ],
+      "Carnes e Aves": [
+        "picanha", "carne", "linguica", "frango", "coxinha da asa", "costela", "asa"
+      ],
+      "Descartáveis e Embalagens": [
+        "copo", "prato", "talher", "garfo", "faca", "colher", "guardanapo", "descartavel", "toalha"
+      ],
+      "Gelo e Apoio": [
+        "gelo", "gelo 12kg", "carvao", "carvão", "carvao 12kg", "carvão 12kg", "fosforo", "fósforo", "acendedor"
+      ]
+    },
+
+    construcao: {
+      "Materiais Básicos": [
+        "cimento", "cimento 50kg", "areia", "brita", "pedra brita", "argamassa", "rejunte",
+        "massa corrida", "cal", "gesso"
+      ],
+      "Acabamento": [
+        "piso", "porcelanato", "azulejo", "rodape", "ceramica", "revestimento"
+      ],
+      "Ferragens": [
+        "ferro", "vergalhao", "prego", "parafuso", "barra", "arame", "dobradica"
+      ],
+      "Tintas e Pintura": [
+        "tinta", "rolo", "pincel", "lixa", "selador", "massa acrilica"
+      ],
+      "Hidráulica": [
+        "cano", "tubo pvc", "joelho", "conexao", "registro", "torneira"
+      ],
+      "Elétrica": [
+        "fio", "cabo", "tomada", "interruptor", "disjuntor", "conduite"
+      ]
+    },
+
+    eletrico: {
+      "Fios e Cabos": [
+        "fio", "cabo", "1,5mm", "2,5mm", "4mm", "6mm"
+      ],
+      "Disjuntores e Proteção": [
+        "disjuntor", "dr", "dps", "bipolar", "monopolar"
+      ],
+      "Conectores": [
+        "conector", "barra de aterramento", "aterramento", "haste", "borne"
+      ],
+      "Tomadas e Interruptores": [
+        "tomada", "interruptor", "espelho"
+      ],
+      "Iluminação": [
+        "lampada", "luminaria", "spot", "refletor", "bocal"
+      ],
+      "Conduítes e Eletrodutos": [
+        "conduite", "eletroduto", "canaleta"
+      ],
+      "Ferramentas": [
+        "alicate", "chave teste", "multimetro", "fita isolante"
+      ]
+    },
+
+    escolar: {
+      "Material de Escrita": [
+        "lapis", "caneta", "borracha", "apontador", "canetinha", "lapis de cor", "regua", "marca texto"
+      ],
+      "Papelaria": [
+        "papel", "sulfite", "fita", "durex", "cola", "tesoura", "luva descartavel"
+      ],
+      "Cadernos": [
+        "caderno"
+      ],
+      "Artes": [
+        "giz", "tinta guache", "pincel", "cartolina", "eva"
+      ]
+    },
+
+    farmacia: {
+      "Medicamentos": [
+        "dipirona", "histamin", "donaren", "torsilax", "paracetamol", "ibuprofeno", "remedio", "medicamento"
+      ],
+      "Curativos": [
+        "gaze", "algodao", "curativo", "esparadrapo", "micropore", "atadura"
+      ],
+      "Bebês": [
+        "fralda", "lenco umedecido", "nan", "formula", "formula nan", "mamadeira", "chupeta"
+      ],
+      "Higiene Pessoal": [
+        "sabonete", "shampoo", "condicionador", "creme dental", "escova"
+      ]
+    },
+
+    condominio: {
+      "Limpeza": [
+        "pano", "pano de chao", "flanela", "rodo", "vassoura", "agua sanitaria", "detergente",
+        "desinfetante", "sabao", "luva", "balde"
+      ],
+      "Descartáveis e Embalagens": [
+        "papel toalha", "saco de lixo", "copo descartavel", "guardanapo"
+      ],
+      "Higiene e Perfumaria": [
+        "papel higienico", "sabonete", "alcool gel"
+      ],
+      "Elétrica": [
+        "lampada", "fio", "tomada", "fita isolante"
+      ]
+    }
+  };
+
+  const typeRules = strongRules[normalizedType] || {};
+
+  for (const [category, keywords] of Object.entries(typeRules)) {
+    if (!categoryExistsInConfig(normalizedType, category)) continue;
+    if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
+      return category;
+    }
+  }
+
+  // Regras importadas do arquivo listTypeRules.js.
+  if (rules?.keywords && typeof rules.keywords === "object") {
+    for (const [category, keywords] of Object.entries(rules.keywords)) {
+      if (!categoryExistsInConfig(normalizedType, category)) continue;
+      if ((keywords || []).some((keyword) => text.includes(normalizeTextForCategory(keyword)))) {
+        return category;
+      }
+    }
+  }
+
+  return null;
+}
+
+function isInvalidCategoryForTypeAdvanced(type, categoryName) {
+  const normalizedType = normalizeListTypeIdForRules(type);
+  const plain = normalizePlainText(categoryName);
+  const rules = getListTypeRules(normalizedType);
+  const invalidByRules = Array.isArray(rules?.invalidCategories)
+    ? rules.invalidCategories.some((c) => normalizePlainText(c) === plain)
+    : false;
+
+  const cfg = getListTypeConfig(normalizedType);
+  const allowed = Array.isArray(cfg?.categories) ? cfg.categories : [];
+
+  // Para listas técnicas, qualquer categoria fora da configuração do tipo é inválida.
+  const strictTypes = ["festa", "construcao", "eletrico", "escolar", "farmacia", "condominio"];
+  const outsideAllowed = strictTypes.includes(normalizedType)
+    ? !allowed.some((c) => normalizePlainText(c) === plain)
+    : false;
+
+  return invalidByRules || outsideAllowed;
+}
+
+function postProcessOrganizedCategories(categories, type = "mercado") {
+  const normalizedType = normalizeListTypeIdForRules(type || "mercado");
+  const cfg = getListTypeConfig(normalizedType);
+  const allowedCategories = Array.isArray(cfg?.categories) && cfg.categories.length
+    ? cfg.categories
+    : ["Outros"];
+
+  const buckets = new Map();
+
+  const getCanonicalAllowedCategory = (categoryName) => {
+    const found = allowedCategories.find(
+      (cat) => normalizePlainText(cat) === normalizePlainText(categoryName)
+    );
+    return found || null;
+  };
+
+  const fallbackCategory =
+    getCanonicalAllowedCategory("Outros") ||
+    allowedCategories[allowedCategories.length - 1] ||
+    "Outros";
+
+  const hasAllowedCategory = (categoryName) => Boolean(getCanonicalAllowedCategory(categoryName));
+
+  const inferFinalCategoryByItem = (item) => {
+    const text = normalizeTextForCategory([
+      item?.name,
+      item?.detail,
+      item?.marca,
+      item?.tipo,
+      item?.embalagem,
+      item?.peso,
+      item?.volume,
+    ].filter(Boolean).join(" "));
+
+    const has = (words) => words.some((word) => text.includes(normalizeTextForCategory(word)));
+    const pick = (categoryName) => hasAllowedCategory(categoryName) ? categoryName : null;
+
+    // Eventos
+    if (normalizedType === "festa" || hasAllowedCategory("Gelo e Apoio")) {
+      if (has(["cerveja", "heineken", "skol", "brahma", "antarctica", "refrigerante", "coca", "guarana", "água", "agua", "suco", "energético", "energetico"])) {
+        return pick("Bebidas");
+      }
+      if (has(["gelo", "gelo 5kg", "gelo 12kg", "carvão", "carvao", "carvão 12kg", "carvao 12kg", "fósforo", "fosforo", "acendedor"])) {
+        return pick("Gelo e Apoio") || pick("Outros");
+      }
+      if (has(["copo", "prato", "guardanapo", "talher", "descartável", "descartavel"])) {
+        return pick("Descartáveis e Embalagens");
+      }
+      if (has(["picanha", "linguiça", "linguica", "coxinha da asa", "carne", "frango", "costela"])) {
+        return pick("Carnes e Aves");
+      }
+    }
+
+    // Construção
+    if (normalizedType === "construcao" || hasAllowedCategory("Materiais Básicos")) {
+      if (has(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
+        return pick("Materiais Básicos");
+      }
+      if (has(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) {
+        return pick("Acabamento");
+      }
+      if (has(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "barra", "arame"])) {
+        return pick("Ferragens");
+      }
+      if (has(["tinta", "rolo", "pincel", "lixa", "selador"])) {
+        return pick("Tintas e Pintura");
+      }
+    }
+
+    // Mercado
+    if (normalizedType === "mercado") {
+      // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
+      if (has(["macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel"])) {
+        return pick("Mercearia") || "Mercearia";
+      }
+
+      // Bebidas PRIMEIRO — antes de qualquer regra que possa capturar "álcool"
+      if (has(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull"])) {
+        return pick("Bebidas") || "Bebidas";
+      }
+      // Descartáveis
+      if (has(["copo", "guardanapo", "talher", "prato descartavel", "prato descartável", "papel toalha", "papel aluminio", "papel alumínio", "papel filme", "saco freezer"])) {
+        return pick("Descartáveis e Embalagens") || "Descartáveis e Embalagens";
+      }
+      if (has(["manteiga", "mateiga", "margarina", "leite", "queijo", "presunto", "iogurte", "ovo"])) {
+        return pick("Frios e Laticínios");
+      }
+      if (has(["carne moída", "carne moida", "carne moi", "coxão mole", "coxao mole", "colchão mole", "colchao mole", "picanha", "linguiça", "linguica", "frango"])) {
+        return pick("Carnes e Aves");
+      }
+    }
+
+    // Farmácia
+    if (normalizedType === "farmacia") {
+      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return pick("Medicamentos");
+      if (has(["gaze", "algodão", "algodao", "curativo", "atadura"])) return pick("Curativos");
+      if (has(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return pick("Bebês");
+    }
+
+    return null;
+  };
+
+  const addItemToCategory = (categoryName, item) => {
+    const canonical = getCanonicalAllowedCategory(categoryName) || fallbackCategory;
+    const current = buckets.get(canonical) || { name: canonical, items: [] };
+    current.items.push(normalizeListItem(item));
+    buckets.set(canonical, current);
+  };
+
+  const flatItems = [];
+
+  (Array.isArray(categories) ? categories : []).forEach((cat) => {
+    const originalCategory = cat?.name || fallbackCategory;
+    const items = Array.isArray(cat?.items) ? cat.items : [];
+
+    items.forEach((rawItem) => {
+      const item = normalizeListItem(rawItem);
+      if (!item?.name || isQuantityOnlyItemName(item.name)) return;
+      flatItems.push({ item, originalCategory });
+    });
+  });
+
+  flatItems.forEach(({ item, originalCategory }) => {
+    const hardCategory = inferFinalCategoryByItem(item);
+    const directCategory = getDirectCategoryOverride(normalizedType, item);
+    const keywordCategory = getKeywordCategoryForItem(normalizedType, item);
+    const originalAllowed = getCanonicalAllowedCategory(originalCategory);
+
+    // hardCategory e directCategory são overrides rígidos — usados diretamente mesmo
+    // que a categoria não esteja em allowedCategories (ex: "Bebidas" em listTypeConfigs).
+    // Sem isso, cerveja/heineken classificada em Limpeza pela IA nunca era corrigida.
+    const finalCategory =
+      hardCategory ||
+      directCategory ||
+      getCanonicalAllowedCategory(keywordCategory) ||
+      (!isInvalidCategoryForTypeAdvanced(normalizedType, originalCategory) ? originalAllowed : null) ||
+      fallbackCategory;
+
+    addItemToCategory(finalCategory, item);
+  });
+
+  const result = allowedCategories
+    .map((categoryName) => buckets.get(categoryName))
+    .filter(Boolean)
+    .map((cat) => ({
+      ...cat,
+      items: (Array.isArray(cat.items) ? cat.items : [])
+        .filter((item) => item?.name)
+        .sort((a, b) =>
+          normalizePlainText(a.name).localeCompare(normalizePlainText(b.name), "pt-BR")
+        ),
+    }))
+    .filter((cat) => cat.items.length > 0);
+
+  return result.length ? result : sanitizeCategories(categories);
 }
 
 function loadUserItemMemory() {
@@ -1720,17 +2237,277 @@ function inferPreferredCategoryForItem(item) {
   return "";
 }
 
-function enforceKnownCategoryRules(categories) {
+
+function inferPreferredCategoryForItemByType(item, type = "mercado") {
+  const normalizedType = String(type || "mercado");
+  const n = normalizeTextForCategory([item?.name, item?.detail, item?.marca, item?.tipo, item?.embalagem].filter(Boolean).join(" "));
+  const has = (...keys) => keys.some(k => n.includes(normalizeTextForCategory(k)));
+  const hasWord = (...keys) => keys.some((k) => {
+    const escaped = normalizeTextForCategory(k).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(n);
+  });
+
+  if (normalizedType === "construcao") {
+    if (has("cimento", "areia", "brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
+    if (has("piso", "porcelanato", "azulejo", "ceramica", "cerâmica", "rodape", "rodapé", "soleira", "revestimento")) return "Acabamento";
+    if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas e Pintura";
+    if (has("cano", "tubo", "pvc", "joelho", "luva", "registro", "torneira", "sifao", "sifão", "ralo")) return "Hidráulica";
+    if (has("prego", "parafuso", "bucha", "porca", "arruela", "dobradica", "dobradiça", "fechadura")) return "Ferragens";
+    if (has("martelo", "alicate", "trena", "nivel", "nível", "furadeira", "parafusadeira", "serra", "desempenadeira", "colher de pedreiro")) return "Ferramentas";
+    return "Outros";
+  }
+
+  if (normalizedType === "eletrico") {
+    if (has("fio", "cabo", "flexivel", "flexível", "bitola", "2,5", "4mm", "6mm")) return "Fios e Cabos";
+    if (has("tomada", "interruptor", "placa", "espelho")) return "Tomadas e Interruptores";
+    if (has("disjuntor", "dr", "dps", "quadro de distribuição", "quadro distribuicao", "barramento")) return "Disjuntores e Proteção";
+    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor")) return "Iluminação";
+    if (has("barra de aterramento", "aterramento", "conector", "conectores")) return "Conectores";
+    if (has("conduite", "conduíte", "eletroduto", "canaleta", "caixa de passagem", "caixa 4x2", "caixa 4x4")) return "Conduítes e Eletrodutos";
+    if (has("alicate", "chave teste", "multimetro", "multímetro", "fita isolante")) return "Ferramentas";
+    return "Outros";
+  }
+
+  if (normalizedType === "escolar") {
+    if (has("caderno", "agenda", "fichario", "fichário")) return "Cadernos";
+    if (has("lapis", "lápis", "caneta", "borracha", "apontador", "lapiseira", "grafite", "marca texto", "marca-texto", "regua", "régua", "canetinha", "lapis de cor", "lápis de cor")) return "Material de Escrita";
+    if (has("cola", "tesoura", "tinta guache", "pincel", "cartolina", "eva", "giz de cera")) return "Artes";
+    if (has("mochila", "estojo", "lancheira")) return "Mochilas e Estojos";
+    if (has("uniforme", "camiseta", "calça", "bermuda", "meia", "tenis", "tênis")) return "Uniformes";
+    if (has("papel sulfite", "sulfite", "papel almaço", "papel almaco", "folha")) return "Cadernos";
+    return "Papelaria";
+  }
+
+  if (normalizedType === "farmacia") {
+    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento")) return "Medicamentos";
+    if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta", "nan", "fórmula", "formula")) return "Bebês";
+    if (has("curativo", "algodão", "algodao", "gaze", "esparadrapo", "soro fisiológico", "soro fisiologico", "alcool 70", "álcool 70")) return "Curativos";
+    if (has("sabonete", "shampoo", "condicionador", "escova", "creme dental", "fio dental", "desodorante")) return "Higiene Pessoal";
+    if (has("protetor solar", "repelente", "hidratante", "pomada dermatologica", "pomada dermatológica")) return "Dermocosméticos";
+    if (has("vitamina", "suplemento", "whey", "colageno", "colágeno")) return "Suplementos";
+    return "Outros";
+  }
+
+  if (normalizedType === "festa") {
+    if (has("carne", "frango", "linguica", "linguiça", "pao de alho", "pão de alho", "coxinha da asa", "asa")) return "Carnes e Aves";
+    if (has("agua", "água", "refrigerante", "suco", "cerveja", "energetico", "energético")) return "Bebidas";
+    if (has("copo", "prato", "talher", "guardanapo", "toalha de mesa", "descartavel", "descartável")) return "Descartáveis e Embalagens";
+    if (has("balao", "balão", "decoracao", "decoração", "vela", "faixa")) return "Decoração";
+    if (has("gelo", "carvão", "carvao", "fosforo", "fósforo")) return "Gelo e Apoio";
+    if (has("bolo", "doce", "salgado", "salgadinho")) return "Outros";
+    return "Outros";
+  }
+
+  if (normalizedType === "condominio") {
+    const generic = inferPreferredCategoryForItem(item);
+    return generic || "Outros";
+  }
+
+  // Mercado: regras explícitas ANTES do fallback genérico
+  // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
+  if (normalizedType === "mercado") {
+    // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
+    if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
+
+    // Bebidas — DEVE vir antes de qualquer regra de Limpeza para evitar conflito com "álcool"
+    if (has("cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava",
+            "crystal", "amstel", "corona", "stella", "becks", "refrigerante", "coca cola",
+            "pepsi", "guarana", "guaraná", "suco", "energetico", "energético", "monster",
+            "redbull", "red bull")) return "Bebidas";
+    // Descartáveis
+    if (has("copo", "guardanapo", "talher", "prato descartavel", "prato descartável",
+            "papel toalha", "papel aluminio", "papel alumínio", "papel filme",
+            "saco freezer", "saco plastico", "saco plástico")) return "Descartáveis e Embalagens";
+    // Carnes — colchão mole = coxão mole (erro de digitação)
+    if (has("carne", "frango", "picanha", "linguiça", "linguica", "coxao mole", "coxão mole",
+            "colchao mole", "colchão mole", "costela", "filé", "file", "salsicha",
+            "hamburguer", "hambúrguer", "bacon", "peixe")) return "Carnes e Aves";
+    // Frios
+    if (has("leite", "queijo", "manteiga", "margarina", "iogurte", "requeijao", "requeijão",
+            "presunto", "mortadela", "ovo", "ovos", "creme de leite")) return "Frios e Laticínios";
+    // Hortifruti
+    if (has("alface", "tomate", "cebola", "alho", "batata", "cenoura", "banana", "maca", "maçã",
+            "laranja", "limao", "limão", "manga", "abacaxi", "uva", "pera", "pêra",
+            "melancia", "abacate", "mamao", "mamão", "abobrinha", "beterraba", "pepino",
+            "repolho", "couve", "berinjela", "mandioca")) return "Hortifruti";
+    // Limpeza
+    if (has("detergente", "sabão", "sabao", "desinfetante", "agua sanitaria", "água sanitária",
+            "amaciante", "lava roupa", "omo", "coala", "bombril", "esponja", "vassoura",
+            "rodo", "balde", "pano de chao", "pano de chão")) return "Limpeza";
+    // Mercearia
+    if (has("arroz", "feijao", "feijão", "macarrao", "macarrão", "farinha", "acucar", "açúcar",
+            "sal", "oleo", "óleo", "azeite", "vinagre", "molho", "extrato", "milho",
+            "atum", "sardinha", "aveia", "granola")) return "Mercearia";
+    // Higiene
+    if (has("shampoo", "sabonete", "condicionador", "desodorante", "creme dental",
+            "escova", "fio dental", "absorvente", "papel higienico", "papel higiênico")) return "Higiene e Perfumaria";
+  }
+
+  return inferPreferredCategoryForItem(item);
+}
+
+
+function normalizeCategoryAliasForType(categoryName, type = "mercado", item = null) {
+  const category = String(categoryName || "").trim();
+  const normalizedType = String(type || "mercado");
+
+  if (normalizedType === "construcao") {
+    if (normalizePlainText(category) === normalizePlainText("Tintas")) return "Tintas e Pintura";
+    if (normalizePlainText(category) === normalizePlainText("Elétrica")) return "Elétrica";
+    return category;
+  }
+
+  if (normalizedType === "eletrico") {
+    if (normalizePlainText(category) === normalizePlainText("Elétrica")) return "Outros";
+    return category;
+  }
+
+  if (normalizedType === "escolar") {
+    const plain = normalizePlainText(category);
+    if (plain === normalizePlainText("Escrita")) return "Material de Escrita";
+    if (plain === normalizePlainText("Cadernos e Papéis")) return "Cadernos";
+    if (plain === normalizePlainText("Material de Escrita")) return "Material de Escrita";
+    return category;
+  }
+
+  if (normalizedType === "farmacia") {
+    const plain = normalizePlainText(category);
+    if (plain === normalizePlainText("Bebê")) return "Bebês";
+    if (plain === normalizePlainText("Bebes")) return "Bebês";
+    return category;
+  }
+
+  if (normalizedType === "festa") {
+    const itemText = normalizeTextForCategory([
+      item?.name,
+      item?.detail,
+      item?.marca,
+      item?.tipo,
+      item?.embalagem,
+    ].filter(Boolean).join(" "));
+    if (normalizePlainText(category) === normalizePlainText("Alimentos")) {
+      if (["gelo", "carvao", "carvão", "fosforo", "fósforo"].some((k) => itemText.includes(normalizeTextForCategory(k)))) {
+        return "Gelo e Apoio";
+      }
+      if (["bolo", "doce", "salgado", "salgadinho"].some((k) => itemText.includes(normalizeTextForCategory(k)))) {
+        return "Outros";
+      }
+    }
+    return category;
+  }
+
+  return category;
+}
+
+function inferCategoryFromListTypeRules(item, type = "mercado") {
+  const rules = getListTypeRules(type);
+  if (!rules?.keywords) return null;
+
+  const itemText = normalizeTextForCategory([
+    item?.name,
+    item?.detail,
+    item?.marca,
+    item?.tipo,
+    item?.embalagem,
+  ].filter(Boolean).join(" "));
+
+  for (const [categoryName, keywords] of Object.entries(rules.keywords || {})) {
+    if (!Array.isArray(keywords)) continue;
+    const matched = keywords.some((keyword) => {
+      const normalizedKeyword = normalizeTextForCategory(keyword);
+      if (!normalizedKeyword) return false;
+      return itemText.includes(normalizedKeyword);
+    });
+    if (matched) return categoryName;
+  }
+
+  return null;
+}
+
+function isInvalidCategoryForType(categoryName, type = "mercado") {
+  const rules = getListTypeRules(type);
+  if (!rules?.invalidCategories) return false;
+  const plain = normalizePlainText(categoryName || "");
+  return rules.invalidCategories.some((cat) => normalizePlainText(cat) === plain);
+}
+
+function isAllowedCategoryForType(categoryName, type = "mercado") {
+  // Categorias universais de supermercado — aceitas mesmo que não estejam em listTypeConfigs
+  const UNIVERSAL_MERCADO_CATEGORIES = [
+    "bebidas", "cervejas", "bebidas alcoolicas", "bebidas alcolicas",
+    "descartaveis e embalagens", "descartaveis", "embalagens",
+    "carnes e aves", "frios e laticinios", "frios e laticınios",
+    "hortifruti", "mercearia", "limpeza", "higiene e perfumaria",
+    "snacks e doces", "temperos e condimentos", "congelados",
+    "cafes e chas", "padaria e matinais", "utilidades domesticas",
+    "itens extras", "outros",
+  ];
+  const plain = normalizePlainText(categoryName || "");
+  if (normalizePlainText(type) === "mercado" && UNIVERSAL_MERCADO_CATEGORIES.includes(plain)) return true;
+
+  const config = getListTypeConfig(type);
+  const allowed = Array.isArray(config?.categories) ? config.categories : [];
+  if (!allowed.length) return true;
+  return allowed.some((cat) => normalizePlainText(cat) === plain);
+}
+
+function pickSafeCategoryForType({ item, originalCategory, type = "mercado" }) {
+  const normalizedType = String(type || "mercado");
+
+  const ruleCategory = inferCategoryFromListTypeRules(item, normalizedType);
+  if (ruleCategory) return normalizeCategoryAliasForType(ruleCategory, normalizedType, item);
+
+  const legacyCategory = inferPreferredCategoryForItemByType(item, normalizedType);
+  const normalizedLegacy = normalizeCategoryAliasForType(legacyCategory, normalizedType, item);
+  if (
+    normalizedLegacy &&
+    !isInvalidCategoryForType(normalizedLegacy, normalizedType) &&
+    isAllowedCategoryForType(normalizedLegacy, normalizedType)
+  ) {
+    return normalizedLegacy;
+  }
+
+  const normalizedOriginal = normalizeCategoryAliasForType(originalCategory, normalizedType, item);
+  if (
+    normalizedOriginal &&
+    !isInvalidCategoryForType(normalizedOriginal, normalizedType) &&
+    isAllowedCategoryForType(normalizedOriginal, normalizedType)
+  ) {
+    return normalizedOriginal;
+  }
+
+  const config = getListTypeConfig(normalizedType);
+  if (Array.isArray(config?.categories) && config.categories.some((cat) => normalizePlainText(cat) === normalizePlainText("Outros"))) {
+    return "Outros";
+  }
+
+  return "Outros";
+}
+
+function enforceKnownCategoryRules(categories, type = "mercado") {
   const buckets = {};
+
   (Array.isArray(categories) ? categories : []).forEach((cat) => {
     (Array.isArray(cat.items) ? cat.items : []).forEach((item) => {
       if (isQuantityOnlyItemName(item.name)) return;
-      const preferred = inferPreferredCategoryForItem(item) || cat.name || "Outros";
-      if (!buckets[preferred]) buckets[preferred] = [];
-      buckets[preferred].push(item);
+
+      const safeCategory = pickSafeCategoryForType({
+        item,
+        originalCategory: cat?.name || "Outros",
+        type,
+      });
+
+      if (!buckets[safeCategory]) buckets[safeCategory] = [];
+      buckets[safeCategory].push(item);
     });
   });
-  return sanitizeCategories(Object.entries(buckets).map(([name, items]) => ({ name, items })));
+
+  return sanitizeCategories(
+    Object.entries(buckets).map(([name, items]) => ({
+      name,
+      items,
+    }))
+  );
 }
 
 
@@ -1771,10 +2548,20 @@ function getExtraPriceInputLabel(item, categoryName = "") {
 
 
 
-function demoOrganize(items) {
+function demoOrganize(items, type = "mercado") {
   // Categorias alinhadas ao Atacadão, com regras específicas antes das genéricas.
+  // ATENÇÃO: ordem importa — cervejas/bebidas DEVEM vir antes de Limpeza
+  // para evitar que "álcool" em Limpeza capture "cerveja" e "heineken".
   const map = [
-
+    // ── BEBIDAS: prioridade máxima ────────────────────────────────────────────
+    [["cerveja","heineken","skol","brahma","antarctica","budweiser","itaipava","crystal","amstel","corona","stella","becks","brahma duplo malte"],"Bebidas"],
+    [["refrigerante","coca cola","coca-cola","pepsi","guaraná","guarana","sprite","fanta","schweppes","kuat","totem"],"Bebidas"],
+    [["suco","nectar","néctar","del valle","tampico","maguary","sufresh","dafruta"],"Bebidas"],
+    [["energetico","energético","monster","redbull","red bull","burn","vibe","baly","charge"],"Bebidas"],
+    // ── DESCARTÁVEIS: antes de "Outros" ─────────────────────────────────────
+    [["copo descartavel","copo descartável","copo","prato descartavel","prato descartável","guardanapo","talher descartavel","talher descartável","talher","papel toalha","papel aluminio","papel alumínio","papel filme","saco freezer","saco plastico","saco plástico","saco zip"],"Descartáveis e Embalagens"],
+    // ── GELO E APOIO / CARVÃO ────────────────────────────────────────────────
+    [["carvao","carvão","carvao 12kg","carvão 12kg","carvao vegetal","carvão vegetal","gelo","fosforo","fósforo","acendedor","isqueiro"],"Gelo e Apoio"],
 
     [["bombom","bom bom","bombon","bala","chiclete","paçoca","pacoca"],"Snacks e Doces"],
     [["lápis de cor","lapis de cor","lapi de cor","lapiz de cor","canetinha","giz de cera","hidrocor"],"Material de Escrita"],
@@ -3217,6 +4004,25 @@ export default function App(){
     ensureMobileViewport();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return undefined;
+    const vv = window.visualViewport;
+    const updateKeyboardOffset = () => {
+      try {
+        const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        document.documentElement.style.setProperty("--tnl-keyboard-offset", `${Math.round(offset)}px`);
+      } catch {}
+    };
+    updateKeyboardOffset();
+    vv.addEventListener("resize", updateKeyboardOffset);
+    vv.addEventListener("scroll", updateKeyboardOffset);
+    return () => {
+      vv.removeEventListener("resize", updateKeyboardOffset);
+      vv.removeEventListener("scroll", updateKeyboardOffset);
+      try { document.documentElement.style.removeProperty("--tnl-keyboard-offset"); } catch {}
+    };
+  }, []);
+
 
   const [screen,setScreen]=useState("home");
   
@@ -3878,10 +4684,10 @@ const [lists,setLists]=useState(()=>{
   }, [pantryReviewReadOnly, pantryReviewDirty, resetPantryFlow, showToast]);
 
   const getManualDialogUnits = useCallback(() => {
-    return ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco"];
+    return ["unidade", "pacote", "kg", "litro", "caixa", "fardo", "saco", "metro", "m²", "lata", "garrafa", "rolo", "barra", "kit", "frasco", "tubo", "cartela", "galão", "mileiro"];
   }, []);
 
-  const isDecimalManualUnit = useCallback((unit) => ["kg", "litro"].includes(normalizeUnitValue(unit)), []);
+  const isDecimalManualUnit = useCallback((unit) => ["kg", "litro", "metro", "m²"].includes(normalizeUnitValue(unit)), []);
 
   const getManualQtyStep = useCallback((unit = dlgUnit) => isDecimalManualUnit(unit) ? 0.5 : 1, [dlgUnit, isDecimalManualUnit]);
 
@@ -4281,13 +5087,15 @@ const [lists,setLists]=useState(()=>{
     setTimeout(()=>searchRef.current?.focus?.(),180);
   },[]);
 
-  const returnToSearch=useCallback((delay=120)=>{
+  const returnToSearch=useCallback((delay=0)=>{
+    const y = typeof window !== "undefined" ? window.scrollY : 0;
+    const listY = listRef.current?.scrollTop ?? null;
     setSearch("");
     setTimeout(()=>{
-      scrollToListTop();
-      setTimeout(()=>searchRef.current?.focus?.(),160);
-    },delay);
-  },[scrollToListTop]);
+      try { window.scrollTo({ top: y, behavior: "auto" }); } catch {}
+      try { if (listRef.current && listY != null) listRef.current.scrollTop = listY; } catch {}
+    }, delay);
+  },[]);
 
   const getPublicAppUrl=()=>APP_PUBLIC_URL;
 
@@ -4826,8 +5634,17 @@ const [lists,setLists]=useState(()=>{
 
   const openProductDialog = async (name, existing=null, options={}) => {
     const mode = options?.mode || "pending";
+    const activeTypeConfig = getListTypeConfig(options?.listType || currentList?.type || listType);
+    const mergeTypeUnits = (cfg) => ({
+      ...(cfg || {}),
+      unidades: Array.from(new Set([
+        ...((Array.isArray(cfg?.unidades) && cfg.unidades.length) ? cfg.unidades : []),
+        ...((Array.isArray(activeTypeConfig?.units) && activeTypeConfig.units.length) ? activeTypeConfig.units : []),
+      ])).filter(Boolean),
+    });
+
     if (existing) {
-      const cfg = getProductConfig(name);
+      const cfg = mergeTypeUnits(getProductConfig(name));
       setDlgConfig(cfg);
       setDlgMarca("");
       setDlgTipo("");
@@ -4840,11 +5657,13 @@ const [lists,setLists]=useState(()=>{
       return;
     }
     // Novo item manual: abre diálogo simples e rápido, sem marca/tipo.
-    const cfg = getProductConfig(name);
+    const cfg = mergeTypeUnits(getProductConfig(name));
     setDlgLoading(false);
     setDlgConfig(cfg);
     setDlgMarca(""); setDlgTipo("");
-    const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || "unidade");
+    const preferredUnit = Array.isArray(cfg.unidades) && cfg.unidades.includes(activeTypeConfig?.defaultUnit)
+      ? activeTypeConfig.defaultUnit
+      : (Array.isArray(cfg.unidades) && cfg.unidades.includes("pacote") ? "pacote" : (cfg.unidades?.[0] || activeTypeConfig?.defaultUnit || "unidade"));
     setDlgUnit(normalizeUnitValue(preferredUnit));
     setDlgQty(1);
     setDlgPeso("");
@@ -4870,7 +5689,7 @@ const [lists,setLists]=useState(()=>{
     setPantryReviewDirty(true);
     setPantryReviewCategories((prev) => {
       const next = JSON.parse(JSON.stringify(Array.isArray(prev) ? prev : []));
-      const organized = enforceKnownCategoryRules(demoOrganize(normalizedItems));
+      const organized = enforceKnownCategoryRules(demoOrganize(normalizedItems, "mercado"));
 
       (organized || []).forEach((cat) => {
         const catName = cat?.name || "Outros";
@@ -4991,7 +5810,7 @@ const [lists,setLists]=useState(()=>{
       }
 
       cat.items.push(extraItem);
-      l.categories = enforceKnownCategoryRules(l.categories);
+      l.categories = enforceKnownCategoryRules(l.categories, currentList?.type || listType);
       updateList(l);
 
       if (hasExtraPrice) {
@@ -5099,7 +5918,7 @@ const [lists,setLists]=useState(()=>{
       let categories;
       const itemsWithMemory = applyUserMemoryToItems(pantryPendingItems);
       try { categories = await aiOrganize(itemsWithMemory, "mercado"); }
-      catch { categories = demoOrganize(itemsWithMemory); }
+      catch { categories = demoOrganize(itemsWithMemory, "mercado"); }
       categories = enforceKnownCategoryRules(categories);
       setPantryReviewCategories(categories);
       setPantryReviewDirty(true);
@@ -5444,7 +6263,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
      catch(err){
   console.error("Erro IA:", err);
 
-  categories = demoOrganize(itemsWithMemory) || [];
+  categories = demoOrganize(itemsWithMemory, listType) || [];
 
   if (!Array.isArray(categories)) {
     categories = [];
@@ -5452,7 +6271,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
 
   showToast("⚠️ IA indisponível — organização básica");
 }
-      categories=enforceKnownCategoryRules(categories);
+      categories=enforceKnownCategoryRules(categories, listType);
       saveUserItemMemoryFromCategories(categories);
       const now=new Date().toISOString();
       const editingOriginal=editingListId?lists.find(l=>l.id===editingListId):null;
@@ -5895,7 +6714,8 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         showToast("⚠️ Não consegui identificar fala no áudio.",3600);
         return;
       }
-      setPasteText(transcript);
+      // Voz não deve preencher o campo/modal de “Colar lista”.
+      // A transcrição é processada diretamente como entrada de voz.
       await importTextAsPendingItemsWithAI(transcript,{source:"voz"});
     }catch(err){
       console.error("Erro na transcrição por áudio:",err);
@@ -6082,7 +6902,12 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
     return "unit";
   };
 
-  const getAllowedPurchaseUnits=()=>["unidade","pacote","kg","litro","caixa","fardo","saco"];
+  const getAllowedPurchaseUnits=()=>{
+    const activeType = currentList?.type || listType || "mercado";
+    const typeUnits = getListTypeConfig(activeType)?.units || [];
+    const baseUnits = ["unidade","pacote","kg","litro","caixa","fardo","saco"];
+    return Array.from(new Set([...typeUnits, ...baseUnits])).filter(Boolean);
+  };
 
   const inferPriceModeForUnit=(unit,item={})=>{
     const normalized=normalizeUnitValue(unit || item?.unit || "unidade");
@@ -6672,7 +7497,6 @@ return rebuiltHistory;
     const item=currentList.categories[ci].items[ii];
     if(item.notFound){
       showToast("⚠️ Item em falta. Volte para pendente antes de marcar como adquirido.");
-      returnToSearch();
       return;
     }
     if(item.checked){
@@ -6680,7 +7504,6 @@ return rebuiltHistory;
       l.categories[ci].items[ii].checked=false;
       l.categories[ci].items[ii].price=null;
       updateList(l);
-      returnToSearch();
       return;
     }
     setCheckPopup({ci,ii});
@@ -6697,7 +7520,7 @@ return rebuiltHistory;
       list_name: l.name || "",
       item_name: item.name || "",
     });
-    updateList(l); returnToSearch();
+    updateList(l);
     showToast(item.notFound?"❌ Item marcado em falta":"↩️ Item voltou para pendente");
   };
 
@@ -6723,23 +7546,16 @@ return rebuiltHistory;
 
   useEffect(()=>{
     if(!itemModal)return;
-    const timers=[
-      setTimeout(()=>{
-        try{
-          priceInputRef.current?.focus?.();
-          const len=String(priceInputRef.current?.value || "").length;
-          priceInputRef.current?.setSelectionRange?.(len,len);
-        }catch{}
-      },80),
-      setTimeout(()=>{
-        try{
-          priceInputRef.current?.focus?.();
-          const len=String(priceInputRef.current?.value || "").length;
-          priceInputRef.current?.setSelectionRange?.(len,len);
-        }catch{}
-      },260),
-    ];
-    return()=>timers.forEach(clearTimeout);
+    const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+    if (isTouchDevice) return undefined;
+    const timer=setTimeout(()=>{
+      try{
+        priceInputRef.current?.focus?.();
+        const len=String(priceInputRef.current?.value || "").length;
+        priceInputRef.current?.setSelectionRange?.(len,len);
+      }catch{}
+    },120);
+    return()=>clearTimeout(timer);
   },[itemModal]);
 
   const confirmItem=()=>{
@@ -6754,11 +7570,12 @@ return rebuiltHistory;
     item.qty=confirmedQty;
     item.qtyAdjusted=Number(item.qty||0)!==Number(item.originalQty||0);
     item.notFound=mNotFound;
+    const hasTypedPrice = Boolean(String(mPriceText || "").trim());
     if(mNotFound){
       item.checked=false;item.price=null;
     } else {
       const p=parseBRL(mPriceText);
-      if(p!=null&&p>=0){
+      if(hasTypedPrice && p!=null&&p>=0){
         item.price=p;
         item.priceRecordedAt=new Date().toISOString();
         item.priceMode=normalizePriceMode(mPriceMode) || inferPriceModeForUnit(item.unit,item) || normalizePriceMode(item.priceMode) || inferDefaultPriceMode(item);
@@ -6783,8 +7600,8 @@ return rebuiltHistory;
           delete item.estimatedWeightRangeKg;
         }
       }
-      item.checked=true;
-      try {
+      if (hasTypedPrice) item.checked=true;
+      if (hasTypedPrice) try {
         const totalForHistory = getItemLineTotal(item);
         addPriceHistoryEntry({
           itemName: item.name,
@@ -7582,6 +8399,8 @@ return rebuiltHistory;
           listType={listType}
           setListType={setListType}
           LIST_TYPES={LIST_TYPES}
+          listTypeConfig={getListTypeConfig(listType)}
+          listTypeSuggestions={getListTypeSuggestions(listType)}
           currentInput={currentInput}
           handleAddItem={handleAddItem}
           setPasteTarget={setPasteTarget}
@@ -7688,6 +8507,7 @@ return rebuiltHistory;
         parseBRL={parseBRL}
         getExtraPriceInputLabel={getExtraPriceInputLabel}
         getCategoryForExtraItem={getCategoryForExtraItem}
+        listType={currentList?.type || listType}
       />
 
       {/* ════════════════════════════════════
@@ -7697,6 +8517,7 @@ return rebuiltHistory;
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF 0%,#F8FAFC 48%,#FFFFFF 100%)"}}>
           <ListScreenHeader
             currentList={currentList}
+            listType={currentList?.type || listType || "mercado"}
             checkedItems={checkedItems}
             totalItems={totalItems}
             fullTotal={fullTotal}
@@ -7963,6 +8784,8 @@ return rebuiltHistory;
               const sub=getCatSubtotal(cat);
               const isCollapsed=collapsedCats[ci];
               const isExtraCat=normalizePlainText(cat.name)==="itens extras";
+              const LIST_SOFT_BY_TYPE={"mercado":"#F5F3FF","supermercado":"#F5F3FF","festa":"#FFF7ED","eventos":"#FFF7ED","construcao":"#FFFBEB","eletrico":"#EFF6FF","escolar":"#F0FDF4","farmacia":"#FDF2F8","condominio":"#EFF6FF","outros":"#F9FAFB"};
+              const listSoft=LIST_SOFT_BY_TYPE[currentList?.type||"mercado"]||"#F5F3FF";
               const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
               if(search&&filtered.length===0)return null;
               const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
@@ -7976,7 +8799,7 @@ return rebuiltHistory;
               });
 
               return(
-                <div key={ci} style={getPremiumSectionStyle(theme,{isExtraCat,allDone})}>
+                <div key={ci} style={getPremiumSectionStyle(theme,{isExtraCat,allDone,listThemeSoft:listSoft})}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
                     style={getPremiumSectionHeaderStyle(theme,{isExtraCat,allDone,isCollapsed})}>
@@ -8066,6 +8889,7 @@ return rebuiltHistory;
         const unitLabel=getPriceLabelForModeAndUnit(inferredMode,effectiveItem.unit);
         return(
           <ModalSheet onClose={()=>setItemModal(null)}>
+            <div className="tnl-keyboard-safe-modal">
             <div style={{textAlign:"center",marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,flexWrap:"wrap",fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>
                 <span>{item.extra || item.addedDuringPurchase ? "➕" : "🛒"}</span>
@@ -8089,7 +8913,7 @@ return rebuiltHistory;
             {mShowEditDetails && (
               <div style={{marginBottom:14,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:18,padding:12}}>
                 <label style={lbl}>Nome do item</label>
-                <input value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder="Nome do item" style={inp({height:50,fontWeight:800})} />
+                <input className="tnl-keyboard-safe-field" value={mEditName} onChange={e=>setMEditName(e.target.value)} placeholder={`Nome do item de ${getListTypeConfig(currentList?.type || listType).label.toLowerCase()}`} style={inp({height:50,fontWeight:800})} />
 
                 <div style={{height:12}} />
 
@@ -8148,8 +8972,8 @@ return rebuiltHistory;
               <label style={lbl}>{unitLabel}</label>
               <div style={{position:"relative"}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:"#6B7280",fontSize:16,pointerEvents:"none"}}>R$</span>
-                <input ref={priceInputRef} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
-                  placeholder="0,00" inputMode="numeric" autoFocus
+                <input className="tnl-keyboard-safe-field" ref={priceInputRef} value={mPriceText} onChange={e=>setMPriceText(formatMoneyInput(e.target.value))}
+                  placeholder="0,00" inputMode="numeric"
                   style={inp({paddingLeft:44,fontWeight:900,fontSize:18,textAlign:"left",caretColor:theme.header})}
                   onFocus={e=>{e.target.style.borderColor=theme.border;try{e.target.setSelectionRange(String(mPriceText||"").length,String(mPriceText||"").length);}catch{}}} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
               </div>
@@ -8170,10 +8994,10 @@ return rebuiltHistory;
                 });
               }} style={{padding:"14px 18px",borderRadius:18,background:"#FEE2E2",border:"none",color:"#B91C1C",fontWeight:800,fontSize:16,cursor:"pointer"}}>🗑</button>
               <button onClick={confirmItem}
-                disabled={!mPriceText.trim()}
-                style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",opacity:(!mPriceText.trim())?0.5:1,cursor:(!mPriceText.trim())?"not-allowed":"pointer"}}>
-                {!mPriceText.trim()?"Informe o preço":"Confirmar"}
+                style={{flex:1,padding:14,borderRadius:18,background:`linear-gradient(135deg,${theme.border},${theme.header})`,border:"none",color:"white",fontWeight:800,fontSize:15,fontFamily:"inherit",cursor:"pointer"}}>
+                {mPriceText.trim()?"Confirmar compra":"Salvar alterações"}
               </button>
+            </div>
             </div>
           </ModalSheet>
         );
@@ -8198,7 +9022,7 @@ return rebuiltHistory;
             <label style={lbl}>Item</label>
             <input value={exName} onChange={e=>setExName(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&exName.trim()){startExtraFlow();}}}
-              placeholder="Ex: cenoura, arroz, detergente..."
+              placeholder={getListTypeConfig(currentList?.type || listType).placeholder}
               style={inp()} onFocus={e=>e.target.style.borderColor="#FF7043"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
             {showCorrection&&(
               <button
@@ -8294,7 +9118,6 @@ return rebuiltHistory;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checked=true;
                   l.categories[checkPopup.ci].items[checkPopup.ii].checkedAt=new Date().toISOString();
                   updateList(l);setCheckPopup(null);setSearch("");
-                  setTimeout(scrollToListTop,100);
                   const allDone=l.categories.every(c=>c.items.every(i=>i.checked||i.notFound));
                   if(allDone&&l.categories.reduce((s,c)=>s+c.items.length,0)>0)setTimeout(()=>setShowFinished(true),400);
                 }} style={{flex:1,padding:14,borderRadius:20,background:"#F9FAFB",border:"none",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit",color:"#4A5568"}}>Não</button>
@@ -8312,7 +9135,9 @@ return rebuiltHistory;
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📋 Colar lista de texto</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
           <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
-            placeholder={"- Arroz\n- Feijão\n- Leite\n- Detergente"}
+            placeholder={pasteTarget === "pantry"
+              ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
+              : getListTypeConfig(listType).placeholder}
             style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
           <button onClick={parsePastedText} disabled={!pasteText.trim()}
             style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
