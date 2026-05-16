@@ -7138,7 +7138,7 @@ return rebuiltHistory;
     return total>0 && (list?.categories||[]).every(c=>(c.items||[]).every(i=>i.checked||i.notFound));
   };
 
-  const isRealSharedList=(list)=>Boolean(list?.sharedId && (list?.isShared === true || list?.imported === true));
+ const isRealSharedList=(list)=>Boolean((list?.sharedId||list?.originalSharedId||list?.sourceSharedId) && (list?.isShared === true || list?.imported === true));
 
   const isReadOnlyFinishedList=(list)=>Boolean(list?.archivedFinished===true);
 
