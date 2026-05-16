@@ -149,16 +149,21 @@ export function hexToRgba(hex, alpha = 1) {
   }
 }
 
-export function getPremiumSectionStyle(theme, { isExtraCat = false, allDone = false } = {}) {
+export function getPremiumSectionStyle(theme, { isExtraCat = false, allDone = false, listThemeSoft = null } = {}) {
   const border = isExtraCat ? "#F97316" : allDone ? "#22C55E" : theme.border;
+  // Fundo levemente tingido com a cor do tipo de lista (10% de opacidade)
+  // Mantém o branco como base para não comprometer a leitura
+  const bgBase = listThemeSoft && !isExtraCat && !allDone
+    ? `linear-gradient(180deg, #FFFFFF 0%, ${listThemeSoft} 100%)`
+    : "rgba(255,255,255,0.96)";
   return {
     marginBottom: 18,
     borderRadius: 22,
     overflow: "hidden",
     border: `1.5px solid ${hexToRgba(border, 0.58)}`,
-    background: "rgba(255,255,255,0.96)",
+    background: bgBase,
     boxShadow: `0 18px 42px ${hexToRgba(border, 0.12)}, 0 2px 8px rgba(15,23,42,0.05)`,
-    transition: "border-color 0.25s, box-shadow 0.25s, transform 0.18s",
+    transition: "border-color 0.25s, box-shadow 0.25s, transform 0.18s, background 0.4s",
   };
 }
 
