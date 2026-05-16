@@ -13,7 +13,8 @@ export const LIST_TYPE_CONFIGS = {
       "caixa",
       "fardo",
       "garrafa",
-      "lata"
+      "lata",
+      "pote"
     ],
     categories: [
       "Hortifruti",
@@ -144,7 +145,8 @@ export const LIST_TYPE_CONFIGS = {
       "pacote",
       "frasco",
       "tubo",
-      "cartela"
+      "cartela",
+      "lata"
     ],
     categories: [
       "Medicamentos",
@@ -166,6 +168,7 @@ export const LIST_TYPE_CONFIGS = {
       "unidade",
       "pacote",
       "caixa",
+      "fardo",
       "litro",
       "galão",
       "kg"
