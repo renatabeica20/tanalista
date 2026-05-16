@@ -223,7 +223,7 @@ export default function CreateListScreen({
   };
 
   return (
-<div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#F8F7FF 0%,#FAFAFB 60%,#FFFFFF 100%)"}}>
+<div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#F8F7FF 0%,#FAFAFB 60%,#FFFFFF 100%)",backgroundColor:themeShadowRGBA(0.10)}}>
   <div style={{background:`linear-gradient(135deg, ${theme.soft} 0%, #FFFFFF 100%)`,padding:"16px 20px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:`1px solid ${theme.softBorder}`,position:"sticky",top:0,zIndex:100,boxShadow:`0 10px 28px ${themeShadowRGBA(0.14)}`,backdropFilter:"saturate(140%) blur(8px)",transition:"background .3s ease, border-color .3s ease, box-shadow .3s ease"}}>
     <button onClick={()=>{archiveFinishedListsBeforeHome();setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
       style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,border:`1px solid ${theme.softBorder}`,cursor:"pointer",fontSize:18,color:theme.dark,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,boxShadow:`0 6px 16px ${themeShadowRGBA(0.18)}`,WebkitTapHighlightColor:"transparent"}}>←</button>
