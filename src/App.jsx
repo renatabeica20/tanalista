@@ -7452,7 +7452,7 @@ return rebuiltHistory;
   },[showToast]);
 
   const refreshSharedListFromCloud=useCallback(async()=>{
-    const sharedId=currentList?.sharedId;
+    const sharedId=currentList?.sharedId||currentList?.originalSharedId||currentList?.sourceSharedId;
     if(!sharedId)return;
     setSharedSyncing(true);
     try{
