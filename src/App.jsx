@@ -87,7 +87,7 @@ import {
   getPremiumSectionHeaderStyle,
 } from "./services/ProductConfigService";
 import GuidedTourController from "./components/GuidedTourController";
-import  from "./components/";
+import SharedSyncController from "./components/SharedSyncController";
 import ToastMessage from "./components/ToastMessage";
 import InstallPrompt from "./components/InstallPrompt";
 import HomeScreen from "./pages/HomeScreen";
