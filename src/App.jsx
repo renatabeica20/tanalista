@@ -5030,7 +5030,7 @@ const [lists,setLists]=useState(()=>{
       setAuthCheckedName(savedName);
 
       const userId=await registerAppUser(savedName,{force:true});
-      if(userId)await restoreUserListsFromCloud(userId,savedName);
+      if(userId && !sharedLandingRecord)await restoreUserListsFromCloud(userId,savedName);
       await registrarEvento(pinResult.mode==="created" ? "user_created" : "login", {
         auth_mode: pinResult.mode || "login",
       });
