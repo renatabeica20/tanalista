@@ -5034,12 +5034,12 @@ const [lists,setLists]=useState(()=>{
       await registrarEvento(pinResult.mode==="created" ? "user_created" : "login", {
         auth_mode: pinResult.mode || "login",
       });
-
-      if(sharedLandingRecord){
-        showToast("Acesso validado. Importando lista recebida...",1800);
-        await importSharedRecordToApp(sharedLandingRecord);
-        return;
-      }
+if(sharedLandingRecord){
+          // Não importa automaticamente — mantém o modal de escolha visível
+          // para que o usuário decida se quer importar ou apenas visualizar.
+          setUserNameModal(false);
+          return;
+        }
 
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
