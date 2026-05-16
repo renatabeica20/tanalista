@@ -8773,6 +8773,8 @@ return rebuiltHistory;
               const sub=getCatSubtotal(cat);
               const isCollapsed=collapsedCats[ci];
               const isExtraCat=normalizePlainText(cat.name)==="itens extras";
+              const LIST_SOFT_BY_TYPE={"mercado":"#F5F3FF","supermercado":"#F5F3FF","festa":"#FFF7ED","eventos":"#FFF7ED","construcao":"#FFFBEB","eletrico":"#EFF6FF","escolar":"#F0FDF4","farmacia":"#FDF2F8","condominio":"#EFF6FF","outros":"#F9FAFB"};
+              const listSoft=LIST_SOFT_BY_TYPE[currentList?.type||"mercado"]||"#F5F3FF";
               const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
               if(search&&filtered.length===0)return null;
               const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
@@ -8786,7 +8788,7 @@ return rebuiltHistory;
               });
 
               return(
-                <div key={ci} style={getPremiumSectionStyle(theme,{isExtraCat,allDone})}>
+                <div key={ci} style={getPremiumSectionStyle(theme,{isExtraCat,allDone,listThemeSoft:listSoft})}>
                   {/* Cabeçalho colorido da categoria */}
                   <div onClick={()=>setCollapsedCats(p=>({...p,[ci]:!p[ci]}))}
                     style={getPremiumSectionHeaderStyle(theme,{isExtraCat,allDone,isCollapsed})}>
