@@ -1387,6 +1387,8 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "mercado") {
+    if (includesAny(["macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel"])) return "Mercearia";
+
     // Bebidas ANTES de Limpeza — "heineken" e "cerveja" não podem cair em Limpeza por causa de "álcool"
     if (includesAny(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "crystal", "amstel", "corona", "stella", "becks", "brahma duplo malte", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull", "agua", "água", "agua com gas", "água com gás"])) return "Bebidas";
     // Descartáveis — copo e guardanapo iam parar em "Outros" sem este override
@@ -1679,6 +1681,11 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Mercado
     if (normalizedType === "mercado") {
+      // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
+      if (has(["macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel"])) {
+        return pick("Mercearia") || "Mercearia";
+      }
+
       // Bebidas PRIMEIRO — antes de qualquer regra que possa capturar "álcool"
       if (has(["cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava", "refrigerante", "coca", "guarana", "guaraná", "pepsi", "suco", "energetico", "energético", "monster", "redbull", "red bull"])) {
         return pick("Bebidas") || "Bebidas";
@@ -2299,6 +2306,9 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   // Mercado: regras explícitas ANTES do fallback genérico
   // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
   if (normalizedType === "mercado") {
+    // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
+    if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
+
     // Bebidas — DEVE vir antes de qualquer regra de Limpeza para evitar conflito com "álcool"
     if (has("cerveja", "heineken", "skol", "brahma", "antarctica", "budweiser", "itaipava",
             "crystal", "amstel", "corona", "stella", "becks", "refrigerante", "coca cola",
@@ -6704,7 +6714,8 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
         showToast("⚠️ Não consegui identificar fala no áudio.",3600);
         return;
       }
-      setPasteText(transcript);
+      // Voz não deve preencher o campo/modal de “Colar lista”.
+      // A transcrição é processada diretamente como entrada de voz.
       await importTextAsPendingItemsWithAI(transcript,{source:"voz"});
     }catch(err){
       console.error("Erro na transcrição por áudio:",err);
