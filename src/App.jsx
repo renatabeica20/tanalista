@@ -5189,9 +5189,10 @@ if(sharedLandingRecord){
   };
 
   const makeShareUrl=(sharedId)=>{
-    const encoded=encodeURIComponent(sharedId);
-   return `${APP_PUBLIC_URL}/?lista=${encoded}&preview=1`;
-  };
+  const encoded=encodeURIComponent(sharedId);
+  const base=window.location.origin;
+  return `${base}/?lista=${encoded}&preview=1`;
+};
 
   const extractSharedIdFromUrl=()=>{
     try{
