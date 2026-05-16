@@ -8506,6 +8506,7 @@ return rebuiltHistory;
         <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#FBFAFF 0%,#F8FAFC 48%,#FFFFFF 100%)"}}>
           <ListScreenHeader
             currentList={currentList}
+            listType={currentList?.type || listType || "mercado"}
             checkedItems={checkedItems}
             totalItems={totalItems}
             fullTotal={fullTotal}
