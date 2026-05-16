@@ -4789,19 +4789,30 @@ const [lists,setLists]=useState(()=>{
     const from=list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "";
     const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizeAuthName(currentName);
     const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizeAuthName(currentName);
-    if(ownerIsCurrent || fromIsCurrent){
+
+    // ── CORREÇÃO DO BUG DE STATUS ─────────────────────────────────────────
+    // O problema: listas recebidas de outro usuário perdiam o status "Recebida de X"
+    // ao excluir outra lista, porque esta função sobrescrevia imported=false
+    // sempre que ownerName coincidisse com o nome do usuário atual.
+    //
+    // A correção: imported=true é protegido quando há marca explícita de
+    // importação (importedAt ou receivedAt). Isso significa que a lista
+    // definitivamente veio de outra pessoa, independente do nome do remetente.
+    // ─────────────────────────────────────────────────────────────────────
+    const wasExplicitlyImported = list.imported === true && Boolean(list.importedAt || list.receivedAt);
+
+    if((ownerIsCurrent || fromIsCurrent) && !wasExplicitlyImported){
       return {
         ...list,
         imported:false,
         importedFrom:null,
         sharedOwner:null,
-        // sharedId pode existir apenas para sincronização na nuvem.
-        // O selo Compartilhada fica reservado ao envio explícito da lista.
         isShared:list.sharedAt ? list.isShared === true : false,
       };
     }
     return list;
   };
+
 
   const saveLists=(nl)=>{
     const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
