@@ -218,6 +218,7 @@ export default function ListScreenHeader({
               fmtR={fmtR}
               highlighted={tour("list_progress")}
               highlightStyle={highlight(tour("list_progress"))}
+              listThemeColor={theme.color}
             />
           </div>
         </div>
