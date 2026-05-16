@@ -29,14 +29,15 @@ const lbl = {
   letterSpacing: "0.08em",
 };
 
-const createCard = {
-  background: "linear-gradient(180deg,#FFFFFF 0%,#FBFAFF 100%)",
+// createCard agora é uma função para receber o tema dinamicamente
+const createCard = (th) => ({
+  background: `linear-gradient(180deg, #FFFFFF 0%, ${th?.soft || "#FBFAFF"} 100%)`,
   borderRadius: 24,
   padding: 18,
-  border: "1px solid rgba(167,139,250,0.22)",
-  boxShadow: "0 14px 30px rgba(17,24,39,0.06), inset 0 1px 0 rgba(255,255,255,0.9)",
-  transition: "border-color .25s ease, box-shadow .25s ease, transform .25s ease",
-};
+  border: `1px solid ${th?.softBorder || "rgba(167,139,250,0.22)"}`,
+  boxShadow: `0 14px 30px rgba(17,24,39,0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
+  transition: "background .4s ease, border-color .4s ease, box-shadow .25s ease, transform .25s ease",
+});
 
 const createSecondaryBtn = {
   width: "100%",
@@ -242,7 +243,7 @@ export default function CreateListScreen({
   </div>
   <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
-    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
+    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard(theme),borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
         <div style={{flex:1,minWidth:0}}>
@@ -295,7 +296,7 @@ export default function CreateListScreen({
     </div>
 
     {/* ORÇAMENTO */}
-    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
+    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_budget"))}}>
       <label style={lbl}>💰 Orçamento</label>
       <div>
         <div style={{position:"relative"}}>
@@ -312,7 +313,7 @@ export default function CreateListScreen({
     </div>
 
     {/* NOME DA LISTA */}
-    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
+    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_name"))}}>
       <label style={lbl}>📝 Nome da lista</label>
       <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
         placeholder="Ex: Compras da semana..."
@@ -324,7 +325,7 @@ export default function CreateListScreen({
     </div>
 
     {/* TIPO DE LISTA */}
-    <div data-tour-step={isTourStep("create_type") ? "create_type" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
+    <div data-tour-step={isTourStep("create_type") ? "create_type" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_type"))}}>
       <label style={lbl}>🏷 Tipo de lista</label>
       <div style={{position:"relative"}}>
         <select value={listType} onChange={e=>setListType(e.target.value)}
@@ -335,7 +336,7 @@ export default function CreateListScreen({
       </div>
     </div>
 
-    <div data-tour-step={isTourStep("create_item_input") ? "create_item_input" : isTourStep("create_item_insert") ? "create_item_insert" : isTourStep("create_item_paste") ? "create_item_paste" : isTourStep("create_item_voice") ? "create_item_voice" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
+    <div data-tour-step={isTourStep("create_item_input") ? "create_item_input" : isTourStep("create_item_insert") ? "create_item_insert" : isTourStep("create_item_paste") ? "create_item_paste" : isTourStep("create_item_voice") ? "create_item_voice" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
       <label style={lbl}>🛒 Adicionar itens</label>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <input data-tour-step={isTourStep("create_item_input") ? "create_item_input" : undefined} value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
