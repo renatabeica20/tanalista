@@ -165,6 +165,41 @@ export default function CreateListScreen({
   const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
   const [confirmDeleteConfig, setConfirmDeleteConfig] = useState(null);
 
+  // Tema visual dinâmico por tipo de lista. Apenas cosmético.
+  const THEME_MAP = {
+    supermercado: { color: "#6D28D9", dark: "#4C1D95", light: "#8B5CF6", soft: "#F5F3FF", softBorder: "#DDD6FE", icon: "🛒", placeholder: "Digite um item da lista" },
+    eventos:      { color: "#EA580C", dark: "#9A3412", light: "#FB923C", soft: "#FFF7ED", softBorder: "#FED7AA", icon: "🎉", placeholder: "Ex: balões, bolo, refrigerante..." },
+    construcao:   { color: "#B45309", dark: "#78350F", light: "#D97706", soft: "#FFFBEB", softBorder: "#FDE68A", icon: "🏗️", placeholder: "Ex: cimento, tijolo, prego..." },
+    eletrico:     { color: "#1D4ED8", dark: "#1E3A8A", light: "#3B82F6", soft: "#EFF6FF", softBorder: "#BFDBFE", icon: "⚡", placeholder: "Ex: fio, disjuntor, tomada..." },
+    escolar:      { color: "#15803D", dark: "#14532D", light: "#22C55E", soft: "#F0FDF4", softBorder: "#BBF7D0", icon: "🏫", placeholder: "Ex: caderno, lápis, mochila..." },
+    farmacia:     { color: "#BE185D", dark: "#831843", light: "#EC4899", soft: "#FDF2F8", softBorder: "#FBCFE8", icon: "💊", placeholder: "Ex: remédio, vitamina, curativo..." },
+    condominio:   { color: "#0F4C75", dark: "#0B3559", light: "#3282B8", soft: "#EFF6FF", softBorder: "#BFDBFE", icon: "🏢", placeholder: "Ex: lâmpada, sabão, papel toalha..." },
+    outras:       { color: "#374151", dark: "#1F2937", light: "#6B7280", soft: "#F9FAFB", softBorder: "#E5E7EB", icon: "📦", placeholder: "Digite um item da lista" },
+  };
+  const _normalizeKey = (s) => String(s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z]/g, "");
+  const _lookupTheme = (lt) => {
+    const k = _normalizeKey(lt);
+    if (THEME_MAP[k]) return THEME_MAP[k];
+    if (/super|mercado/.test(k)) return THEME_MAP.supermercado;
+    if (/event|festa/.test(k)) return THEME_MAP.eventos;
+    if (/constru|obra/.test(k)) return THEME_MAP.construcao;
+    if (/eletr/.test(k)) return THEME_MAP.eletrico;
+    if (/escol|escola/.test(k)) return THEME_MAP.escolar;
+    if (/farm|remed/.test(k)) return THEME_MAP.farmacia;
+    if (/condom|predio/.test(k)) return THEME_MAP.condominio;
+    if (/outr/.test(k)) return THEME_MAP.outras;
+    return THEME_MAP.supermercado;
+  };
+  const theme = _lookupTheme(listType);
+  const themeGradient = `linear-gradient(135deg, ${theme.dark} 0%, ${theme.color} 60%, ${theme.light} 100%)`;
+  const themeShadowRGBA = (a) => {
+    const h = theme.color.replace("#", "");
+    const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  };
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     const id = "tnl-create-anim";
@@ -189,20 +224,20 @@ export default function CreateListScreen({
 
   return (
 <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#F8F7FF 0%,#FAFAFB 60%,#FFFFFF 100%)"}}>
-  <div style={{background:"linear-gradient(135deg,#FFFFFF 0%,#FBFAFF 100%)",padding:"16px 20px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid rgba(167,139,250,0.22)",position:"sticky",top:0,zIndex:100,boxShadow:"0 10px 28px rgba(76,29,149,0.08)",backdropFilter:"saturate(140%) blur(8px)"}}>
+  <div style={{background:`linear-gradient(135deg, ${theme.soft} 0%, #FFFFFF 100%)`,padding:"16px 20px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:`1px solid ${theme.softBorder}`,position:"sticky",top:0,zIndex:100,boxShadow:`0 10px 28px ${themeShadowRGBA(0.14)}`,backdropFilter:"saturate(140%) blur(8px)",transition:"background .3s ease, border-color .3s ease, box-shadow .3s ease"}}>
     <button onClick={()=>{archiveFinishedListsBeforeHome();setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
-      style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#F5F3FF,#FFFFFF)",border:"1px solid #EDE9FE",cursor:"pointer",fontSize:18,color:"#4C1D95",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,boxShadow:"0 6px 16px rgba(76,29,149,0.10)",WebkitTapHighlightColor:"transparent"}}>←</button>
+      style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,border:`1px solid ${theme.softBorder}`,cursor:"pointer",fontSize:18,color:theme.dark,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,boxShadow:`0 6px 16px ${themeShadowRGBA(0.18)}`,WebkitTapHighlightColor:"transparent"}}>←</button>
     <div style={{flex:1,minWidth:0}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-        <AppLogo size={26} radius={8} shadow={false}/>
-        <div style={{fontWeight:900,fontSize:18,color:"#111827",textAlign:"center",letterSpacing:"-0.01em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",background:listName?"linear-gradient(135deg,#4C1D95,#8B5CF6)":"none",WebkitBackgroundClip:listName?"text":"unset",WebkitTextFillColor:listName?"transparent":"#111827"}}>{listName?listName:"Nova lista"}</div>
+        <span aria-hidden style={{fontSize:22,lineHeight:1}}>{theme.icon}</span>
+        <div style={{fontWeight:900,fontSize:18,color:"#111827",textAlign:"center",letterSpacing:"-0.01em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",background:listName?`linear-gradient(135deg, ${theme.dark}, ${theme.light})`:"none",WebkitBackgroundClip:listName?"text":"unset",WebkitTextFillColor:listName?"transparent":"#111827"}}>{listName?listName:"Nova lista"}</div>
       </div>
     </div>
-    <button onClick={()=>startGuidedTour("create")} style={{border:"1px solid #DDD6FE",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",color:"#5B21B6",borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 6px 14px rgba(109,40,217,0.12)",WebkitTapHighlightColor:"transparent"}}>✨ Como usar</button>
+    <button onClick={()=>startGuidedTour("create")} style={{border:`1px solid ${theme.softBorder}`,background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,color:theme.dark,borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 6px 14px ${themeShadowRGBA(0.14)}`,WebkitTapHighlightColor:"transparent"}}>✨ Como usar</button>
   </div>
-  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"visible",animation:"tnl-create-in .35s ease both"}}>
+  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
-    <div data-tour-step="create_pantry" style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
+    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard,borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
         <div style={{flex:1,minWidth:0}}>
@@ -250,12 +285,12 @@ export default function CreateListScreen({
       </div>
       <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
         {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-        <button data-tour-step="create_pantry_action" onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
+        <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
       </div>
     </div>
 
     {/* ORÇAMENTO */}
-    <div data-tour-step="create_budget" style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
+    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_budget"))}}>
       <label style={lbl}>💰 Orçamento</label>
       <div>
         <div style={{position:"relative"}}>
@@ -272,7 +307,7 @@ export default function CreateListScreen({
     </div>
 
     {/* NOME DA LISTA */}
-    <div data-tour-step="create_name" style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
+    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_name"))}}>
       <label style={lbl}>📝 Nome da lista</label>
       <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
         placeholder="Ex: Compras da semana..."
@@ -284,32 +319,31 @@ export default function CreateListScreen({
     </div>
 
     {/* TIPO DE LISTA */}
-    <div data-tour-step="create_type" style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
+    <div data-tour-step={isTourStep("create_type") ? "create_type" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_type"))}}>
       <label style={lbl}>🏷 Tipo de lista</label>
       <div style={{position:"relative"}}>
         <select value={listType} onChange={e=>setListType(e.target.value)}
           style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",WebkitAppearance:"none",MozAppearance:"none",cursor:"pointer",paddingRight:46,fontWeight:700,color:"#111827"}}>
           {LIST_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6D28D9",fontSize:12,fontWeight:900,background:"#F5F3FF",borderRadius:999,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #DDD6FE"}}>▼</span>
+        <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:theme.color,fontSize:12,fontWeight:900,background:theme.soft,borderRadius:999,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${theme.softBorder}`}}>▼</span>
       </div>
     </div>
 
-    <div data-tour-step="create_item_input" data-tour-also="create_item_voice create_item_paste create_item_insert" style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
+    <div data-tour-step={isTourStep("create_item_input") ? "create_item_input" : isTourStep("create_item_insert") ? "create_item_insert" : isTourStep("create_item_paste") ? "create_item_paste" : isTourStep("create_item_voice") ? "create_item_voice" : undefined} style={{...createCard,...tourHighlightStyle(isTourStep("create_item_input") || isTourStep("create_item_insert") || isTourStep("create_item_paste") || isTourStep("create_item_voice"))}}>
       <label style={lbl}>🛒 Adicionar itens</label>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
-        <input data-tour-step="create_item_input" value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
+        <input data-tour-step={isTourStep("create_item_input") ? "create_item_input" : undefined} value={currentInput} onChange={e=>setCurrentInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&handleAddItem()}
-          placeholder={`Digite itens de ${listType}`}
+          placeholder={theme.placeholder}
           style={{...inp({height:56}),...tourHighlightStyle(isTourStep("create_item_input"))}} onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor="#E5E7EB"}/>
-        <button data-tour-step="create_item_insert" onClick={handleAddItem}
-          style={{padding:"0 18px",height:56,borderRadius:18,background:"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 12px 24px rgba(109,40,217,0.28), inset 0 1px 0 rgba(255,255,255,0.18)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
+        <button data-tour-step={isTourStep("create_item_insert") ? "create_item_insert" : undefined} onClick={handleAddItem}
+          style={{padding:"0 18px",height:56,borderRadius:18,background:themeGradient,border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 12px 24px ${themeShadowRGBA(0.32)}, inset 0 1px 0 rgba(255,255,255,0.18)`,WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
-
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
-        <button data-tour-step="create_item_paste" onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
-          style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)",...tourHighlightStyle(isTourStep("create_item_paste"))}}>
+        <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
+          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`,...tourHighlightStyle(isTourStep("create_item_paste"))}}>
           📋 Colar lista
         </button>
         <VoiceInput
@@ -326,7 +360,7 @@ export default function CreateListScreen({
     </div>
 
     {pendingItems.length>0&&(
-      <div data-tour-step="create_items_preview" style={{background:"linear-gradient(180deg,#FFFFFF,#FBFAFF)",borderRadius:22,overflow:"hidden",boxShadow:"0 12px 28px rgba(17,24,39,0.07)",border:"1px solid rgba(167,139,250,0.22)",animation:"tnl-create-pop .25s ease both",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
+      <div data-tour-step={isTourStep("create_items_preview") ? "create_items_preview" : undefined} style={{background:"linear-gradient(180deg,#FFFFFF,#FBFAFF)",borderRadius:22,overflow:"hidden",boxShadow:"0 12px 28px rgba(17,24,39,0.07)",border:"1px solid rgba(167,139,250,0.22)",animation:"tnl-create-pop .25s ease both",...tourHighlightStyle(isTourStep("create_items_preview"))}}>
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#F5F3FF,#EDE9FE)",borderBottom:"1px solid rgba(167,139,250,0.25)",fontSize:12,fontWeight:900,color:"#4C1D95",display:"flex",justifyContent:"space-between",alignItems:"center",textTransform:"uppercase",letterSpacing:"0.05em"}}>
           <span>{pendingItems.length} {pendingItems.length===1?"item":"itens"} na pré-lista</span>
           <button onClick={()=>setPendingItems([])} style={{background:"#FFFFFF",border:"1px solid #FECACA",color:"#DC2626",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",borderRadius:999,padding:"4px 10px",WebkitTapHighlightColor:"transparent"}}>Limpar tudo</button>
@@ -366,19 +400,19 @@ export default function CreateListScreen({
     )}
 
     {(activePantry && pendingItems.length>0 && !pantryCompared && !editingListId) ? (
-      <button data-tour-step="create_ai" onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
+      <button data-tour-step={isTourStep("create_ai") ? "create_ai" : undefined} onClick={compareWithActivePantry} disabled={loading||pendingItems.length===0}
         style={{...createPrimaryBtn,background:"linear-gradient(135deg,#15803D 0%,#16A34A 50%,#22C55E 100%)",boxShadow:(loading||pendingItems.length===0)?"none":"0 18px 38px rgba(22,163,74,0.32), inset 0 1px 0 rgba(255,255,255,0.18)",opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
         Comparar com Itens em Casa {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
       </button>
     ) : (
       <>
-        <button data-tour-step="create_ai" onClick={organizeList} disabled={loading||pendingItems.length===0}
-          style={{...createPrimaryBtn,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
+        <button data-tour-step={isTourStep("create_ai") ? "create_ai" : undefined} onClick={organizeList} disabled={loading||pendingItems.length===0}
+          style={{...createPrimaryBtn,background:themeGradient,boxShadow:`0 18px 38px ${themeShadowRGBA(0.34)}, inset 0 1px 0 rgba(255,255,255,0.18)`,opacity:(loading||pendingItems.length===0)?0.5:1,cursor:(loading||pendingItems.length===0)?"not-allowed":"pointer",...tourHighlightStyle(isTourStep("create_ai"))}}>
           {editingListId?"Salvar alterações":"✨ Organizar com IA"} {pendingItems.length>0&&`(${pendingItems.length} ${pendingItems.length===1?"item":"itens"})`}
         </button>
         {pendingItems.length>0&&(
           <button onClick={organizeListKeepOrder} disabled={loading}
-            style={{...createSecondaryBtn,borderColor:"#DDD6FE",color:"#5B21B6",background:"linear-gradient(135deg,#FFFFFF,#FAF9FF)"}}>
+            style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`}}>
             📝 Manter minha ordem
           </button>
         )}
