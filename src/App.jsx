@@ -5189,7 +5189,7 @@ const [lists,setLists]=useState(()=>{
 
   const makeShareUrl=(sharedId)=>{
     const encoded=encodeURIComponent(sharedId);
-    return `${APP_PUBLIC_URL}/?lista=${encoded}`;
+   return `${APP_PUBLIC_URL}/?lista=${encoded}&preview=1`;
   };
 
   const extractSharedIdFromUrl=()=>{
@@ -5614,9 +5614,14 @@ const [lists,setLists]=useState(()=>{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
 
-      if(validSession){
+     if(validSession){
         setUserNameModal(false);
-        await importSharedRecordToApp(record);
+        const isPreviewMode=new URL(window.location.href).searchParams.get("preview")==="1";
+        if(!isPreviewMode){
+          await importSharedRecordToApp(record);
+          clearSharedUrlFromAddressBar();
+          return;
+        }
         clearSharedUrlFromAddressBar();
         return;
       }
