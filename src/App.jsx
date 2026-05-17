@@ -1425,7 +1425,7 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "farmacia") {
-    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return "Medicamentos";
+    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antibiótivo", "antiflamatorio", "anti-inflamatório", "antiinflamatorio", "vitamina", "suplemento", "xarope", "suspensao", "suspensão", "comprimido", "capsula", "cápsula", "injetavel", "injetável", "pomada", "creme", "colírio", "colirio", "solucao oral", "solução oral"])) return "Medicamentos";
     if (includesAny(["gaze", "algodão", "algodao", "curativo", "atadura"])) return "Curativos";
     if (includesAny(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return "Bebês";
   }
@@ -1730,7 +1730,7 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Farmácia
     if (normalizedType === "farmacia") {
-      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return pick("Medicamentos");
+      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antiinflamatorio", "vitamina", "suplemento", "xarope", "suspensao", "suspensão", "comprimido", "capsula", "cápsula", "injetavel", "injetável", "pomada", "creme", "colirio", "colírio"])) return pick("Medicamentos");
       if (has(["gaze", "algodão", "algodao", "curativo", "atadura"])) return pick("Curativos");
       if (has(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return pick("Bebês");
     }
@@ -2250,7 +2250,7 @@ function inferPreferredCategoryForItem(item) {
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
     { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
     { cat: "Material de Escrita", keys: ["lapis de cor","lápis de cor","lapis","lápis","canetinha","hidrocor","giz de cera","cola escolar","tesoura escolar","regua","régua","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
-    { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","vitamina","xarope","soro fisiologico","soro fisiológico"] },
+    { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","amoxicilina","clavulanato","amoxiclav","atak clav","azitromicina","cefalexina","nimesulida","dexametasona","prednisona","omeprazol","losartana","enalapril","metformina","sinvastatina","atorvastatina","clonazepam","rivotril","ritalina","fluoxetina","sertralina","antibiotico","antibiótivo","antiinflamatorio","vitamina","suplemento","xarope","suspensao","suspensão","comprimido","capsula","cápsula","injetavel","injetável","pomada","colirio","colírio","solucao oral","solução oral"] },
     { cat: "Hidráulica", keys: ["cano","tubo","conexao","conexão","registro","torneira","chuveiro","ralo","sifao","sifão"] },
     { cat: "Ferramentas", keys: ["martelo","chave de fenda","alicate","furadeira","parafusadeira"] },
     { cat: "Ferragens", keys: ["prego","parafuso","bucha","porca","arruela"] },
@@ -2305,7 +2305,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   }
 
   if (normalizedType === "farmacia") {
-    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento")) return "Medicamentos";
+    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antiinflamatorio", "comprimido", "capsula", "cápsula", "suspensao", "suspensão", "injetavel", "injetável", "pomada", "colirio", "colírio", "solucao oral")) return "Medicamentos";
     if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta", "nan", "fórmula", "formula")) return "Bebês";
     if (has("curativo", "algodão", "algodao", "gaze", "esparadrapo", "soro fisiológico", "soro fisiologico", "alcool 70", "álcool 70")) return "Curativos";
     if (has("sabonete", "shampoo", "condicionador", "escova", "creme dental", "fio dental", "desodorante")) return "Higiene Pessoal";
@@ -3024,8 +3024,43 @@ function photoItemsToText(items) {
     .join("\n");
 }
 
+// Renderiza a primeira página de um PDF como imagem JPEG via pdf.js
+async function pdfFirstPageToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const load = () => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const pdfjsLib = window["pdfjs-dist/build/pdf"];
+          if (!pdfjsLib) { reject(new Error("pdf.js não carregado")); return; }
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.min(viewport.width, 1600);
+          canvas.height = Math.round(viewport.height * (canvas.width / viewport.width));
+          const scaledViewport = page.getViewport({ scale: 2.0 * (canvas.width / viewport.width) });
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport: scaledViewport }).promise;
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error("Erro ao ler PDF"));
+      reader.readAsArrayBuffer(file);
+    };
+    if (window["pdfjs-dist/build/pdf"]) { load(); return; }
+    const existing = document.getElementById("tnl-pdfjs-script");
+    if (existing) { existing.addEventListener("load", load); return; }
+    const s = document.createElement("script");
+    s.id = "tnl-pdfjs-script";
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = load;
+    s.onerror = () => reject(new Error("Não foi possível carregar o leitor de PDF."));
+    document.head.appendChild(s);
+  });
+}
+
 // Comprime imagem para máx 1600px e qualidade 85% antes de enviar para a API.
-// Fotos de celular chegam com 4-8MB; o base64 passa o limite de 10MB da Vercel.
 async function compressImageFile(file, maxPx = 1600, quality = 0.85) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -3036,8 +3071,7 @@ async function compressImageFile(file, maxPx = 1600, quality = 0.85) {
         const w = Math.round(img.width * scale);
         const h = Math.round(img.height * scale);
         const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };
@@ -3054,7 +3088,7 @@ const LIST_TYPE_OCR_CONTEXT = {
     role: "leitor de receitas médicas e listas de farmácia",
     example: '{"items":[{"name":"Amoxicilina 500mg","qty":1,"unit":"caixa"},{"name":"Dipirona 500mg","qty":1,"unit":"caixa"}]}',
     rules: [
-      "- preserve o nome completo do medicamento incluindo dosagem (ex: 'Losartana 50mg', 'Amoxicilina 500mg');",
+      "- preserve o nome completo do medicamento incluindo dosagem (ex: 'Losartana 50mg', 'Amoxicilina + Clavulanato 400mg');",
       "- unit deve ser caixa, frasco, tubo, cartela, ampola ou unidade;",
       "- ignore posologia, instruções de uso, nome do médico, CRM, data e dados do paciente;",
       "- extraia APENAS os nomes dos medicamentos e quantidades prescritas.",
@@ -3064,7 +3098,7 @@ const LIST_TYPE_OCR_CONTEXT = {
     role: "leitor de listas de material escolar",
     example: '{"items":[{"name":"Caderno espiral 200 folhas","qty":2,"unit":"unidade"},{"name":"Lápis de cor 12 cores","qty":1,"unit":"caixa"}]}',
     rules: [
-      "- preserve especificações como número de folhas, cores, tamanho (ex: 'Caderno 200 folhas', 'Lápis de cor 24 cores');",
+      "- preserve especificações como número de folhas, cores, tamanho;",
       "- unit deve ser unidade, caixa, pacote, kit ou par;",
       "- ignore nome da escola, série, ano letivo e professor.",
     ],
@@ -3073,9 +3107,8 @@ const LIST_TYPE_OCR_CONTEXT = {
     role: "leitor de listas de materiais de construção",
     example: '{"items":[{"name":"Cimento CP-II 50kg","qty":10,"unit":"saco"},{"name":"Tijolo 6 furos","qty":500,"unit":"unidade"}]}',
     rules: [
-      "- preserve especificações técnicas (ex: 'Cimento CP-II', 'Fio 2,5mm', 'Cano PVC 100mm');",
-      "- unit deve ser saco, unidade, metro, m², barra, rolo, lata, caixa ou kg;",
-      "- quantidades podem ser grandes — extraia exatamente.",
+      "- preserve especificações técnicas (ex: 'Cimento CP-II', 'Fio 2,5mm');",
+      "- unit deve ser saco, unidade, metro, m², barra, rolo, lata, caixa ou kg.",
     ],
   },
   eletrico: {
@@ -3091,14 +3124,29 @@ const LIST_TYPE_OCR_CONTEXT = {
     example: '{"items":[{"name":"Arroz","qty":2,"unit":"pacote"},{"name":"Frango","qty":1,"unit":"kg"}]}',
     rules: [
       "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, bandeja ou pote;",
-      "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz;",
-      "- se a linha disser '2kg de carne', retorne qty 2, unit kg, name carne.",
+      "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz.",
     ],
   },
 };
 
 async function readShoppingListFromImage(file, listType = "mercado") {
   const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+
+  let dataUrl;
+  if (isPdf) {
+    try {
+      dataUrl = await pdfFirstPageToJpeg(file);
+    } catch {
+      throw new Error("Não foi possível converter o PDF. Tente fotografar a lista diretamente.");
+    }
+  } else {
+    dataUrl = await compressImageFile(file);
+  }
+
+  if (!dataUrl) throw new Error("Não foi possível ler o arquivo.");
+
+  const [meta, base64] = dataUrl.split(",");
+  const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
 
   const ctx = LIST_TYPE_OCR_CONTEXT[listType] || LIST_TYPE_OCR_CONTEXT.mercado;
 
@@ -3116,33 +3164,15 @@ async function readShoppingListFromImage(file, listType = "mercado") {
     "- se não conseguir identificar nenhum item, retorne {\"items\":[]}.",
   ].join("\n");
 
-  let body;
-
-  if (isPdf) {
-    // PDF: lê como base64 e envia como document — Anthropic aceita PDF nativo
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target.result;
-        resolve(result.split(",")[1]);
-      };
-      reader.onerror = () => reject(new Error("Não foi possível ler o PDF."));
-      reader.readAsDataURL(file);
-    });
-    body = { prompt, model: ANTHROPIC_MODEL_VISION, maxTokens: 1500, pdf: { data: base64 } };
-  } else {
-    // Imagem: comprime antes de enviar
-    const dataUrl = await compressImageFile(file);
-    if (!dataUrl) throw new Error("Não foi possível ler a imagem.");
-    const [meta, base64] = dataUrl.split(",");
-    const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
-    body = { prompt, model: ANTHROPIC_MODEL_VISION, maxTokens: 1500, image: { mediaType, data: base64 } };
-  }
-
   const res = await fetch("/api/anthropic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      prompt,
+      model: ANTHROPIC_MODEL_VISION,
+      maxTokens: 1500,
+      image: { mediaType, data: base64 },
+    }),
   });
 
   if (!res.ok) {
@@ -3154,7 +3184,7 @@ async function readShoppingListFromImage(file, listType = "mercado") {
   if (data?.error) throw new Error(data.error);
   const parsed = data?.json || extractJsonObject(data?.text || "");
   const items = Array.isArray(parsed?.items) ? parsed.items : [];
-  if (!items.length) throw new Error("A IA não identificou itens no documento. Tente uma imagem mais nítida ou com melhor iluminação.");
+  if (!items.length) throw new Error("A IA não identificou itens no documento. Tente uma imagem mais nítida.");
   return photoItemsToText(items);
 }
 
@@ -7001,17 +7031,13 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       setOcrProgress(100);
       setOcrText(text);
       if(text)showToast("✅ Lista lida pela IA. Revise antes de importar.",3600);
-      else showToast("⚠️ Não consegui identificar itens na foto. Tente enquadrar melhor a lista.",4200);
+      else showToast("⚠️ Não consegui identificar itens. Tente enquadrar melhor a lista.",4200);
     }catch(err){
       console.error("Erro na leitura por foto:",err);
-      const msg = err?.message || "";
-      if(msg.includes("não identificou") || msg.includes("items")) {
-        showToast("⚠️ A IA não encontrou itens no documento. Tente uma imagem mais nítida.",4600);
-      } else if(msg.includes("413") || msg.includes("limit")) {
-        showToast("⚠️ Arquivo muito grande. Tente uma imagem menor ou com menor resolução.",4600);
-      } else {
-        showToast("⚠️ Não foi possível ler o arquivo: " + (msg.slice(0,80) || "tente novamente."),5000);
-      }
+      const msg=err?.message||"";
+      if(msg.includes("PDF")||msg.includes("converter"))showToast("⚠️ "+msg,5000);
+      else if(msg.includes("não identificou")||msg.includes("nítida"))showToast("⚠️ A IA não encontrou itens. Tente uma imagem mais nítida e bem iluminada.",5000);
+      else showToast("⚠️ Erro ao ler o arquivo. Tente novamente com outra imagem.",4600);
     }finally{
       setOcrLoading(false);
       e.target.value="";
@@ -9314,11 +9340,11 @@ if(hasChanges)showToast("🔄 Lista atualizada");
       {showPhotoModal&&(()=>{
         const ocrCtx={
           farmacia:{title:"📋 Importar receita ou lista de farmácia",hint:"Fotografe ou importe a receita médica ou lista impressa. A IA extrai os medicamentos e quantidades automaticamente."},
-          escolar:{title:"📄 Importar lista de material escolar",hint:"Fotografe ou importe o PDF com a lista de materiais. A IA extrai os itens preservando especificações como quantidade de folhas e cores."},
-          construcao:{title:"📐 Importar lista de materiais",hint:"Fotografe ou importe a lista de materiais de construção. A IA extrai os itens com suas especificações técnicas."},
-          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Fotografe ou importe a lista. A IA extrai os itens preservando bitola, amperagem e outras especificações."},
+          escolar:{title:"📄 Importar lista de material escolar",hint:"Fotografe ou importe o PDF com a lista de materiais. A IA extrai os itens preservando especificações."},
+          construcao:{title:"📐 Importar lista de materiais",hint:"Fotografe ou importe a lista. A IA extrai os itens com suas especificações técnicas."},
+          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Fotografe ou importe a lista. A IA extrai os itens preservando bitola, amperagem e especificações."},
         };
-        const ctx=ocrCtx[listType]||{title:"📷 Importar lista por foto ou arquivo",hint:"Fotografe uma lista impressa ou manuscrita, ou importe uma imagem. A IA vai interpretar e montar os itens automaticamente."};
+        const ctx=ocrCtx[listType]||{title:"📷 Importar lista por foto ou arquivo",hint:"Fotografe uma lista impressa ou manuscrita, ou importe uma imagem ou PDF. A IA vai interpretar e montar os itens automaticamente."};
         return(
         <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{ctx.title}</div>
