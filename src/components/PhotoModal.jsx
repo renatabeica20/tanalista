@@ -85,10 +85,11 @@ export default function PhotoModal({
         <label
           style={{
             ...btnG,
-            background: "linear-gradient(135deg, #15803D 0%, #16A34A 45%, #22C55E 100%)",
-            border: "1px solid rgba(255,255,255,0.20)",
+            background:
+              "linear-gradient(135deg, #064E3B 0%, #047857 25%, #15803D 50%, #16A34A 75%, #22C55E 100%)",
+            border: "1px solid rgba(255,255,255,0.28)",
             boxShadow:
-              "0 14px 34px -10px rgba(22,163,74,0.55), 0 6px 14px -6px rgba(34,197,94,0.40), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.10)",
+              "0 22px 44px -14px rgba(6,78,59,0.55), 0 14px 28px -10px rgba(22,163,74,0.45), 0 6px 14px -6px rgba(34,197,94,0.35), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -2px 0 rgba(0,0,0,0.14), inset 0 0 0 1px rgba(255,255,255,0.06)",
             cursor: ocrLoading ? "not-allowed" : "pointer",
             opacity: ocrLoading ? 0.7 : 1,
             marginBottom: 12,
@@ -96,6 +97,16 @@ export default function PhotoModal({
             overflow: "hidden",
           }}
         >
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 45%, transparent 55%)",
+              pointerEvents: "none",
+            }}
+          />
           <span
             aria-hidden
             style={{
