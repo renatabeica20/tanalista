@@ -4805,8 +4805,7 @@ const [lists,setLists]=useState(()=>{
     // importação (importedAt ou receivedAt). Isso significa que a lista
     // definitivamente veio de outra pessoa, independente do nome do remetente.
     // ─────────────────────────────────────────────────────────────────────
-    const wasExplicitlyImported = list.imported === true && Boolean(list.importedAt || list.receivedAt);
-
+    const wasExplicitlyImported = list.imported === true;
     if((ownerIsCurrent || fromIsCurrent) && !wasExplicitlyImported){
       return {
         ...list,
