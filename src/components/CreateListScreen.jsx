@@ -162,6 +162,7 @@ export default function CreateListScreen({
   loading,
   isTourStep,
   tourHighlightStyle,
+  onShowPhotoModal,
 }) {
   const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
   const [confirmDeleteConfig, setConfirmDeleteConfig] = useState(null);
@@ -347,7 +348,7 @@ export default function CreateListScreen({
           style={{padding:"0 18px",height:56,borderRadius:18,background:themeGradient,border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 12px 24px ${themeShadowRGBA(0.32)}, inset 0 1px 0 rgba(255,255,255,0.18)`,WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
         <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
           style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`,...tourHighlightStyle(isTourStep("create_item_paste"))}}>
           📋 Colar lista
@@ -362,6 +363,10 @@ export default function CreateListScreen({
           baseStyle={createSecondaryBtn}
           extraStyle={tourHighlightStyle(isTourStep("create_item_voice"))}
         />
+        <button onClick={()=>onShowPhotoModal?.()}
+          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`}}>
+          📷 Importar lista
+        </button>
       </div>
     </div>
 
