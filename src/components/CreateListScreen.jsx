@@ -343,26 +343,45 @@ export default function CreateListScreen({
           style={{padding:"0 18px",height:56,borderRadius:18,background:themeGradient,border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 12px 24px ${themeShadowRGBA(0.32)}, inset 0 1px 0 rgba(255,255,255,0.18)`,WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:12}}>
-        <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
-          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`,...tourHighlightStyle(isTourStep("create_item_paste"))}}>
-          📋 Colar lista
-        </button>
-        <button onClick={()=>onShowPhotoModal?.()}
-          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`}}>
-          📷 Importar lista
-        </button>
-        <VoiceInput
-          target="list"
-          voiceTargetRef={voiceTargetRef}
-          setVoiceTarget={setVoiceTarget}
-          startVoiceInput={startVoiceInput}
-          voiceProcessing={voiceProcessing}
-          voiceListening={voiceListening}
-          baseStyle={createSecondaryBtn}
-          extraStyle={tourHighlightStyle(isTourStep("create_item_voice"))}
-        />
-      </div>
+      {(() => {
+        const premiumSecondary = {
+          ...createSecondaryBtn,
+          minHeight: 54,
+          padding: "13px 14px",
+          borderRadius: 18,
+          fontWeight: 800,
+          fontSize: 13.5,
+          letterSpacing: "-0.005em",
+          color: theme.dark,
+          border: `1.5px solid ${theme.softBorder}`,
+          background: `linear-gradient(180deg, #FFFFFF 0%, ${theme.soft} 100%)`,
+          boxShadow:
+            `0 1px 0 rgba(255,255,255,0.95) inset, 0 -1px 0 rgba(76,29,149,0.04) inset, 0 1px 2px rgba(17,24,39,0.05), 0 10px 24px -10px ${themeShadowRGBA ? themeShadowRGBA(0.22) : "rgba(109,40,217,0.22)"}, 0 4px 10px -4px rgba(17,24,39,0.06)`,
+          backdropFilter: "saturate(1.05)",
+        };
+        return (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:12}}>
+            <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
+              style={{...premiumSecondary,...tourHighlightStyle(isTourStep("create_item_paste"))}}>
+              📋 Colar lista
+            </button>
+            <button onClick={()=>onShowPhotoModal?.()}
+              style={premiumSecondary}>
+              📷 Importar lista
+            </button>
+            <VoiceInput
+              target="list"
+              voiceTargetRef={voiceTargetRef}
+              setVoiceTarget={setVoiceTarget}
+              startVoiceInput={startVoiceInput}
+              voiceProcessing={voiceProcessing}
+              voiceListening={voiceListening}
+              baseStyle={premiumSecondary}
+              extraStyle={tourHighlightStyle(isTourStep("create_item_voice"))}
+            />
+          </div>
+        );
+      })()}
     </div>
 
     {pendingItems.length>0&&(
