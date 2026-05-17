@@ -4806,7 +4806,7 @@ const [lists,setLists]=useState(()=>{
     // definitivamente veio de outra pessoa, independente do nome do remetente.
     // ─────────────────────────────────────────────────────────────────────
     const wasExplicitlyImported = list.imported === true;
-    if((ownerIsCurrent || fromIsCurrent) && !wasExplicitlyImported){
+  if((ownerIsCurrent || fromIsCurrent) && !wasExplicitlyImported && !list.sharedId){
       return {
         ...list,
         imported:false,
