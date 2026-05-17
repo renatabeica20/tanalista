@@ -382,8 +382,8 @@ const GUIDED_TOUR_STEPS = [
     id: "create_pantry",
     screen: "create",
     icon: "🏠",
-    title: "Compare com Itens em Casa",
-    text: "Evite compras repetidas comparando sua lista com os produtos que já possui.",
+    title: "Itens em Casa (opcional)",
+    text: "Toque no bloco para expandir e cadastrar o que você já tem em casa. O app compara com sua lista e evita compras desnecessárias.",
     position: "top",
   },
   {
@@ -4306,6 +4306,7 @@ const [lists,setLists]=useState(()=>{
   const [showNotificationsScreen,setShowNotificationsScreen]=useState(false);
   const [showGuidedTour,setShowGuidedTour]=useState(false);
   const [guidedTourIndex,setGuidedTourIndex]=useState(0);
+  const tourSeenScreensRef=useRef(new Set()); // telas já iniciadas no tour do primeiro acesso
   const guidedTourStep = GUIDED_TOUR_STEPS[guidedTourIndex] || null;
   const currentScreenTourSteps = GUIDED_TOUR_STEPS.filter(step => step.screen === screen);
   const guidedTourLocalIndex = Math.max(0, currentScreenTourSteps.findIndex(step => step.id === guidedTourStep?.id));
@@ -4354,8 +4355,27 @@ const [lists,setLists]=useState(()=>{
 
   const finishGuidedTour = useCallback((mode = "done") => {
     setShowGuidedTour(false);
+    // Marca como concluído quando o usuário pula explicitamente
+    // ou quando termina o tour na última tela (list)
+    if (mode === "skip" || screen === "list") {
+      setGuidedTourCompleted(mode === "skip" ? "dismissed" : "done");
+    }
     registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_closed", { step: guidedTourStep?.id || "", screen });
   }, [guidedTourStep, screen]);
+
+  // Inicia o tour automaticamente no primeiro acesso, por tela
+  useEffect(()=>{
+    if(hasCompletedGuidedTour())return;
+    if(showGuidedTour)return;
+    if(userNameModal)return;
+    if(!["home","create","list"].includes(screen))return;
+    if(tourSeenScreensRef.current.has(screen))return;
+    tourSeenScreensRef.current.add(screen);
+    const firstIndex=GUIDED_TOUR_FIRST_STEP_BY_SCREEN[screen]??0;
+    setGuidedTourIndex(firstIndex);
+    setShowGuidedTour(true);
+    registrarEvento("guided_tour_started",{screen,trigger:"first_access_auto"});
+  },[screen,showGuidedTour,userNameModal]);
 
   const nextGuidedTourStep = useCallback(() => {
     const sameScreenSteps = GUIDED_TOUR_STEPS
