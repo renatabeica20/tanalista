@@ -3098,26 +3098,7 @@ const LIST_TYPE_OCR_CONTEXT = {
 };
 
 async function readShoppingListFromImage(file, listType = "mercado") {
-  // Comprime antes de converter — evita ultrapassar limite de 10MB da Vercel
   const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
-  let dataUrl;
-  if (isPdf) {
-    // PDF: converte primeira página para imagem via canvas (só funciona em PDFs com texto nativo via embed)
-    // Fallback: lê como base64 e envia como application/pdf — a API rejeita, mas o erro fica claro
-    dataUrl = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
-  } else {
-    dataUrl = await compressImageFile(file);
-  }
-
-  if (!dataUrl) throw new Error("Não foi possível ler o arquivo.");
-
-  const [meta, base64] = dataUrl.split(",");
-  const mediaType = isPdf ? "image/jpeg" : ((meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg");
 
   const ctx = LIST_TYPE_OCR_CONTEXT[listType] || LIST_TYPE_OCR_CONTEXT.mercado;
 
@@ -3135,25 +3116,45 @@ async function readShoppingListFromImage(file, listType = "mercado") {
     "- se não conseguir identificar nenhum item, retorne {\"items\":[]}.",
   ].join("\n");
 
+  let body;
+
+  if (isPdf) {
+    // PDF: lê como base64 e envia como document — Anthropic aceita PDF nativo
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target.result;
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = () => reject(new Error("Não foi possível ler o PDF."));
+      reader.readAsDataURL(file);
+    });
+    body = { prompt, model: ANTHROPIC_MODEL_VISION, maxTokens: 1500, pdf: { data: base64 } };
+  } else {
+    // Imagem: comprime antes de enviar
+    const dataUrl = await compressImageFile(file);
+    if (!dataUrl) throw new Error("Não foi possível ler a imagem.");
+    const [meta, base64] = dataUrl.split(",");
+    const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
+    body = { prompt, model: ANTHROPIC_MODEL_VISION, maxTokens: 1500, image: { mediaType, data: base64 } };
+  }
+
   const res = await fetch("/api/anthropic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      prompt,
-      model: ANTHROPIC_MODEL_VISION,
-      maxTokens: 1500,
-      image: { mediaType, data: base64 },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Erro na leitura por imagem (${res.status}) ${detail.slice(0, 180)}`);
+    throw new Error(`Erro na leitura (${res.status}): ${detail.slice(0, 200)}`);
   }
 
   const data = await res.json();
+  if (data?.error) throw new Error(data.error);
   const parsed = data?.json || extractJsonObject(data?.text || "");
   const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  if (!items.length) throw new Error("A IA não identificou itens no documento. Tente uma imagem mais nítida ou com melhor iluminação.");
   return photoItemsToText(items);
 }
 
@@ -7003,7 +7004,14 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
       else showToast("⚠️ Não consegui identificar itens na foto. Tente enquadrar melhor a lista.",4200);
     }catch(err){
       console.error("Erro na leitura por foto:",err);
-      showToast("⚠️ Não foi possível ler a foto pela IA. Tente outra imagem mais nítida.",4600);
+      const msg = err?.message || "";
+      if(msg.includes("não identificou") || msg.includes("items")) {
+        showToast("⚠️ A IA não encontrou itens no documento. Tente uma imagem mais nítida.",4600);
+      } else if(msg.includes("413") || msg.includes("limit")) {
+        showToast("⚠️ Arquivo muito grande. Tente uma imagem menor ou com menor resolução.",4600);
+      } else {
+        showToast("⚠️ Não foi possível ler o arquivo: " + (msg.slice(0,80) || "tente novamente."),5000);
+      }
     }finally{
       setOcrLoading(false);
       e.target.value="";
