@@ -72,8 +72,8 @@ export default function ListsSection({
             width: "100%",
             padding: "15px 16px",
             borderRadius: 20,
-            background: "#25D366",
-            border: "none",
+            background: "linear-gradient(135deg, #4C1D95 0%, #6D28D9 50%, #8B5CF6 100%)",
+            border: "1px solid rgba(255,255,255,0.18)",
             color: "white",
             fontWeight: 900,
             fontSize: 15,
@@ -83,7 +83,7 @@ export default function ListsSection({
             alignItems: "center",
             justifyContent: "center",
             gap: 10,
-            boxShadow: "0 12px 28px rgba(37,211,102,0.22)",
+            boxShadow: "0 18px 36px -10px rgba(76,29,149,0.55), 0 8px 18px -6px rgba(124,58,237,0.40), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 -1px 0 rgba(0,0,0,0.10)",
           }}
         >
           <WhatsAppIcon size={19} /> Compartilhe o Tá na Lista

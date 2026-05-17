@@ -47,8 +47,6 @@ function getListPersistenceKeys(listOrId) {
   if (data?.id) keys.push(`id:${String(data.id)}`);
   if (data?.sharedId) keys.push(`shared:${String(data.sharedId)}`);
   const createdPart = normalizeDeletedKeyPart(listOrId.created_at || listOrId.createdAt || data?.createdAt || data?.created_at || "");
-  // Chaves por nome/título sem data causavam exclusão em lote quando havia listas com o mesmo nome.
-  // Agora elas só entram com data de criação como complemento de segurança.
   if (createdPart && listOrId.user_id && listOrId.title) keys.push(`user:${String(listOrId.user_id)}:${normalizeDeletedKeyPart(listOrId.title)}:${createdPart}`);
   if (createdPart && listOrId.userId && listOrId.name) keys.push(`user:${String(listOrId.userId)}:${normalizeDeletedKeyPart(listOrId.name)}:${createdPart}`);
   if (createdPart && data?.userId && data?.name) keys.push(`user:${String(data.userId)}:${normalizeDeletedKeyPart(data.name)}:${createdPart}`);
@@ -142,7 +140,6 @@ async function findAppUserByName(name) {
   };
 
   try {
-    // A identidade principal agora é o nome normalizado, protegido por índice único no Supabase.
     return (
       await tryFetch(`nome_normalizado=eq.${encodeURIComponent(normalized)}`) ||
       await tryFetch(`nome=eq.${encodeURIComponent(clean)}`) ||
@@ -199,15 +196,48 @@ async function getSharedListsForUser(userId, name) {
   return Array.from(map.values()).sort((a, b) => getListComparableStamp({ ...(b || {}), ...(b?.data || {}) }) - getListComparableStamp({ ...(a || {}), ...(a?.data || {}) }));
 }
 
+// ─── CORREÇÃO: sharedRecordToLocalList ───────────────────────────────────────
+// Versão anterior não preservava os campos imported/importedAt/importedFrom,
+// fazendo com que listas recebidas perdessem seu status após recargas.
+//
+// Agora: preserva explicitamente todos os campos de origem da lista,
+// sem sobrescrever ownerName/remetente quando já estão definidos no registro.
+// ─────────────────────────────────────────────────────────────────────────────
 function sharedRecordToLocalList(record) {
   const base = record?.data || {};
+  const currentUserName = getAppUserName();
+  const recordOwner = record?.remetente || base.ownerName || base.remetente || "";
+
+  // Detecta se a lista foi recebida de outro usuário comparando o remetente
+  // do registro com o usuário atual. Usa normalização para evitar falsos negativos
+  // por diferença de maiúsculas/acentos.
+  const normalizedOwner = normalizeAuthName(recordOwner);
+  const normalizedCurrent = normalizeAuthName(currentUserName);
+  const isFromAnotherUser = Boolean(
+    normalizedOwner &&
+    normalizedCurrent &&
+    normalizedOwner !== normalizedCurrent
+  );
+
+  // Preserva imported=true se já estava definido, OU se detectamos que veio
+  // de outro usuário E há marca de importação (importedAt ou receivedAt).
+  const wasImported = base.imported === true || Boolean(base.importedAt || base.receivedAt);
+  const shouldMarkImported = wasImported && isFromAnotherUser;
+
   return {
     ...base,
     id: base.id || `shared-${record?.id || Date.now()}`,
     sharedId: record?.id || base.sharedId || null,
     userId: record?.user_id || base.userId || null,
-    ownerName: record?.remetente || base.ownerName || base.remetente || getAppUserName() || "Usuario do Ta na Lista",
-    remetente: record?.remetente || base.remetente || base.ownerName || getAppUserName() || "Usuario do Ta na Lista",
+    // Preserva o nome do dono original — não sobrescreve com o usuário atual
+    ownerName: recordOwner || currentUserName || "Usuário do Tá na Lista",
+    remetente: recordOwner || base.remetente || currentUserName || "Usuário do Tá na Lista",
+    // ── Campos de origem preservados explicitamente ──
+    imported: shouldMarkImported,
+    importedAt: base.importedAt || null,
+    importedFrom: base.importedFrom || (isFromAnotherUser ? recordOwner : null),
+    receivedAt: base.receivedAt || null,
+    isShared: base.isShared === true,
     restoredFromCloud: true,
     restoredAt: new Date().toISOString(),
   };
@@ -223,8 +253,6 @@ async function registerAppUser(name, { force = false } = {}) {
   if (!force && alreadyRegistered === device_id && existingUserId) return existingUserId;
 
   try {
-    // Quando o usuário informa o nome no login, o nome passa a ser a identidade principal.
-    // O device_id continua apenas como identificação auxiliar do aparelho.
     const foundByNameFirst = force ? await findAppUserByName(clean) : null;
     if (foundByNameFirst?.id) {
       saveAppUserId(foundByNameFirst.id);
@@ -241,8 +269,6 @@ async function registerAppUser(name, { force = false } = {}) {
       return found.id;
     }
 
-    // Se o armazenamento local foi perdido ou o acesso veio de outro aparelho,
-    // recupera pelo nome antes de criar novo cadastro.
     const foundByName = await findAppUserByName(clean);
     if (foundByName?.id) {
       saveAppUserId(foundByName.id);
@@ -268,7 +294,6 @@ async function registerAppUser(name, { force = false } = {}) {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      // Se o banco bloquear duplicidade por corrida de requisições, reaproveita o usuário já existente.
       if (res.status === 409 || /duplicate key|users_nome_normalizado_unique|nome_normalizado/i.test(text)) {
         const existing = await findAppUserByName(clean);
         if (existing?.id) {
@@ -278,7 +303,6 @@ async function registerAppUser(name, { force = false } = {}) {
           return existing.id;
         }
       }
-      // Compatibilidade temporária: se a coluna ainda não existir em algum ambiente, tenta o fluxo antigo.
       if (/nome_normalizado|column/i.test(text)) {
         const fallbackRes = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
           method: "POST",
@@ -309,6 +333,117 @@ async function registerAppUser(name, { force = false } = {}) {
   }
 }
 
+// ─── CORREÇÃO: createSharedListRecord ────────────────────────────────────────
+// Versão anterior fazia ...list dentro de data, herdando o bug recursivo
+// de data.data.data... igual ao sharedListService.
+// Agora usa buildSafeListData para extrair apenas campos de lista válidos.
+// ─────────────────────────────────────────────────────────────────────────────
+function buildSafeListData(list, ownerName) {
+  const {
+    // Campos do banco que NUNCA devem ir dentro do data jsonb
+    data: _data,
+    remetente: _remetente,
+    user_id: _user_id,
+    created_at: _created_at,
+    // Campos válidos de lista
+    id,
+    name,
+    type,
+    budget,
+    categories,
+    items,
+    sharedOwner,
+    userId,
+    deviceId,
+    isShared,
+    imported,
+    importedAt,
+    importedFrom,
+    receivedAt,
+    sharedAt,
+    sharedEvents,
+    lastEventAt,
+    lastSyncedAt,
+    lastSyncSource,
+    lastRemoteSignature,
+    lastCloudSeenAt,
+    status,
+    completedAt,
+    market_name,
+    sharedId,
+    ...rest
+  } = list || {};
+
+  return {
+    id,
+    name,
+    type,
+    budget,
+    categories,
+    items,
+    ownerName,
+    sharedOwner,
+    userId: userId || getAppUserId() || null,
+    deviceId,
+    isShared,
+    imported,
+    importedAt,
+    importedFrom,
+    receivedAt,
+    sharedAt,
+    sharedEvents,
+    lastEventAt,
+    lastSyncedAt,
+    lastSyncSource,
+    lastRemoteSignature,
+    lastCloudSeenAt,
+    status,
+    completedAt,
+    market_name,
+    sharedId,
+    ...Object.fromEntries(
+      Object.entries(rest).filter(([k]) =>
+        !["title", "list_type", "user_id", "created_at"].includes(k)
+      )
+    ),
+  };
+}
+
+async function findSharedListRecordByList(list) {
+  if (!list || !hasSupabaseConfig()) return null;
+  try {
+    const userId = list.userId || list.user_id || getAppUserId();
+    const ownerName = list.ownerName || list.remetente || getAppUserName();
+    const name = list.name || "";
+    if (!name) return null;
+
+    const tryFetch = async (filter) => {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/shared_lists?${filter}&list_type=neq.auth_profile&select=*&order=created_at.desc&limit=5`,
+        { method: "GET", headers: supabaseHeaders({ "Cache-Control": "no-store" }) }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    };
+
+    const candidates = userId
+      ? await tryFetch(`user_id=eq.${encodeURIComponent(userId)}`)
+      : ownerName
+        ? await tryFetch(`remetente=ilike.${encodeURIComponent(ownerName)}`)
+        : [];
+
+    const normalizedName = String(name).trim().toLowerCase();
+    const match = candidates.find(record => {
+      const recordName = String(record?.data?.name || record?.title || "").trim().toLowerCase();
+      return recordName === normalizedName && !record?.data?.isDeleted;
+    });
+
+    return match || null;
+  } catch {
+    return null;
+  }
+}
 
 async function createSharedListRecord(list) {
   if (!hasSupabaseConfig()) {
@@ -322,11 +457,7 @@ async function createSharedListRecord(list) {
     title: list?.name || "Lista de compras",
     list_type: list?.type || "geral",
     budget: Number(list?.budget || 0),
-    data: {
-      ...list,
-      ownerName,
-      userId: userId || getAppUserId() || null,
-    },
+    data: buildSafeListData(list, ownerName),
     remetente: ownerName,
     user_id: userId || getAppUserId() || null,
   };
@@ -341,7 +472,6 @@ async function createSharedListRecord(list) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    // Compatibilidade: se a coluna user_id ainda não existir no Supabase, salva a lista sem quebrar o compartilhamento.
     if (/user_id|column/i.test(text)) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.user_id;
@@ -513,6 +643,7 @@ export {
   createSharedListRecord,
   hideSharedListRecordForCurrentUser,
   softDeleteSharedListRecord,
+  findSharedListRecordByList,
   sharedListSignature,
   getListSyncStamp,
   formatRelativeSyncTime,

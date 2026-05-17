@@ -73,6 +73,7 @@ import {
   createSharedListRecord,
   hideSharedListRecordForCurrentUser,
   softDeleteSharedListRecord,
+  findSharedListRecordByList,
   sharedListSignature,
   getListSyncStamp,
   formatRelativeSyncTime,
@@ -117,6 +118,9 @@ import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ShoppingListPreview from "./components/ShoppingListPreview";
+import HomeBanner from "./components/HomeBanner";
+import PasteModal from "./components/PasteModal";
+import PhotoModal from "./components/PhotoModal";
 import {
   LIST_TYPE_CONFIGS,
   getListTypeConfig,
@@ -858,7 +862,13 @@ function getListOriginMeta(list) {
   if (receivedFromAnotherUser) {
     return { type:"received", icon:"📥", text:"Recebida de " + from };
   }
-
+const sharedWith=list.sharedWithName;
+if(sharedWith&&!receivedFromAnotherUser){
+  const normalizedWith=normalizeAuthName(sharedWith);
+  if(!normalizedCurrent||normalizedWith!==normalizedCurrent){
+    return{type:"shared",icon:"🤝",text:"Compartilhada com "+sharedWith};
+  }
+}
   if (owner) {
     return { type:"created", icon:"✍️", text: normalizedCurrent && normalizedOwner === normalizedCurrent ? "Criada por você" : "Feita por " + owner };
   }
@@ -1055,7 +1065,17 @@ const SMART_PRODUCT_NAME_CORRECTIONS = {
   "limpa aluminio": "Limpa alumínio",
   "limpa alumínio": "Limpa alumínio",
   "bucho": "Bucho",
-  "amendoim": "Amendoim"
+  "amendoim": "Amendoim",
+  // Correções de nomes truncados ou com acento cortado
+  "carne moi": "Carne moída",
+  "carne moí": "Carne moída",
+  "carne moida": "Carne moída",
+  "pao frances": "Pão Francês",
+  "pão frances": "Pão Francês",
+  "pao francê": "Pão Francês",
+  "pão francê": "Pão Francês",
+  "pao france": "Pão Francês",
+  "pão france": "Pão Francês",
 };
 
 function smartNormalizeProductName(value) {
@@ -1098,6 +1118,7 @@ function smartNormalizeProductName(value) {
 
 function normalizeTextForCategory(value) {
   return normalizePlainText(value)
+    .replace(/\([^)]*\)/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\b(pct|pcte|pacote|pacotes|cx|caixa|caixas|un|unid|unidade|unidades|kg|g|ml|l)\b/g, " ")
     .replace(/\s+/g, " ")
@@ -1138,6 +1159,10 @@ function singularizePortugueseWord(word) {
   if (irregular[plain]) return irregular[plain];
 
   if (["arroz", "feijao", "feijão", "macarrao", "macarrão", "leite", "oleo", "óleo", "cafe", "café", "sal", "acucar", "açúcar"].includes(plain)) return lower;
+
+  // Palavras terminadas em "ês" são adjetivos de origem/gentílico — não singularizar
+  const esAdjectives = ["frances", "ingles", "japones", "chines", "portugues", "holandes", "finlandes", "escóces", "escoces", "irandes", "danes"];
+  if (esAdjectives.includes(plain)) return lower;
 
   if (plain.endsWith("oes") && lower.length > 5) return lower.replace(/ões$/i, "ão").replace(/oes$/i, "ão");
   if (plain.endsWith("aes") && lower.length > 5) return lower.replace(/ães$/i, "ão").replace(/aes$/i, "ão");
@@ -1188,6 +1213,8 @@ function normalizeUnitValue(unit) {
   if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
   if (/^lata/.test(raw)) return "lata";
   if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^bandeja/.test(raw)) return "bandeja";
+  if (/^pote/.test(raw)) return "pote";
   if (/^duzia|^dúzia/.test(raw)) return "dúzia";
   if (/^peca|^peça/.test(raw)) return "peça";
   if (/^par/.test(raw)) return "par";
@@ -1221,7 +1248,9 @@ function formatUnitForQuantity(qty, unit) {
     "dúzia":"dúzias",
     "peça":"peças",
     "par":"pares",
-    "mileiro":"mileiros"
+    "mileiro":"mileiros",
+    "bandeja":"bandejas",
+    "pote":"potes",
   };
   if (u === "kg") return "kg";
   return n > 1 ? (plural[u] || u) : u;
@@ -1399,7 +1428,7 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "farmacia") {
-    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return "Medicamentos";
+    if (includesAny(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antiinflamatorio", "vitamina", "suplemento", "xarope", "suspensao", "suspensão", "comprimido", "capsula", "cápsula", "injetavel", "injetável", "pomada", "creme", "colirio", "colírio", "solucao oral", "solução oral"])) return "Medicamentos";
     if (includesAny(["gaze", "algodão", "algodao", "curativo", "atadura"])) return "Curativos";
     if (includesAny(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return "Bebês";
   }
@@ -1704,7 +1733,7 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Farmácia
     if (normalizedType === "farmacia") {
-      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno"])) return pick("Medicamentos");
+      if (has(["donaren", "histamin", "torsilax", "dipirona", "paracetamol", "ibuprofeno", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antiinflamatorio", "vitamina", "suplemento", "xarope", "suspensao", "suspensão", "comprimido", "capsula", "cápsula", "injetavel", "injetável", "pomada", "colirio", "colírio"])) return pick("Medicamentos");
       if (has(["gaze", "algodão", "algodao", "curativo", "atadura"])) return pick("Curativos");
       if (has(["fralda", "nan", "fórmula", "formula", "lenço umedecido", "lenco umedecido"])) return pick("Bebês");
     }
@@ -2224,7 +2253,7 @@ function inferPreferredCategoryForItem(item) {
     { cat: "Bebidas", keys: ["cerveja","heineken","skol","brahma","refrigerante","agua","água","suco","energetico","energético","coca","guarana","guaraná","agua de coco","água de coco"] },
     { cat: "Cadernos", keys: ["caderno","agenda","fichario","fichário"] },
     { cat: "Material de Escrita", keys: ["lapis de cor","lápis de cor","lapis","lápis","canetinha","hidrocor","giz de cera","cola escolar","tesoura escolar","regua","régua","caneta","borracha","apontador","marca texto","marca-texto","corretivo","grafite","lapiseira"] },
-    { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","vitamina","xarope","soro fisiologico","soro fisiológico"] },
+    { cat: "Medicamentos", keys: ["remedio","remédio","medicamento","dipirona","paracetamol","ibuprofeno","amoxicilina","clavulanato","amoxiclav","atak clav","azitromicina","cefalexina","nimesulida","dexametasona","prednisona","omeprazol","losartana","enalapril","metformina","sinvastatina","atorvastatina","clonazepam","rivotril","ritalina","fluoxetina","sertralina","antibiotico","antiinflamatorio","vitamina","suplemento","xarope","suspensao","suspensão","comprimido","capsula","cápsula","injetavel","injetável","pomada","colirio","colírio","solucao oral","solução oral"] },
     { cat: "Hidráulica", keys: ["cano","tubo","conexao","conexão","registro","torneira","chuveiro","ralo","sifao","sifão"] },
     { cat: "Ferramentas", keys: ["martelo","chave de fenda","alicate","furadeira","parafusadeira"] },
     { cat: "Ferragens", keys: ["prego","parafuso","bucha","porca","arruela"] },
@@ -2279,7 +2308,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   }
 
   if (normalizedType === "farmacia") {
-    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento")) return "Medicamentos";
+    if (has("dipirona", "paracetamol", "ibuprofeno", "donaren", "histamin", "torsilax", "xarope", "antialergico", "antialérgico", "remedio", "remédio", "medicamento", "amoxicilina", "clavulanato", "amoxiclav", "atak", "azitromicina", "cefalexina", "nimesulida", "dexametasona", "prednisona", "omeprazol", "losartana", "enalapril", "metformina", "sinvastatina", "atorvastatina", "clonazepam", "rivotril", "ritalina", "fluoxetina", "sertralina", "antibiotico", "antiinflamatorio", "comprimido", "capsula", "cápsula", "suspensao", "suspensão", "injetavel", "injetável", "pomada", "colirio", "colírio")) return "Medicamentos";
     if (has("fralda", "lenço umedecido", "lenco umedecido", "pomada", "mamadeira", "chupeta", "nan", "fórmula", "formula")) return "Bebês";
     if (has("curativo", "algodão", "algodao", "gaze", "esparadrapo", "soro fisiológico", "soro fisiologico", "alcool 70", "álcool 70")) return "Curativos";
     if (has("sabonete", "shampoo", "condicionador", "escova", "creme dental", "fio dental", "desodorante")) return "Higiene Pessoal";
@@ -2998,45 +3027,148 @@ function photoItemsToText(items) {
     .join("\n");
 }
 
-async function readShoppingListFromImage(file) {
-  const dataUrl = await fileToDataUrl(file);
-  const [meta, base64] = dataUrl.split(",");
-  const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || file.type || "image/jpeg";
+// Renderiza a primeira página de um PDF como imagem JPEG via pdf.js
+async function pdfFirstPageToJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const load = () => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const pdfjsLib = window["pdfjs-dist/build/pdf"];
+          if (!pdfjsLib) { reject(new Error("pdf.js não carregado")); return; }
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.min(viewport.width, 1600);
+          canvas.height = Math.round(viewport.height * (canvas.width / viewport.width));
+          const scaledViewport = page.getViewport({ scale: 2.0 * (canvas.width / viewport.width) });
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport: scaledViewport }).promise;
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error("Erro ao ler PDF"));
+      reader.readAsArrayBuffer(file);
+    };
+    if (window["pdfjs-dist/build/pdf"]) { load(); return; }
+    const existing = document.getElementById("tnl-pdfjs-script");
+    if (existing) { existing.addEventListener("load", load); return; }
+    const s = document.createElement("script");
+    s.id = "tnl-pdfjs-script";
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = load;
+    s.onerror = () => reject(new Error("Não foi possível carregar o leitor de PDF."));
+    document.head.appendChild(s);
+  });
+}
 
+async function compressImageFile(file, maxPx = 1600, quality = 0.85) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+const LIST_TYPE_OCR_CONTEXT = {
+  farmacia: {
+    role: "leitor de receitas médicas e listas de farmácia",
+    example: '{"items":[{"name":"Amoxicilina 500mg","qty":1,"unit":"caixa"},{"name":"Dipirona 500mg","qty":1,"unit":"caixa"}]}',
+    rules: [
+      "- preserve o nome completo do medicamento incluindo dosagem (ex: 'Amoxicilina + Clavulanato 400mg');",
+      "- unit deve ser caixa, frasco, tubo, cartela, ampola ou unidade;",
+      "- ignore posologia, instruções de uso, nome do médico, CRM, data e dados do paciente.",
+    ],
+  },
+  escolar: {
+    role: "leitor de listas de material escolar",
+    example: '{"items":[{"name":"Caderno espiral 200 folhas","qty":2,"unit":"unidade"},{"name":"Lápis de cor 12 cores","qty":1,"unit":"caixa"}]}',
+    rules: [
+      "- preserve especificações como número de folhas, cores, tamanho;",
+      "- unit deve ser unidade, caixa, pacote, kit ou par;",
+      "- ignore nome da escola, série, ano letivo e professor.",
+    ],
+  },
+  construcao: {
+    role: "leitor de listas de materiais de construção",
+    example: '{"items":[{"name":"Cimento CP-II 50kg","qty":10,"unit":"saco"},{"name":"Tijolo 6 furos","qty":500,"unit":"unidade"}]}',
+    rules: [
+      "- preserve especificações técnicas;",
+      "- unit deve ser saco, unidade, metro, m², barra, rolo, lata, caixa ou kg.",
+    ],
+  },
+  eletrico: {
+    role: "leitor de listas de materiais elétricos",
+    example: '{"items":[{"name":"Fio 2,5mm","qty":50,"unit":"metro"},{"name":"Disjuntor 20A","qty":2,"unit":"unidade"}]}',
+    rules: [
+      "- preserve especificações técnicas como bitola, amperagem, voltagem;",
+      "- unit deve ser metro, rolo, unidade, caixa ou kit.",
+    ],
+  },
+  mercado: {
+    role: "leitor de listas de compras de supermercado",
+    example: '{"items":[{"name":"Arroz","qty":2,"unit":"pacote"},{"name":"Frango","qty":1,"unit":"kg"}]}',
+    rules: [
+      "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, bandeja ou pote.",
+    ],
+  },
+};
+
+async function readShoppingListFromImage(file, listType = "mercado") {
+  const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+  let dataUrl;
+  if (isPdf) {
+    try { dataUrl = await pdfFirstPageToJpeg(file); }
+    catch { throw new Error("Não foi possível converter o PDF. Tente fotografar a lista diretamente."); }
+  } else {
+    dataUrl = await compressImageFile(file);
+  }
+  if (!dataUrl) throw new Error("Não foi possível ler o arquivo.");
+  const [meta, base64] = dataUrl.split(",");
+  const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
+  const ctx = LIST_TYPE_OCR_CONTEXT[listType] || LIST_TYPE_OCR_CONTEXT.mercado;
   const prompt = [
-    "Você é um leitor de listas de compras em português do Brasil.",
-    "Leia a foto enviada, mesmo que a lista esteja manuscrita.",
-    "Extraia apenas os itens de compra, ignorando linhas de caderno, cabeçalho, dias da semana, data e rabiscos.",
-    "Corrija erros óbvios de leitura manuscrita quando o contexto indicar produto comum de mercado.",
+    `Você é um ${ctx.role} em português do Brasil.`,
+    "Leia o documento enviado, mesmo que esteja manuscrito, impresso ou digitado.",
+    "Extraia apenas os itens da lista, ignorando cabeçalhos, rodapés, datas e informações administrativas.",
+    "Corrija erros óbvios de leitura quando o contexto indicar o item correto.",
     "Retorne APENAS JSON válido, sem markdown, neste formato:",
-    '{"items":[{"name":"arroz","qty":2,"unit":"pacote"}]}',
+    ctx.example,
     "Regras:",
     "- qty deve ser número;",
-    "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par ou peça;",
-    "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz;",
-    "- se a linha disser '2kg de carne', retorne qty 2, unit kg, name carne;",
-    "- não invente itens que não estejam na imagem.",
+    ...ctx.rules,
+    "- não invente itens que não estejam no documento.",
+    "- se não conseguir identificar nenhum item, retorne {\"items\":[]}.",
   ].join("\n");
-
   const res = await fetch("/api/anthropic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      prompt,
-      model: ANTHROPIC_MODEL_VISION,
-      maxTokens: 900,
-      image: { mediaType, data: base64 },
-    }),
+    body: JSON.stringify({ prompt, model: ANTHROPIC_MODEL_VISION, maxTokens: 1500, image: { mediaType, data: base64 } }),
   });
-
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Erro na leitura por imagem (${res.status}) ${detail.slice(0, 180)}`);
+    throw new Error(`Erro na leitura (${res.status}): ${detail.slice(0, 200)}`);
   }
-
   const data = await res.json();
+  if (data?.error) throw new Error(data.error);
   const parsed = data?.json || extractJsonObject(data?.text || "");
   const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  if (!items.length) throw new Error("A IA não identificou itens no documento. Tente uma imagem mais nítida.");
   return photoItemsToText(items);
 }
 
@@ -4789,19 +4921,29 @@ const [lists,setLists]=useState(()=>{
     const from=list.importedFrom || list.sharedOwner || list.remetente || list.ownerName || "";
     const ownerIsCurrent=normalizeAuthName(owner) && normalizeAuthName(owner)===normalizeAuthName(currentName);
     const fromIsCurrent=normalizeAuthName(from) && normalizeAuthName(from)===normalizeAuthName(currentName);
-    if(ownerIsCurrent || fromIsCurrent){
+
+    // ── CORREÇÃO DO BUG DE STATUS ─────────────────────────────────────────
+    // O problema: listas recebidas de outro usuário perdiam o status "Recebida de X"
+    // ao excluir outra lista, porque esta função sobrescrevia imported=false
+    // sempre que ownerName coincidisse com o nome do usuário atual.
+    //
+    // A correção: imported=true é protegido quando há marca explícita de
+    // importação (importedAt ou receivedAt). Isso significa que a lista
+    // definitivamente veio de outra pessoa, independente do nome do remetente.
+    // ─────────────────────────────────────────────────────────────────────
+    const wasExplicitlyImported = list.imported === true;
+  if((ownerIsCurrent || fromIsCurrent) && !wasExplicitlyImported && !list.sharedId){
       return {
         ...list,
         imported:false,
         importedFrom:null,
         sharedOwner:null,
-        // sharedId pode existir apenas para sincronização na nuvem.
-        // O selo Compartilhada fica reservado ao envio explícito da lista.
-        isShared:list.sharedAt ? list.isShared === true : false,
+        isShared: list.isShared === true || Boolean(list.sharedId),
       };
     }
     return list;
   };
+
 
   const saveLists=(nl)=>{
     const safe=mergeUniqueLists((Array.isArray(nl)?nl:[]).map(normalizeListOwnershipFlags));
@@ -5019,16 +5161,17 @@ const [lists,setLists]=useState(()=>{
       setAuthCheckedName(savedName);
 
       const userId=await registerAppUser(savedName,{force:true});
-      if(userId)await restoreUserListsFromCloud(userId,savedName);
+      const isIncomingSharedList = new URL(window.location.href).searchParams.get("preview") === "1";
+if(userId && !isIncomingSharedList)await restoreUserListsFromCloud(userId,savedName);
       await registrarEvento(pinResult.mode==="created" ? "user_created" : "login", {
         auth_mode: pinResult.mode || "login",
       });
-
-      if(sharedLandingRecord){
-        showToast("Acesso validado. Importando lista recebida...",1800);
-        await importSharedRecordToApp(sharedLandingRecord);
-        return;
-      }
+if(sharedLandingRecord){
+          // Não importa automaticamente — mantém o modal de escolha visível
+          // para que o usuário decida se quer importar ou apenas visualizar.
+          setUserNameModal(false);
+          return;
+        }
 
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
@@ -5177,9 +5320,10 @@ const [lists,setLists]=useState(()=>{
   };
 
   const makeShareUrl=(sharedId)=>{
-    const encoded=encodeURIComponent(sharedId);
-    return `${APP_PUBLIC_URL}/?lista=${encoded}`;
-  };
+  const encoded=encodeURIComponent(sharedId);
+  const base=window.location.origin;
+  return `${base}/?lista=${encoded}&preview=1`;
+};
 
   const extractSharedIdFromUrl=()=>{
     try{
@@ -5284,8 +5428,11 @@ const [lists,setLists]=useState(()=>{
   const publishSharedList=async(list)=>{
     if(!list)throw new Error("Lista não encontrada.");
     if(list.sharedId){
-      syncSharedListToCloud(list,{silent:true});
-      return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
+      const alreadyShared={...list,isShared:true,sharedAt:list.sharedAt||new Date().toISOString()};
+setCurrentList(prev=>prev&&prev.id===list.id?alreadyShared:prev);
+saveLists(lists.map(l=>l.id===list.id?alreadyShared:l));
+syncSharedListToCloud(alreadyShared,{silent:true});
+return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list:alreadyShared,mode:"supabase"};
     }
 
     const record=await createSharedListRecord(list);
@@ -5537,8 +5684,7 @@ const [lists,setLists]=useState(()=>{
       return null;
     }
 
-    const persisted=await persistListRecordToCloud(received,{silent:true});
-    const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
+    const finalReceived={...received,sharedId:null,originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
     localStorage.setItem("tnl_lists",JSON.stringify(nl));
@@ -5603,9 +5749,17 @@ const [lists,setLists]=useState(()=>{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
 
-      if(validSession){
+     if(validSession){
         setUserNameModal(false);
-        await importSharedRecordToApp(record);
+        const isPreviewMode=new URL(window.location.href).searchParams.get("preview")==="1";
+        if(!isPreviewMode){
+          await importSharedRecordToApp(record);
+          clearSharedUrlFromAddressBar();
+          return;
+        }
+        // Preview: mostra o modal de escolha que já existe no app
+        setSharedPreviewExpanded(false);
+        setSharedLandingRecord(record);
         clearSharedUrlFromAddressBar();
         return;
       }
@@ -6851,20 +7005,23 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
   const handlePhotoListFile=async(e)=>{
     const file=e.target.files?.[0];
     if(!file)return;
-    setOcrFileName(file.name||"foto da lista");
+    setOcrFileName(file.name||"arquivo");
     setOcrText("");
     setOcrProgress(12);
     setOcrLoading(true);
     try{
       setOcrProgress(35);
-      const text=normalizeOcrText(await readShoppingListFromImage(file));
+      const text=normalizeOcrText(await readShoppingListFromImage(file, listType));
       setOcrProgress(100);
       setOcrText(text);
       if(text)showToast("✅ Lista lida pela IA. Revise antes de importar.",3600);
-      else showToast("⚠️ Não consegui identificar itens na foto. Tente enquadrar melhor a lista.",4200);
+      else showToast("⚠️ Não consegui identificar itens. Tente enquadrar melhor.",4200);
     }catch(err){
-      console.error("Erro na leitura por foto:",err);
-      showToast("⚠️ Não foi possível ler a foto pela IA. Tente outra imagem mais nítida.",4600);
+      console.error("Erro na leitura:",err);
+      const msg=err?.message||"";
+      if(msg.includes("PDF")||msg.includes("converter"))showToast("⚠️ "+msg,5000);
+      else if(msg.includes("não identificou")||msg.includes("nítida"))showToast("⚠️ A IA não encontrou itens. Tente uma imagem mais nítida e bem iluminada.",5000);
+      else showToast("⚠️ Erro ao ler o arquivo. Tente novamente.",4600);
     }finally{
       setOcrLoading(false);
       e.target.value="";
@@ -7117,8 +7274,10 @@ return rebuiltHistory;
     return total>0 && (list?.categories||[]).every(c=>(c.items||[]).every(i=>i.checked||i.notFound));
   };
 
-  const isRealSharedList=(list)=>Boolean(list?.sharedId && (list?.isShared === true || list?.imported === true));
-
+const isRealSharedList=(list)=>Boolean(
+  (list?.sharedId||list?.originalSharedId||list?.sourceSharedId) &&
+  (list?.isShared === true || list?.imported === true || Boolean(list?.originalSharedId||list?.sourceSharedId))
+);
   const isReadOnlyFinishedList=(list)=>Boolean(list?.archivedFinished===true);
 
   const blockFinishedListEdit=()=>{
@@ -7377,8 +7536,8 @@ return rebuiltHistory;
   },[showFinished,currentList]);
 
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
-    const sharedId=list?.sharedId;
-    if(!sharedId)return null;
+    const sharedId=list?.sharedId||list?.originalSharedId||list?.sourceSharedId;
+if(!sharedId)return null;
     try{
       if(!silent)setSharedSyncing(true);
 
@@ -7431,7 +7590,7 @@ return rebuiltHistory;
   },[showToast]);
 
   const refreshSharedListFromCloud=useCallback(async()=>{
-    const sharedId=currentList?.sharedId;
+    const sharedId=currentList?.originalSharedId||currentList?.sourceSharedId||currentList?.sharedId;
     if(!sharedId)return;
     setSharedSyncing(true);
     try{
@@ -7441,6 +7600,8 @@ return rebuiltHistory;
       const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
       const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
       const isReceivedFromAnotherUser = Boolean(currentList.imported === true || currentList.receivedAt || currentList.importedAt) && !remoteOwnerIsCurrentUser;
+      const acceptedEvent=(record.data?.sharedEvents||[]).find(e=>e.type==="shared-accepted");
+const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||currentList.sharedWithName||null;
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
@@ -7452,18 +7613,22 @@ return rebuiltHistory;
         remetente: remoteOwner,
         ownerName: record?.data?.ownerName || remoteOwner,
         sharedOwner: isReceivedFromAnotherUser ? remoteOwner : null,
+        sharedWithName: isReceivedFromAnotherUser ? null : sharedWithName,
         pulledAt:new Date().toISOString(),
       },record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const hasLocal=existing.some(l=>l.id===currentList.id || (sharedId&&l.sharedId===sharedId));
+      const hasLocal=existing.some(l=>l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)));
       const nl=hasLocal
-        ? existing.map(l=>(l.id===currentList.id || (sharedId&&l.sharedId===sharedId))?refreshed:l)
+       ? existing.map(l=>(l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)))?refreshed:l)
         : [refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
-      setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
-      showToast("🔄 Lista atualizada");
+      const remoteSignature=sharedListSignature(record.data);
+const localSignature=sharedListSignature(currentList);
+const hasChanges=remoteSignature && remoteSignature!==localSignature;
+setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
+if(hasChanges)showToast("🔄 Lista atualizada");
     }catch(err){
       console.warn("Falha ao atualizar lista compartilhada",err);
       showToast("⚠️ Não foi possível atualizar a lista compartilhada",5200);
@@ -7488,7 +7653,7 @@ return rebuiltHistory;
     // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
     // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
     if(updated.sharedId){
-      syncSharedListToCloud(updated,{silent:true,force:!isRealSharedList(updated)});
+     syncSharedListToCloud(updated,{silent:true,force:true});
     }
   };
 
@@ -7780,13 +7945,8 @@ return rebuiltHistory;
       let removedFromCloud=false;
       let persistedDeletion=false;
 
-      // Primeiro grava uma marca de exclusão no próprio registro remoto.
-      // Assim, mesmo que o usuário limpe o histórico/cache ou troque de aba/dispositivo,
-      // a lista não volta a ser restaurada no login seguinte.
       persistedDeletion=await softDeleteSharedListRecord(target.sharedId,target);
 
-      // Depois tenta o DELETE físico. Se o Supabase/RLS bloquear, a marca remota acima
-      // continua sendo a fonte de verdade para não recarregar a lista excluída.
       if(!target.imported){
         removedFromCloud=await deleteSharedListRecord(target.sharedId);
       }
@@ -7794,6 +7954,18 @@ return rebuiltHistory;
       if(!removedFromCloud && !persistedDeletion){
         await hideSharedListRecordForCurrentUser(target.sharedId);
         showToast("🗑 Lista removida da sua conta",1800);
+      }
+    } else {
+      // Lista sem sharedId local — pode ter sido persistida no Supabase em sessão anterior
+      // sem que o sharedId tenha sido salvo de volta no localStorage.
+      // Busca pelo nome+userId e marca como deletada no Supabase se encontrar.
+      try {
+        const cloudRecord = await findSharedListRecordByList(target);
+        if(cloudRecord?.id){
+          await softDeleteSharedListRecord(cloudRecord.id, target);
+        }
+      } catch {
+        // Falha silenciosa — a exclusão local já foi feita
       }
     }
   };
@@ -8182,128 +8354,11 @@ return rebuiltHistory;
 <HomeScreen>
         <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(160deg,#f5f0ff 0%,#faf8ff 40%,#f0f4ff 100%)",position:"relative"}}>
 
-          {/* ── BANNER SUPERIOR ── */}
-          <div style={{background:"linear-gradient(135deg,#6d28d9 0%,#7c3aed 54%,#9f67fa 100%)",paddingTop:28,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:32,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",boxShadow:"0 16px 48px rgba(109,40,217,0.28)"}}>
-            {/* Orbes decorativos */}
-            <div style={{position:"absolute",top:-80,right:-60,width:240,height:240,background:"radial-gradient(circle,rgba(255,255,255,0.14),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:-50,left:-40,width:180,height:180,background:"radial-gradient(circle,rgba(255,255,255,0.10),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
-            <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-              <div style={{textAlign:"center",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:28,padding:"20px 20px 18px",width:"100%",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
-                <BrandWordmark />
-                <div style={{color:"rgba(255,255,255,0.80)",fontSize:13,lineHeight:1.5,fontStyle:"italic",fontWeight:500,marginTop:12}}>Organize, compartilhe e controle o orçamento</div>
-                <button
-                  onClick={()=>startGuidedTour("home")}
-                  style={{marginTop:16,border:"1.5px solid rgba(255,255,255,0.40)",borderRadius:999,padding:"11px 20px",background:"rgba(255,255,255,0.18)",color:"#FFFFFF",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",transition:"background 0.2s"}}
-                >
-                  ✨ Como usar o app
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ── GRADE DE MÓDULOS ── */}
-          <div style={{paddingTop:24,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-              <div style={{fontWeight:800,fontSize:11,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"1.2px"}}>Módulos</div>
-              <div style={{fontSize:12,color:"#7c3aed",fontWeight:700,background:"#f0ebff",padding:"3px 10px",borderRadius:999}}>6 áreas integradas</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:30}}>
-  {[
-    {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
-    {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
-    {iconType:"conta",name:"Conta",desc:"Dividir despesas",active:false},
-    {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
-    {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
-    {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
-  ].map(m=>{
-    const inactive = !m.active;
-    return (
-      <div
-        key={m.name}
-        role="button"
-        tabIndex={m.active ? 0 : -1}
-        aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
-        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
-        onClick={() => {
-          if (!m.active) return;
-          setScreen("create");
-        }}
-        onKeyDown={(e) => {
-          if (!m.active) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setScreen("create");
-          }
-        }}
-        style={{
-          background: m.active
-            ? "linear-gradient(140deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)"
-            : "linear-gradient(180deg,#FFFFFF 0%,#FAFAFE 100%)",
-          borderRadius: 22,
-          padding: m.active ? "20px 14px" : "18px 14px",
-          cursor: m.active ? "pointer" : "not-allowed",
-          boxShadow: m.active
-            ? "0 22px 48px -12px rgba(109,40,217,0.55), 0 6px 18px -8px rgba(76,29,149,0.4), inset 0 1px 0 rgba(255,255,255,0.18)"
-            : "0 4px 14px rgba(17,24,39,0.04)",
-          border: m.active
-            ? "1px solid rgba(255,255,255,0.18)"
-            : "1px solid #EDE9FE",
-          position: "relative", overflow: "hidden", textAlign: "center",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          minHeight: m.active ? 164 : 154,
-          transition: "transform 180ms ease, box-shadow 220ms ease",
-        }}>
-        {m.active && (
-          <>
-            <div aria-hidden style={{
-              position:"absolute", top:-40, right:-40, width:140, height:140, borderRadius:"50%",
-              background:"radial-gradient(circle,rgba(255,255,255,0.25),rgba(255,255,255,0) 70%)",
-              pointerEvents:"none"
-            }}/>
-            <div style={{
-              position:"absolute", top:10, right:10,
-              background:"#FFFFFF", color:"#6D28D9",
-              fontSize:9, fontWeight:900, padding:"3px 9px",
-              borderRadius:180, textTransform:"uppercase",
-              letterSpacing:"0.08em",
-              boxShadow:"0 4px 10px -2px rgba(0,0,0,0.18)"
-            }}>Ativo</div>
-          </>
-        )}
-        {inactive && (
-          <div style={{
-            position:"absolute", top:10, right:10,
-            background:"#EDE9FE", color:"#7C3AED",
-            fontSize:9, fontWeight:900, padding:"3px 9px",
-            borderRadius:180, textTransform:"uppercase",
-            letterSpacing:"0.08em",
-            border:"1px solid #DDD6FE"
-          }}>Em breve</div>
-        )}
-        <div style={{
-          filter: inactive ? "grayscale(1)" : "none",
-          opacity: inactive ? 0.55 : 1,
-          transition: "filter 200ms ease, opacity 200ms ease",
-        }}>
-          <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
-        </div>
-        <div style={{
-          fontWeight: 900,
-          fontSize: m.active ? 16 : 15,
-          color: m.active ? "#FFFFFF" : "#6B7280",
-          marginTop: 4,
-          letterSpacing: "-0.01em",
-        }}>{m.name}</div>
-        <div style={{
-          fontSize: 12,
-          color: m.active ? "rgba(255,255,255,0.85)" : "#9CA3AF",
-          marginTop: 4,
-          fontWeight: 500,
-        }}>{m.desc}</div>
-      </div>
-    );
-  })}
-</div>
+          <HomeBanner
+  onStartTour={() => startGuidedTour("home")}
+  onOpenCompras={() => setScreen("create")}
+  isTourStep={isTourStep}
+/>
 
 
             <ListsSection
@@ -8335,9 +8390,8 @@ return rebuiltHistory;
               setShowPriceStatsScreen={setShowPriceStatsScreen}
               shareAppWhatsApp={shareAppWhatsApp}
             />
-          </div>
-        </div>
-     </HomeScreen>
+     </div>
+        </HomeScreen>
 )}
 
 
@@ -8421,6 +8475,7 @@ return rebuiltHistory;
           loading={loading}
           isTourStep={isTourStep}
           tourHighlightStyle={tourHighlightStyle}
+          onShowPhotoModal={()=>setShowPhotoModal(true)}
         />
       )}
 
@@ -8863,10 +8918,22 @@ return rebuiltHistory;
           </div>
 
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
-          <FloatingActions
-            onAddExtraItem={() => setExtraModal(true)}
-            highlightExtraItem={isTourStep("list_extra_item")}
-          />
+         <FloatingActions
+  onAddExtraItem={() => setExtraModal(true)}
+  highlightExtraItem={isTourStep("list_extra_item")}
+  themeGradient={(() => {
+    const t = currentList?.type || listType || "mercado";
+    const TMAP = {
+      mercado:"#4C1D95,#6D28D9,#8B5CF6", supermercado:"#4C1D95,#6D28D9,#8B5CF6",
+      eventos:"#9A3412,#EA580C,#FB923C", festa:"#9A3412,#EA580C,#FB923C",
+      construcao:"#78350F,#B45309,#D97706", eletrico:"#1E3A8A,#1D4ED8,#3B82F6",
+      escolar:"#14532D,#15803D,#22C55E", farmacia:"#831843,#BE185D,#EC4899",
+      condominio:"#0B3559,#0F4C75,#3282B8", outros:"#1F2937,#374151,#6B7280",
+    };
+    const c = TMAP[t] || TMAP.mercado;
+    return `linear-gradient(135deg, ${c.split(",")[0]} 0%, ${c.split(",")[1]} 45%, ${c.split(",")[2]} 100%)`;
+  })()}
+/>
           </div>
         </div>
       )}
@@ -9130,50 +9197,35 @@ return rebuiltHistory;
       })()}
 
       {/* ── MODAL: COLAR TEXTO ── */}
-      {showPasteModal&&(
-        <ModalSheet onClose={()=>setShowPasteModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📋 Colar lista de texto</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
-          <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
-            placeholder={pasteTarget === "pantry"
-              ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
-              : getListTypeConfig(listType).placeholder}
-            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
-          <button onClick={parsePastedText} disabled={!pasteText.trim()}
-            style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
-            ✅ Importar itens
-          </button>
-        </ModalSheet>
-      )}
+      {showPasteModal && (
+  <PasteModal
+    open={showPasteModal}
+    onClose={() => setShowPasteModal(false)}
+    pasteText={pasteText}
+    setPasteText={setPasteText}
+    parsePastedText={parsePastedText}
+    placeholder={pasteTarget === "pantry"
+      ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
+      : getListTypeConfig(listType).placeholder}
+  />
+)}
 
 
       {/* ── MODAL: LER FOTO DA LISTA ── */}
-      {showPhotoModal&&(
-        <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📷 Ler lista por foto</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>Fotografe uma lista impressa ou manuscrita. A IA vai interpretar a imagem e montar os itens. Para melhorar a leitura, use boa iluminação e enquadre apenas a lista.</div>
-          <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",marginBottom:12,cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1}}>
-            📸 Tirar foto ou escolher imagem
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
-          </label>
-          {ocrFileName&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Arquivo: {ocrFileName}</div>}
-          {ocrLoading&&(
-            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:14,marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Interpretando imagem... {ocrProgress}%</div>
-              <div style={{height:10,background:"#E5E7EB",borderRadius:999,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${ocrProgress}%`,background:"linear-gradient(90deg,#16A34A,#22C55E)",borderRadius:999,transition:"width .25s"}}/>
-              </div>
-            </div>
-          )}
-          <textarea value={ocrText} onChange={e=>setOcrText(e.target.value)}
-            placeholder={ocrLoading?"Aguarde a leitura da imagem...":"O texto reconhecido aparecerá aqui para revisão antes de importar."}
-            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:190,resize:"none",marginBottom:14}}/>
-          <button onClick={()=>importTextAsPendingItems(ocrText,{closePhoto:true})} disabled={!ocrText.trim()||ocrLoading}
-            style={{...btnG,opacity:ocrText.trim()&&!ocrLoading?1:0.5,cursor:ocrText.trim()&&!ocrLoading?"pointer":"not-allowed"}}>
-            ✅ Transformar em itens da lista
-          </button>
-        </ModalSheet>
-      )}
+      {showPhotoModal && (
+  <PhotoModal
+    open={showPhotoModal}
+    listType={listType}
+    ocrLoading={ocrLoading}
+    ocrProgress={ocrProgress}
+    ocrFileName={ocrFileName}
+    ocrText={ocrText}
+    setOcrText={setOcrText}
+    onClose={() => setShowPhotoModal(false)}
+    onFileChange={handlePhotoListFile}
+    onImport={() => importTextAsPendingItems(ocrText, {closePhoto: true})}
+  />
+)}
 
       {/* ── MODAL: REUTILIZAR LISTA ── */}
       {reuseModal&&(

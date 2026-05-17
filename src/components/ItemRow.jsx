@@ -55,15 +55,15 @@ export default function ItemRow({
         gridTemplateColumns: "44px minmax(0,1fr) 40px",
         gap: 14,
         alignItems: "center",
-        padding: "16px 16px",
+        padding: "16px 18px",
         background: rowBg,
-        borderBottom: isLast ? "none" : "1px solid rgba(15, 23, 42, 0.10)",
+        borderBottom: isLast ? "none" : "1px solid rgba(15, 23, 42, 0.06)",
         transition:
           "background 240ms ease, box-shadow 240ms ease, opacity 240ms ease",
         boxShadow: isHighlighted
-          ? `inset 3px 0 0 ${accent}, 0 0 0 1px rgba(124,58,237,0.05)`
+          ? `inset 3px 0 0 ${accent}, 0 0 0 1px rgba(124,58,237,0.06), 0 6px 18px -10px rgba(124,58,237,0.20)`
           : "inset 0 0 0 0 transparent",
-        opacity: notFound ? 0.74 : 1,
+        opacity: notFound ? 0.72 : 1,
       }}
     >
       {/* Checkbox premium */}
@@ -71,15 +71,15 @@ export default function ItemRow({
         onClick={handleToggleCheck}
         aria-label={checked ? "Desmarcar item" : "Marcar item comprado"}
         style={{
-          width: 32,
-          height: 32,
+          width: 34,
+          height: 34,
           borderRadius: "50%",
           border: checked
-            ? "2px solid #16A34A"
-            : `2px solid ${notFound ? "#E5E7EB" : "#D6CCFA"}`,
+            ? "2px solid #15803D"
+            : `1.5px solid ${notFound ? "#E5E7EB" : "#D6CCFA"}`,
           background: checked
-            ? "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)"
-            : "#FFFFFF",
+            ? "linear-gradient(135deg, #34D399 0%, #22C55E 45%, #15803D 100%)"
+            : "linear-gradient(180deg, #FFFFFF 0%, #FAFAFC 100%)",
           color: "#FFFFFF",
           fontWeight: 900,
           fontSize: 15,
@@ -88,8 +88,8 @@ export default function ItemRow({
           alignItems: "center",
           justifyContent: "center",
           boxShadow: checked
-            ? "0 6px 14px -4px rgba(22, 163, 74, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)"
-            : "0 1px 2px rgba(100, 80, 200, 0.08), inset 0 0 0 2px #FFFFFF",
+            ? "0 10px 22px -6px rgba(22,163,74,0.55), 0 2px 4px rgba(22,163,74,0.25), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.08)"
+            : "0 1px 2px rgba(15,23,42,0.06), 0 4px 10px -6px rgba(100,80,200,0.18), inset 0 0 0 2px #FFFFFF",
           transform: "scale(1)",
           transition:
             "background 220ms ease, border-color 220ms ease, box-shadow 240ms ease, transform 160ms ease",
@@ -105,6 +105,7 @@ export default function ItemRow({
             transform: checked ? "scale(1)" : "scale(0)",
             transition: "transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1)",
             lineHeight: 1,
+            textShadow: "0 1px 1px rgba(0,0,0,0.18)",
           }}
         >
           ✓
@@ -140,7 +141,7 @@ export default function ItemRow({
             style={{
               fontSize: 15.5,
               fontWeight: 700,
-              letterSpacing: -0.15,
+              letterSpacing: "-0.015em",
               color: notFound ? "#9CA3AF" : checked ? "#9CA3AF" : "#0F172A",
               textDecoration: notFound || checked ? "line-through" : "none",
               textDecorationColor: notFound
@@ -169,10 +170,11 @@ export default function ItemRow({
                 background: "linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)",
                 border: "1px solid #FED7AA",
                 borderRadius: 999,
-                padding: "2px 8px",
-                letterSpacing: 0.6,
+                padding: "3px 9px",
+                letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                boxShadow: "0 1px 2px rgba(154, 52, 18, 0.08)",
+                boxShadow:
+                  "0 1px 2px rgba(154,52,18,0.10), inset 0 1px 0 rgba(255,255,255,0.65)",
               }}
             >
               Extra
@@ -183,24 +185,25 @@ export default function ItemRow({
         {/* Meta line: qty • unit price */}
         <div
           style={{
-            marginTop: 5,
+            marginTop: 6,
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: 7,
             flexWrap: "wrap",
             fontSize: 12,
             fontWeight: 600,
+            letterSpacing: "-0.005em",
             color: notFound ? "#9CA3AF" : "#6B7280",
             lineHeight: 1.35,
           }}
         >
           <span>{qtyLabel}</span>
-          <span style={{ color: "#D6CCFA" }}>•</span>
-          <span>{unitPrice || "Sem preço"}</span>
+          <span style={{ color: "#D6CCFA", fontSize: 10 }}>●</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>{unitPrice || "Sem preço"}</span>
         </div>
 
         {/* Total — destacado */}
-        <div style={{ marginTop: 7 }}>
+        <div style={{ marginTop: 8 }}>
           {total > 0 ? (
             <span
               style={{
@@ -212,20 +215,23 @@ export default function ItemRow({
                 background: notFound
                   ? "#F3F4F6"
                   : hexToRgba
-                    ? hexToRgba(accentHeader, 0.09)
-                    : "rgba(4, 120, 87, 0.09)",
+                    ? `linear-gradient(180deg, ${hexToRgba(accentHeader, 0.12)} 0%, ${hexToRgba(accentHeader, 0.06)} 100%)`
+                    : "linear-gradient(180deg, rgba(4,120,87,0.12) 0%, rgba(4,120,87,0.06) 100%)",
                 border: `1px solid ${
                   notFound
                     ? "#E5E7EB"
                     : hexToRgba
-                      ? hexToRgba(accentHeader, 0.2)
-                      : "rgba(4, 120, 87, 0.2)"
+                      ? hexToRgba(accentHeader, 0.22)
+                      : "rgba(4, 120, 87, 0.22)"
                 }`,
-                padding: "3px 10px",
+                padding: "4px 11px",
                 borderRadius: 10,
                 fontWeight: 800,
                 fontSize: 13.5,
-                letterSpacing: -0.1,
+                letterSpacing: "-0.01em",
+                boxShadow: notFound
+                  ? "none"
+                  : "0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(15,23,42,0.04)",
               }}
             >
               {fmtR ? fmtR(total) : total}
@@ -235,14 +241,15 @@ export default function ItemRow({
               style={{
                 display: "inline-block",
                 fontSize: 10.5,
-                fontWeight: 700,
-                color: "#7C3AED",
-                background: "#F3EFFF",
-                border: "1px solid rgba(124, 58, 237, 0.14)",
-                padding: "3px 9px",
+                fontWeight: 800,
+                color: "#6D28D9",
+                background: "linear-gradient(180deg, #F5F0FF 0%, #EDE4FF 100%)",
+                border: "1px solid rgba(124, 58, 237, 0.18)",
+                padding: "3px 10px",
                 borderRadius: 999,
                 textTransform: "uppercase",
-                letterSpacing: 0.5,
+                letterSpacing: "0.08em",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
               }}
             >
               Total pendente
@@ -251,7 +258,7 @@ export default function ItemRow({
         </div>
 
         {item?.price != null && PriceMonthBadge && (
-          <div style={{ marginTop: 7 }}>
+          <div style={{ marginTop: 8 }}>
             <PriceMonthBadge
               itemName={item.name}
               price={item.price}
@@ -278,10 +285,10 @@ export default function ItemRow({
           width: 36,
           height: 36,
           borderRadius: 12,
-          border: "1px solid " + (notFound ? "#FCA5A5" : "rgba(100, 80, 200, 0.14)"),
+          border: "1px solid " + (notFound ? "#FCA5A5" : "rgba(100, 80, 200, 0.16)"),
           background: notFound
             ? "linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)"
-            : "#FFFFFF",
+            : "linear-gradient(180deg, #FFFFFF 0%, #FAFAFC 100%)",
           color: notFound ? "#B91C1C" : "#94A3B8",
           fontWeight: 800,
           fontSize: 18,
@@ -291,8 +298,8 @@ export default function ItemRow({
           alignItems: "center",
           justifyContent: "center",
           boxShadow: notFound
-            ? "0 4px 10px -3px rgba(185, 28, 28, 0.25), inset 0 1px 0 rgba(255,255,255,0.4)"
-            : "0 1px 2px rgba(100, 80, 200, 0.06)",
+            ? "0 8px 18px -6px rgba(185,28,28,0.35), 0 2px 4px rgba(185,28,28,0.15), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(127,29,29,0.10)"
+            : "0 1px 2px rgba(15,23,42,0.05), 0 4px 10px -6px rgba(100,80,200,0.14), inset 0 1px 0 rgba(255,255,255,0.9)",
           transition:
             "background 220ms ease, color 220ms ease, border-color 220ms ease, transform 160ms ease, box-shadow 220ms ease",
           ...missingHighlightStyle,

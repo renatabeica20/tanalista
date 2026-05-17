@@ -14,7 +14,8 @@ export const LIST_TYPE_CONFIGS = {
       "fardo",
       "garrafa",
       "lata",
-      "pote"
+      "pote",
+      "bandeja"
     ],
     categories: [
       "Hortifruti",

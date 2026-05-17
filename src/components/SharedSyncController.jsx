@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export default function SharedSyncController({
   screen,
@@ -8,34 +8,58 @@ export default function SharedSyncController({
   autoSyncNoticeRef,
   onRefresh,
 }) {
+  const intervalRef = useRef(null);
+  const isPollingRef = useRef(false);
+
   useEffect(() => {
-    // Atualização automática somente para lista realmente compartilhada/recebida.
-    // Lista própria sincronizada na nuvem não deve ser recarregada automaticamente ao abrir o histórico,
-    // pois uma cópia remota antiga pode desmarcar itens já finalizados.
-    if (screen !== "list" || !currentList?.sharedId || !isRealSharedList?.(currentList)) return;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
-    const lastPull = getListSyncStamp?.({
-      lastSyncedAt: currentList.lastCloudSeenAt || currentList.pulledAt,
-    });
+    // Verifica sharedId em todos os campos possíveis — listas importadas
+    // guardam o ID original em originalSharedId ou sourceSharedId
+    const effectiveSharedId =
+      currentList?.sharedId ||
+      currentList?.originalSharedId ||
+      currentList?.sourceSharedId;
 
-    if (lastPull && Date.now() - lastPull < 45000) return;
+    const shouldPoll =
+      screen === "list" &&
+      effectiveSharedId &&
+      isRealSharedList?.(currentList);
 
-    const now = Date.now();
-    if (now - (autoSyncNoticeRef?.current || 0) < 45000) return;
+    if (!shouldPoll) return;
 
-    if (autoSyncNoticeRef) autoSyncNoticeRef.current = now;
-    onRefresh?.().catch(() => null);
+    const poll = async () => {
+      if (isPollingRef.current) return;
+      isPollingRef.current = true;
+      try {
+        await onRefresh?.();
+      } catch {
+        // silencia erros de rede
+      } finally {
+        isPollingRef.current = false;
+      }
+    };
+
+    intervalRef.current = setInterval(poll, 4000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [
     screen,
     currentList?.id,
     currentList?.sharedId,
+    currentList?.originalSharedId,
+    currentList?.sourceSharedId,
     currentList?.isShared,
     currentList?.imported,
-    currentList?.lastCloudSeenAt,
-    currentList?.pulledAt,
     isRealSharedList,
-    getListSyncStamp,
-    autoSyncNoticeRef,
     onRefresh,
   ]);
 

@@ -4,7 +4,7 @@ import { useState } from "react";
  * FloatingActions — visual premium, sem alterações de lógica/props/callbacks.
  *
  * Mantém:
- *  - props: onAddExtraItem, highlightExtraItem
+ *  - props: onAddExtraItem, highlightExtraItem, themeGradient
  *  - comportamento de clique (onAddExtraItem)
  *  - z-index dinâmico para tour/onboarding (highlightExtraItem)
  *
@@ -16,10 +16,13 @@ import { useState } from "react";
  *  - Ícone SVG nítido (substitui o "＋")
  *  - Safe-area iOS via env(safe-area-inset-bottom)
  *  - Responsivo: largura/padding adaptam em telas estreitas
+ *  - themeGradient: acompanha o tema visual do tipo de lista
  */
-export default function FloatingActions({ onAddExtraItem, highlightExtraItem = false }) {
+export default function FloatingActions({ onAddExtraItem, highlightExtraItem = false, themeGradient }) {
   const [pressed, setPressed] = useState(false);
   const [hover, setHover] = useState(false);
+
+  const activeGradient = themeGradient || "linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)";
 
   const baseShadow = pressed
     ? "0 4px 14px rgba(76,29,149,0.32), 0 2px 6px rgba(15,23,42,0.18)"
@@ -70,8 +73,7 @@ export default function FloatingActions({ onAddExtraItem, highlightExtraItem = f
           bottom: `calc(24px + env(safe-area-inset-bottom, 0px))`,
           left: "50%",
           transform: `translateX(-50%) scale(${pressed ? 0.96 : hover ? 1.02 : 1})`,
-          background:
-            "linear-gradient(135deg, #4C1D95 0%, #6D28D9 45%, #8B5CF6 100%)",
+          background: activeGradient,
           border: "1px solid rgba(255,255,255,0.18)",
           color: "white",
           borderRadius: 999,
@@ -92,7 +94,7 @@ export default function FloatingActions({ onAddExtraItem, highlightExtraItem = f
           touchAction: "manipulation",
           outline: "none",
           transition:
-            "transform 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms ease, filter 220ms ease",
+            "transform 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms ease, filter 220ms ease, background 400ms ease",
           ...(highlightExtraItem
             ? {
                 filter: "brightness(1.16) saturate(1.12)",

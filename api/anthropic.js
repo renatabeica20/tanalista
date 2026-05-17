@@ -5,7 +5,7 @@
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "10mb",
+      sizeLimit: "20mb",
     },
   },
 };
@@ -22,12 +22,25 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY não configurada. Adicione nas variáveis de ambiente do Vercel." });
   }
 
-  const { prompt, system, maxTokens = 1024, model = "claude-3-5-haiku-latest", image } = req.body || {};
+  const { prompt, system, maxTokens = 1024, model = "claude-sonnet-4-6", image, pdf } = req.body || {};
   if (!prompt) return res.status(400).json({ error: "Campo 'prompt' obrigatório." });
 
   // ── Montar conteúdo ──────────────────────────────────────────────────
   let messageContent;
-  if (image && image.data && image.mediaType) {
+  if (pdf && pdf.data) {
+    // PDF nativo — Anthropic aceita application/pdf via document type
+    messageContent = [
+      {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: pdf.data,
+        },
+      },
+      { type: "text", text: prompt },
+    ];
+  } else if (image && image.data && image.mediaType) {
     // Visão: imagem + texto
     messageContent = [
       {

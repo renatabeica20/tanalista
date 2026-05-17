@@ -1,14 +1,14 @@
 export const ANTHROPIC_MODEL_CLASSIFY =
   import.meta.env.VITE_ANTHROPIC_MODEL_CLASSIFY ||
-  "claude-3-5-haiku-latest";
+  "claude-haiku-4-5-20251001";
 
 export const ANTHROPIC_MODEL_ORGANIZE =
   import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE ||
-  "claude-3-5-sonnet-latest";
+  "claude-sonnet-4-6";
 
 export const ANTHROPIC_MODEL_VISION =
   import.meta.env.VITE_ANTHROPIC_MODEL_VISION ||
-  "claude-3-5-sonnet-latest";
+  "claude-sonnet-4-6";
 
 export const APP_PUBLIC_URL =
   (
