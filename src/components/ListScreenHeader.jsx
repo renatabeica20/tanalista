@@ -35,6 +35,7 @@ export default function ListScreenHeader({
   showFinished,
   onBackHome,
   onShare,
+  onStartTour,
   isTourStep,
   tourHighlightStyle,
   WhatsAppIcon,
@@ -202,6 +203,32 @@ export default function ListScreenHeader({
               }}
             >
               <SafeWhatsAppIcon size={17} /> Enviar lista
+            </button>
+
+            <button
+              onClick={onStartTour}
+              title="Como usar esta tela"
+              style={{
+                background: "rgba(255,255,255,0.16)",
+                border: "1px solid rgba(255,255,255,0.32)",
+                borderRadius: 999,
+                padding: "9px 13px",
+                color: "white",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                whiteSpace: "nowrap",
+                backdropFilter: "blur(10px)",
+                boxShadow:
+                  "0 8px 20px -4px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.18)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "background 180ms ease, transform 160ms ease",
+              }}
+            >
+              ✨ Como usar
             </button>
           </div>
 
