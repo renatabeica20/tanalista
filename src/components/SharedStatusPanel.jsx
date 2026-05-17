@@ -22,7 +22,7 @@ export default function SharedStatusPanel({
     <div
       style={{
         position: "relative",
-        margin: "10px 16px 0",
+       margin: "10px 16px 12px",
         background:
           "linear-gradient(135deg,#F5F3FF 0%,#EDE9FE 55%,#F3E8FF 100%)",
         border: "1px solid rgba(167,139,250,0.42)",
