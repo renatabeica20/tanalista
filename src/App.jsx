@@ -8388,9 +8388,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
               setShowPriceStatsScreen={setShowPriceStatsScreen}
               shareAppWhatsApp={shareAppWhatsApp}
             />
-          </div>
-        </div>
-     </HomeScreen>
+        </HomeScreen>
 )}
 
 
