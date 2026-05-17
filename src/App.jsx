@@ -73,6 +73,7 @@ import {
   createSharedListRecord,
   hideSharedListRecordForCurrentUser,
   softDeleteSharedListRecord,
+  findSharedListRecordByList,
   sharedListSignature,
   getListSyncStamp,
   formatRelativeSyncTime,
@@ -7816,13 +7817,8 @@ if(hasChanges)showToast("🔄 Lista atualizada");
       let removedFromCloud=false;
       let persistedDeletion=false;
 
-      // Primeiro grava uma marca de exclusão no próprio registro remoto.
-      // Assim, mesmo que o usuário limpe o histórico/cache ou troque de aba/dispositivo,
-      // a lista não volta a ser restaurada no login seguinte.
       persistedDeletion=await softDeleteSharedListRecord(target.sharedId,target);
 
-      // Depois tenta o DELETE físico. Se o Supabase/RLS bloquear, a marca remota acima
-      // continua sendo a fonte de verdade para não recarregar a lista excluída.
       if(!target.imported){
         removedFromCloud=await deleteSharedListRecord(target.sharedId);
       }
@@ -7830,6 +7826,18 @@ if(hasChanges)showToast("🔄 Lista atualizada");
       if(!removedFromCloud && !persistedDeletion){
         await hideSharedListRecordForCurrentUser(target.sharedId);
         showToast("🗑 Lista removida da sua conta",1800);
+      }
+    } else {
+      // Lista sem sharedId local — pode ter sido persistida no Supabase em sessão anterior
+      // sem que o sharedId tenha sido salvo de volta no localStorage.
+      // Busca pelo nome+userId e marca como deletada no Supabase se encontrar.
+      try {
+        const cloudRecord = await findSharedListRecordByList(target);
+        if(cloudRecord?.id){
+          await softDeleteSharedListRecord(cloudRecord.id, target);
+        }
+      } catch {
+        // Falha silenciosa — a exclusão local já foi feita
       }
     }
   };
@@ -8565,7 +8573,6 @@ if(hasChanges)showToast("🔄 Lista atualizada");
             showFinished={showFinished}
             onBackHome={archiveFinishedListsBeforeHome}
             onShare={() => { setShareTargetList(currentList); setShareModal(true); }}
-            onStartTour={() => startGuidedTour("list")}
             isTourStep={isTourStep}
             tourHighlightStyle={tourHighlightStyle}
             WhatsAppIcon={WhatsAppIcon}
@@ -8586,6 +8593,10 @@ if(hasChanges)showToast("🔄 Lista atualizada");
             formatRelativeSyncTime={formatRelativeSyncTime}
           />
 
+          {/* Search */}
+          <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
+            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
+          </div>
           {/* Card integrado: orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
             const suggs = getSuggestions();
