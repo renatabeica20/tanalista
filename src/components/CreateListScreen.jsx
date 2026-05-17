@@ -5,79 +5,79 @@ import VoiceInput from "./VoiceInput";
 
 const inp = (extra = {}) => ({
   width: "100%",
-  padding: "13px 16px",
-  border: "2px solid #E5E7EB",
-  borderRadius: 18,
-  fontSize: 16,
+  padding: "14px 18px",
+  border: "1.5px solid #E5E7EB",
+  borderRadius: 16,
+  fontSize: 15.5,
   color: "#111827",
   outline: "none",
   fontFamily: "inherit",
   background: "#FFFFFF",
   boxSizing: "border-box",
   WebkitTapHighlightColor: "transparent",
-  transition: "border-color .25s ease, box-shadow .25s ease",
+  transition: "border-color .25s ease, box-shadow .25s ease, background .25s ease",
   ...extra,
 });
 
 const lbl = {
   fontWeight: 800,
-  fontSize: 11,
+  fontSize: 10.5,
   color: "#4C1D95",
-  marginBottom: 10,
+  marginBottom: 12,
   display: "block",
   textTransform: "uppercase",
-  letterSpacing: "0.08em",
+  letterSpacing: "0.12em",
 };
 
-// createCard agora é uma função para receber o tema dinamicamente
 const createCard = (th) => ({
   background: `linear-gradient(180deg, #FFFFFF 0%, ${th?.soft || "#FBFAFF"} 100%)`,
-  borderRadius: 24,
-  padding: 18,
-  border: `1px solid ${th?.softBorder || "rgba(167,139,250,0.22)"}`,
-  boxShadow: `0 14px 30px rgba(17,24,39,0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
+  borderRadius: 22,
+  padding: 22,
+  border: `1px solid ${th?.softBorder || "rgba(167,139,250,0.18)"}`,
+  boxShadow: "0 1px 2px rgba(17,24,39,0.04), 0 12px 32px -10px rgba(17,24,39,0.10), inset 0 1px 0 rgba(255,255,255,0.92)",
   transition: "background .4s ease, border-color .4s ease, box-shadow .25s ease, transform .25s ease",
 });
 
 const createSecondaryBtn = {
   width: "100%",
-  minHeight: 52,
-  padding: "13px 14px",
-  borderRadius: 18,
+  minHeight: 50,
+  padding: "13px 16px",
+  borderRadius: 16,
   background: "#FFFFFF",
   border: "1.5px solid #E5E7EB",
   color: "#374151",
-  fontWeight: 800,
+  fontWeight: 700,
   fontSize: 14,
+  letterSpacing: "-0.005em",
   cursor: "pointer",
   fontFamily: "inherit",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   gap: 8,
-  boxShadow: "0 8px 20px rgba(17,24,39,0.05), inset 0 1px 0 rgba(255,255,255,0.9)",
+  boxShadow: "0 1px 2px rgba(17,24,39,0.04), 0 6px 16px -6px rgba(17,24,39,0.08), inset 0 1px 0 rgba(255,255,255,0.9)",
   WebkitTapHighlightColor: "transparent",
   transition: "transform .2s ease, box-shadow .25s ease, border-color .25s ease",
 };
 
 const createPrimaryBtn = {
   width: "100%",
-  minHeight: 58,
-  padding: "16px 18px",
-  borderRadius: 22,
+  minHeight: 56,
+  padding: "16px 20px",
+  borderRadius: 18,
   background: "linear-gradient(135deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)",
   border: "none",
   color: "white",
-  fontWeight: 900,
-  fontSize: 17,
+  fontWeight: 800,
+  fontSize: 16,
   cursor: "pointer",
   fontFamily: "inherit",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: 8,
-  boxShadow: "0 18px 38px rgba(109,40,217,0.34), inset 0 1px 0 rgba(255,255,255,0.18)",
-  letterSpacing: "0.01em",
+  gap: 10,
+  boxShadow: "0 1px 2px rgba(76,29,149,0.20), 0 14px 32px -8px rgba(109,40,217,0.45), inset 0 1px 0 rgba(255,255,255,0.22)",
+  letterSpacing: "-0.005em",
   WebkitTapHighlightColor: "transparent",
   transition: "transform .2s ease, box-shadow .25s ease, opacity .2s ease",
 };
@@ -91,12 +91,12 @@ function HelpIcon({ text = "" }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 18,
-        height: 18,
+        width: 16,
+        height: 16,
         borderRadius: "50%",
         background: "linear-gradient(135deg,#EDE9FE,#F5F3FF)",
         color: "#5B21B6",
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: 900,
         cursor: "pointer",
         border: "1px solid #C7D2FE",
@@ -201,11 +201,6 @@ export default function CreateListScreen({
     const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
     return `rgba(${r},${g},${b},${a})`;
   };
-  // Cor de fundo da página: versão muito suave da cor do tema (10% opacidade)
-  const pageBg = () => {
-    const h = theme.soft; // ex: "#F5F3FF"
-    return `linear-gradient(180deg, ${theme.soft} 0%, #FFFFFF 60%, #FFFFFF 100%)`;
-  };
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -230,19 +225,19 @@ export default function CreateListScreen({
   };
 
   return (
-<div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:pageBg(),transition:"background .4s ease"}}>
-  <div style={{background:`linear-gradient(135deg, ${theme.soft} 0%, #FFFFFF 100%)`,padding:"16px 20px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:`1px solid ${theme.softBorder}`,position:"sticky",top:0,zIndex:100,boxShadow:`0 10px 28px ${themeShadowRGBA(0.14)}`,backdropFilter:"saturate(140%) blur(8px)",transition:"background .3s ease, border-color .3s ease, box-shadow .3s ease"}}>
+<div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:"linear-gradient(180deg,#F8F7FF 0%,#FAFAFB 60%,#FFFFFF 100%)",backgroundColor:themeShadowRGBA(0.10)}}>
+  <div style={{background:`linear-gradient(135deg, ${theme.soft} 0%, #FFFFFF 100%)`,padding:"18px 20px 16px",display:"flex",alignItems:"center",gap:14,borderBottom:`1px solid ${theme.softBorder}`,position:"sticky",top:0,zIndex:100,boxShadow:`0 1px 0 ${themeShadowRGBA(0.06)}, 0 8px 24px -8px ${themeShadowRGBA(0.18)}`,backdropFilter:"saturate(140%) blur(12px)",WebkitBackdropFilter:"saturate(140%) blur(12px)",transition:"background .3s ease, border-color .3s ease, box-shadow .3s ease"}}>
     <button onClick={()=>{archiveFinishedListsBeforeHome();setPendingItems([]);setCurrentInput("");setEditingListId(null);setPantryCompared(false);setPantryComparison(null);}}
-      style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,border:`1px solid ${theme.softBorder}`,cursor:"pointer",fontSize:18,color:theme.dark,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,boxShadow:`0 6px 16px ${themeShadowRGBA(0.18)}`,WebkitTapHighlightColor:"transparent"}}>←</button>
+      style={{width:40,height:40,borderRadius:14,background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,border:`1px solid ${theme.softBorder}`,cursor:"pointer",fontSize:18,color:theme.dark,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,boxShadow:`0 1px 2px ${themeShadowRGBA(0.10)}, 0 6px 14px -4px ${themeShadowRGBA(0.20)}`,WebkitTapHighlightColor:"transparent",flexShrink:0}}>←</button>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
         <span aria-hidden style={{fontSize:22,lineHeight:1}}>{theme.icon}</span>
-        <div style={{fontWeight:900,fontSize:18,color:"#111827",textAlign:"center",letterSpacing:"-0.01em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",background:listName?`linear-gradient(135deg, ${theme.dark}, ${theme.light})`:"none",WebkitBackgroundClip:listName?"text":"unset",WebkitTextFillColor:listName?"transparent":"#111827"}}>{listName?listName:"Nova lista"}</div>
+        <div style={{fontWeight:800,fontSize:18,color:"#111827",textAlign:"center",letterSpacing:"-0.02em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",background:listName?`linear-gradient(135deg, ${theme.dark}, ${theme.light})`:"none",WebkitBackgroundClip:listName?"text":"unset",WebkitTextFillColor:listName?"transparent":"#111827"}}>{listName?listName:"Nova lista"}</div>
       </div>
     </div>
-    <button onClick={()=>startGuidedTour("create")} style={{border:`1px solid ${theme.softBorder}`,background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,color:theme.dark,borderRadius:999,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 6px 14px ${themeShadowRGBA(0.14)}`,WebkitTapHighlightColor:"transparent"}}>✨ Como usar</button>
+    <button onClick={()=>startGuidedTour("create")} style={{border:`1px solid ${theme.softBorder}`,background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,color:theme.dark,borderRadius:999,padding:"9px 14px",fontSize:12,fontWeight:800,letterSpacing:"-0.005em",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 1px 2px ${themeShadowRGBA(0.10)}, 0 6px 14px -4px ${themeShadowRGBA(0.18)}`,WebkitTapHighlightColor:"transparent",flexShrink:0}}>✨ Como usar</button>
   </div>
-  <div style={{padding:"18px 18px 40px",flex:1,display:"flex",flexDirection:"column",gap:14,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
+  <div style={{padding:"20px 18px 48px",flex:1,display:"flex",flexDirection:"column",gap:16,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
     {/* ITENS EM CASA */}
     <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard(theme),borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -333,7 +328,7 @@ export default function CreateListScreen({
           style={{...inp({height:58,fontSize:16,paddingLeft:18}),appearance:"none",WebkitAppearance:"none",MozAppearance:"none",cursor:"pointer",paddingRight:46,fontWeight:700,color:"#111827"}}>
           {LIST_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        <span style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:theme.color,fontSize:12,fontWeight:900,background:theme.soft,borderRadius:999,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${theme.softBorder}`}}>▼</span>
+        <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:theme.color,fontSize:11,fontWeight:900,background:theme.soft,borderRadius:10,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",border:`1px solid ${theme.softBorder}`,boxShadow:`0 1px 2px ${themeShadowRGBA(0.10)}`}}>▼</span>
       </div>
     </div>
 
@@ -348,10 +343,14 @@ export default function CreateListScreen({
           style={{padding:"0 18px",height:56,borderRadius:18,background:themeGradient,border:"none",color:"white",fontSize:15,fontWeight:900,cursor:"pointer",flexShrink:0,fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 12px 24px ${themeShadowRGBA(0.32)}, inset 0 1px 0 rgba(255,255,255,0.18)`,WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em",...tourHighlightStyle(isTourStep("create_item_insert"))}}>Inserir</button>
       </div>
       <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.5,fontWeight:600}}>Digite, cole ou fale a lista. O sistema considera o tipo selecionado para organizar os itens.</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:12}}>
         <button data-tour-step={isTourStep("create_item_paste") ? "create_item_paste" : undefined} onClick={()=>{setPasteTarget("list");setShowPasteModal(true);}}
           style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`,...tourHighlightStyle(isTourStep("create_item_paste"))}}>
           📋 Colar lista
+        </button>
+        <button onClick={()=>onShowPhotoModal?.()}
+          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`}}>
+          📷 Importar lista
         </button>
         <VoiceInput
           target="list"
@@ -363,10 +362,6 @@ export default function CreateListScreen({
           baseStyle={createSecondaryBtn}
           extraStyle={tourHighlightStyle(isTourStep("create_item_voice"))}
         />
-        <button onClick={()=>onShowPhotoModal?.()}
-          style={{...createSecondaryBtn,borderColor:theme.softBorder,color:theme.dark,background:`linear-gradient(135deg,#FFFFFF,${theme.soft})`}}>
-          📷 Importar lista
-        </button>
       </div>
     </div>
 
@@ -379,10 +374,10 @@ export default function CreateListScreen({
         {pendingItems.map((item,i)=>{
           const emb=item.embalagem||"";
           return(
-            <div key={i} style={{padding:"12px 14px",borderBottom:i<pendingItems.length-1?"1px solid #F3F0FA":"none",display:"flex",alignItems:"center",gap:10,background:i%2===0?"transparent":"rgba(245,243,255,0.35)"}}>
-              <span style={{fontSize:16,width:30,height:30,borderRadius:10,background:"#F5F3FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EDE9FE"}}>🛒</span>
+            <div key={i} style={{padding:"14px 16px",borderBottom:i<pendingItems.length-1?"1px solid #F3F0FA":"none",display:"flex",alignItems:"center",gap:12,background:i%2===0?"transparent":"rgba(245,243,255,0.35)"}}>
+              <span style={{fontSize:16,width:32,height:32,borderRadius:10,background:"#F5F3FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #EDE9FE"}}>🛒</span>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:14,color:"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                <div style={{fontWeight:600,fontSize:14,color:"#111827",letterSpacing:"-0.005em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {[formatQtyUnit(item.qty,item.unit),item.marca,item.tipo,item.name,emb].filter(Boolean).join(" · ")}
                 </div>
               </div>
