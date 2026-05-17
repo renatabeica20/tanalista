@@ -103,14 +103,79 @@ export const HORTIFRUTI_UNIT_WEIGHT = {
   repolho: { avgKg: 1.00, minKg: 0.70, maxKg: 1.50, aliases: [] }
 };
 
+// ── CARNES, AVES E PEIXES: PESO MÉDIO ESTIMADO POR UNIDADE ──────────────
+// Usada quando o usuário informa "1 frango" ou "1 pernil" com preço por kg.
+// Faixas baseadas em pesos típicos encontrados em supermercados brasileiros.
+export const MEAT_UNIT_WEIGHT = {
+  frango: { avgKg: 1.80, minKg: 1.20, maxKg: 2.50, aliases: ["frango inteiro", "frango resfriado", "frango congelado"] },
+  "frango caipira": { avgKg: 1.50, minKg: 1.00, maxKg: 2.20, aliases: [] },
+  "coxa de frango": { avgKg: 0.18, minKg: 0.13, maxKg: 0.25, aliases: ["coxa frango", "coxa e sobrecoxa"] },
+  "sobrecoxa de frango": { avgKg: 0.20, minKg: 0.15, maxKg: 0.28, aliases: ["sobrecoxa frango"] },
+  "peito de frango": { avgKg: 0.35, minKg: 0.25, maxKg: 0.50, aliases: ["peito frango"] },
+  "asa de frango": { avgKg: 0.10, minKg: 0.07, maxKg: 0.14, aliases: ["asa frango", "coxinha da asa"] },
+  pato: { avgKg: 2.00, minKg: 1.50, maxKg: 2.80, aliases: ["pato inteiro"] },
+  peru: { avgKg: 5.00, minKg: 3.50, maxKg: 8.00, aliases: ["peru inteiro", "perú"] },
+  frango_corte: { avgKg: 0.22, minKg: 0.15, maxKg: 0.30, aliases: ["filé de frango", "file de frango"] },
+
+  pernil: { avgKg: 2.50, minKg: 1.50, maxKg: 4.00, aliases: ["pernil suíno", "pernil suino"] },
+  "paleta suína": { avgKg: 1.80, minKg: 1.20, maxKg: 2.80, aliases: ["paleta suina", "paleta de porco"] },
+  costela: { avgKg: 1.20, minKg: 0.80, maxKg: 2.00, aliases: ["costela bovina", "costela de porco", "costela suína", "costela suina"] },
+  picanha: { avgKg: 1.00, minKg: 0.70, maxKg: 1.50, aliases: [] },
+  alcatra: { avgKg: 1.20, minKg: 0.80, maxKg: 1.80, aliases: [] },
+  maminha: { avgKg: 0.90, minKg: 0.60, maxKg: 1.30, aliases: [] },
+  fraldinha: { avgKg: 0.80, minKg: 0.55, maxKg: 1.20, aliases: [] },
+  cupim: { avgKg: 1.50, minKg: 1.00, maxKg: 2.50, aliases: [] },
+  "file mignon": { avgKg: 0.80, minKg: 0.50, maxKg: 1.20, aliases: ["filé mignon", "file de mignon"] },
+  "contra file": { avgKg: 1.00, minKg: 0.70, maxKg: 1.50, aliases: ["contrafilé", "contrafile"] },
+  patinho: { avgKg: 1.00, minKg: 0.70, maxKg: 1.50, aliases: [] },
+  acem: { avgKg: 1.00, minKg: 0.60, maxKg: 1.60, aliases: ["açém", "acem bovino"] },
+  musculo: { avgKg: 0.80, minKg: 0.50, maxKg: 1.20, aliases: ["músculo", "musculo bovino"] },
+
+  salmao: { avgKg: 0.30, minKg: 0.20, maxKg: 0.50, aliases: ["salmão", "file de salmao", "filé de salmão"] },
+  tilapia: { avgKg: 0.40, minKg: 0.25, maxKg: 0.60, aliases: ["tilápia", "file de tilapia", "filé de tilápia"] },
+  "peixe inteiro": { avgKg: 0.80, minKg: 0.40, maxKg: 1.50, aliases: ["peixe"] },
+  "linguiça": { avgKg: 0.50, minKg: 0.35, maxKg: 0.70, aliases: ["linguica", "linguiça toscana", "linguica toscana"] },
+  calabresa: { avgKg: 0.40, minKg: 0.30, maxKg: 0.60, aliases: ["linguiça calabresa", "linguica calabresa"] },
+};
+
+// ── BUSCA POR NOME: CORRESPONDÊNCIA ROBUSTA ──────────────────────────────
+// Usa tokenização por palavras para evitar falsos positivos de substring.
+// Ex: "sal" não deve bater em "salmão"; "pato" não em "batata".
+function matchesProductName(clean, aliases) {
+  // 1. Correspondência exata — maior prioridade
+  if (aliases.some(alias => alias === clean)) return true;
+
+  // 2. Correspondência por tokens: todos os tokens do alias presentes no nome buscado
+  for (const alias of aliases) {
+    const aliasTokens = alias.split(/\s+/).filter(Boolean);
+    const cleanTokens = clean.split(/\s+/).filter(Boolean);
+    // alias de 1 token: deve ser token exato no nome (evita "sal" bater em "salmão")
+    if (aliasTokens.length === 1) {
+      if (cleanTokens.includes(aliasTokens[0])) return true;
+    } else {
+      // alias de múltiplos tokens: todos devem estar presentes no nome
+      if (aliasTokens.every(t => cleanTokens.some(ct => ct === t || ct.startsWith(t)))) return true;
+    }
+  }
+  return false;
+}
+
 export function getHortifrutiUnitWeightInfo(productName) {
   const clean = normalizePlainText(productName || "");
   if (!clean) return null;
   for (const [key, info] of Object.entries(HORTIFRUTI_UNIT_WEIGHT)) {
     const aliases = [key, ...(Array.isArray(info.aliases) ? info.aliases : [])].map(normalizePlainText);
-    if (aliases.some(alias => alias && (clean === alias || clean.includes(alias) || alias.includes(clean)))) {
-      return { key, ...info };
-    }
+    if (matchesProductName(clean, aliases)) return { key, ...info };
+  }
+  return null;
+}
+
+export function getMeatUnitWeightInfo(productName) {
+  const clean = normalizePlainText(productName || "");
+  if (!clean) return null;
+  for (const [key, info] of Object.entries(MEAT_UNIT_WEIGHT)) {
+    const aliases = [key, ...(Array.isArray(info.aliases) ? info.aliases : [])].map(normalizePlainText);
+    if (matchesProductName(clean, aliases)) return { key, ...info };
   }
   return null;
 }
@@ -120,7 +185,7 @@ export function getEstimatedProduceWeight(item) {
   if (!["unidade", "un", "unid", "und", "peca", "peça"].includes(unit)) return null;
   const qty = Number(String(item?.qty ?? 1).replace(",", "."));
   if (!Number.isFinite(qty) || qty <= 0) return null;
-  const info = getHortifrutiUnitWeightInfo(item?.name || "");
+  const info = getHortifrutiUnitWeightInfo(item?.name || "") || getMeatUnitWeightInfo(item?.name || "");
   if (!info) return null;
   return {
     ...info,
