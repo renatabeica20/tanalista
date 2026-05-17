@@ -2332,13 +2332,6 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   // Mercado: regras explícitas ANTES do fallback genérico
   // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
   if (normalizedType === "mercado") {
-    // Exceções específicas — DEVEM vir antes das regras genéricas para evitar
-    // que "molho de tomate" caia em Hortifruti por conter "tomate",
-    // ou que "farinha de mandioca" caia em Hortifruti por conter "mandioca".
-    if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate", "molho shoyu", "molho inglês", "molho ingles", "molho de soja", "molho barbecue", "molho pesto")) return "Mercearia";
-    if (has("farinha de mandioca", "farinha mandioca", "farofa de mandioca", "farofa", "polvilho", "tapioca", "farinha de trigo", "farinha de arroz", "farinha de aveia", "farinha integral")) return "Mercearia";
-    if (has("suco de tomate", "catchup de tomate", "ketchup")) return "Mercearia";
-
     // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
     if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
 
@@ -2358,12 +2351,11 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     // Frios
     if (has("leite", "queijo", "manteiga", "margarina", "iogurte", "requeijao", "requeijão",
             "presunto", "mortadela", "ovo", "ovos", "creme de leite")) return "Frios e Laticínios";
-    // Hortifruti — mandioca só entra se não for farinha/processado (já tratado acima)
+    // Hortifruti
     if (has("alface", "tomate", "cebola", "alho", "batata", "cenoura", "banana", "maca", "maçã",
             "laranja", "limao", "limão", "manga", "abacaxi", "uva", "pera", "pêra",
             "melancia", "abacate", "mamao", "mamão", "abobrinha", "beterraba", "pepino",
-            "repolho", "couve", "berinjela") ||
-        (has("mandioca") && !has("farinha", "farofa", "tapioca", "polvilho"))) return "Hortifruti";
+            "repolho", "couve", "berinjela", "mandioca")) return "Hortifruti";
     // Limpeza
     if (has("detergente", "sabão", "sabao", "desinfetante", "agua sanitaria", "água sanitária",
             "amaciante", "lava roupa", "omo", "coala", "bombril", "esponja", "vassoura",
@@ -3032,24 +3024,72 @@ function photoItemsToText(items) {
     .join("\n");
 }
 
-async function readShoppingListFromImage(file) {
+const LIST_TYPE_OCR_CONTEXT = {
+  farmacia: {
+    role: "leitor de listas de medicamentos e produtos de farmácia",
+    example: '{"items":[{"name":"Losartana 50mg","qty":2,"unit":"caixa"},{"name":"Omeprazol 20mg","qty":1,"unit":"caixa"}]}',
+    rules: [
+      "- preserve o nome completo do medicamento incluindo dosagem (ex: 'Losartana 50mg', 'Amoxicilina 500mg');",
+      "- unit deve ser caixa, frasco, tubo, cartela, ampola ou unidade;",
+      "- se houver posologia ou instruções de uso, ignore — extraia só o nome e quantidade;",
+      "- ignore cabeçalhos como 'Receituário', 'CRM', nome do médico e data.",
+    ],
+  },
+  escolar: {
+    role: "leitor de listas de material escolar",
+    example: '{"items":[{"name":"Caderno espiral 200 folhas","qty":2,"unit":"unidade"},{"name":"Lápis de cor 12 cores","qty":1,"unit":"caixa"}]}',
+    rules: [
+      "- preserve especificações importantes como número de folhas, cores, tamanho (ex: 'Caderno 200 folhas', 'Lápis de cor 24 cores');",
+      "- unit deve ser unidade, caixa, pacote, kit ou par;",
+      "- ignore cabeçalho com nome da escola, série, ano letivo e professor.",
+    ],
+  },
+  construcao: {
+    role: "leitor de listas de materiais de construção",
+    example: '{"items":[{"name":"Cimento CP-II 50kg","qty":10,"unit":"saco"},{"name":"Tijolo 6 furos","qty":500,"unit":"unidade"}]}',
+    rules: [
+      "- preserve especificações técnicas (ex: 'Cimento CP-II', 'Fio 2,5mm', 'Cano PVC 100mm');",
+      "- unit deve ser saco, unidade, metro, m², barra, rolo, lata, caixa ou kg;",
+      "- quantidades podem ser grandes (centenas ou milhares) — extraia exatamente.",
+    ],
+  },
+  eletrico: {
+    role: "leitor de listas de materiais elétricos",
+    example: '{"items":[{"name":"Fio 2,5mm","qty":50,"unit":"metro"},{"name":"Disjuntor 20A","qty":2,"unit":"unidade"}]}',
+    rules: [
+      "- preserve especificações técnicas como bitola, amperagem, voltagem (ex: 'Fio 2,5mm', 'Disjuntor 20A');",
+      "- unit deve ser metro, rolo, unidade, caixa ou kit.",
+    ],
+  },
+  mercado: {
+    role: "leitor de listas de compras de supermercado",
+    example: '{"items":[{"name":"Arroz","qty":2,"unit":"pacote"},{"name":"Frango","qty":1,"unit":"kg"}]}',
+    rules: [
+      "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, bandeja ou pote;",
+      "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz;",
+      "- se a linha disser '2kg de carne', retorne qty 2, unit kg, name carne.",
+    ],
+  },
+};
+
+async function readShoppingListFromImage(file, listType = "mercado") {
   const dataUrl = await fileToDataUrl(file);
   const [meta, base64] = dataUrl.split(",");
   const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || file.type || "image/jpeg";
 
+  const ctx = LIST_TYPE_OCR_CONTEXT[listType] || LIST_TYPE_OCR_CONTEXT.mercado;
+
   const prompt = [
-    "Você é um leitor de listas de compras em português do Brasil.",
-    "Leia a foto enviada, mesmo que a lista esteja manuscrita.",
-    "Extraia apenas os itens de compra, ignorando linhas de caderno, cabeçalho, dias da semana, data e rabiscos.",
-    "Corrija erros óbvios de leitura manuscrita quando o contexto indicar produto comum de mercado.",
+    `Você é um ${ctx.role} em português do Brasil.`,
+    "Leia o documento enviado, mesmo que esteja manuscrito, impresso ou em PDF convertido para imagem.",
+    "Extraia apenas os itens da lista, ignorando cabeçalhos, rodapés, datas e informações administrativas.",
+    "Corrija erros óbvios de leitura quando o contexto indicar o produto correto.",
     "Retorne APENAS JSON válido, sem markdown, neste formato:",
-    '{"items":[{"name":"arroz","qty":2,"unit":"pacote"}]}',
+    ctx.example,
     "Regras:",
     "- qty deve ser número;",
-    "- unit deve ser unidade, pacote, kg, g, L, ml, caixa, lata, garrafa, fardo, dúzia, par ou peça;",
-    "- se a linha disser '2 pacote de arroz', retorne qty 2, unit pacote, name arroz;",
-    "- se a linha disser '2kg de carne', retorne qty 2, unit kg, name carne;",
-    "- não invente itens que não estejam na imagem.",
+    ...ctx.rules,
+    "- não invente itens que não estejam no documento.",
   ].join("\n");
 
   const res = await fetch("/api/anthropic", {
@@ -6913,7 +6953,7 @@ function comparePendingItemsWithPantry(items, pantryCategories = []) {
     setOcrLoading(true);
     try{
       setOcrProgress(35);
-      const text=normalizeOcrText(await readShoppingListFromImage(file));
+      const text=normalizeOcrText(await readShoppingListFromImage(file, listType));
       setOcrProgress(100);
       setOcrText(text);
       if(text)showToast("✅ Lista lida pela IA. Revise antes de importar.",3600);
@@ -8492,6 +8532,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
           loading={loading}
           isTourStep={isTourStep}
           tourHighlightStyle={tourHighlightStyle}
+          onShowPhotoModal={()=>setShowPhotoModal(true)}
         />
       )}
 
@@ -9219,32 +9260,47 @@ if(hasChanges)showToast("🔄 Lista atualizada");
 
 
       {/* ── MODAL: LER FOTO DA LISTA ── */}
-      {showPhotoModal&&(
+      {showPhotoModal&&(()=>{
+        const ocrCtx={
+          farmacia:{title:"📋 Importar receita ou lista de farmácia",hint:"Fotografe ou importe a receita médica ou lista impressa. A IA vai extrair os medicamentos e quantidades automaticamente."},
+          escolar:{title:"📄 Importar lista de material escolar",hint:"Fotografe ou importe o PDF com a lista de materiais. A IA vai extrair os itens preservando especificações como quantidade de folhas e cores."},
+          construcao:{title:"📐 Importar lista de materiais",hint:"Fotografe ou importe a lista de materiais de construção. A IA vai extrair os itens com suas especificações técnicas."},
+          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Fotografe ou importe a lista. A IA vai extrair os itens preservando bitola, amperagem e outras especificações."},
+        };
+        const ctx=ocrCtx[listType]||{title:"📷 Importar lista por foto ou arquivo",hint:"Fotografe uma lista impressa ou manuscrita, ou importe um PDF/imagem. A IA vai interpretar e montar os itens automaticamente."};
+        return(
         <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📷 Ler lista por foto</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>Fotografe uma lista impressa ou manuscrita. A IA vai interpretar a imagem e montar os itens. Para melhorar a leitura, use boa iluminação e enquadre apenas a lista.</div>
-          <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",marginBottom:12,cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1}}>
-            📸 Tirar foto ou escolher imagem
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
-          </label>
+          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{ctx.title}</div>
+          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>{ctx.hint}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              📸 Foto ou imagem
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
+            </label>
+            <label style={{...btnG,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              📄 PDF ou arquivo
+              <input type="file" accept="image/*,application/pdf,.pdf" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
+            </label>
+          </div>
           {ocrFileName&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Arquivo: {ocrFileName}</div>}
           {ocrLoading&&(
             <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:14,marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Interpretando imagem... {ocrProgress}%</div>
+              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Lendo documento... {ocrProgress}%</div>
               <div style={{height:10,background:"#E5E7EB",borderRadius:999,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${ocrProgress}%`,background:"linear-gradient(90deg,#16A34A,#22C55E)",borderRadius:999,transition:"width .25s"}}/>
               </div>
             </div>
           )}
           <textarea value={ocrText} onChange={e=>setOcrText(e.target.value)}
-            placeholder={ocrLoading?"Aguarde a leitura da imagem...":"O texto reconhecido aparecerá aqui para revisão antes de importar."}
+            placeholder={ocrLoading?"Aguarde a leitura do documento...":"Os itens reconhecidos aparecerão aqui para revisão antes de importar."}
             style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:190,resize:"none",marginBottom:14}}/>
           <button onClick={()=>importTextAsPendingItems(ocrText,{closePhoto:true})} disabled={!ocrText.trim()||ocrLoading}
             style={{...btnG,opacity:ocrText.trim()&&!ocrLoading?1:0.5,cursor:ocrText.trim()&&!ocrLoading?"pointer":"not-allowed"}}>
             ✅ Transformar em itens da lista
           </button>
         </ModalSheet>
-      )}
+        );
+      })()}
 
       {/* ── MODAL: REUTILIZAR LISTA ── */}
       {reuseModal&&(
