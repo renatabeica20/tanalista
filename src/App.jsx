@@ -4174,8 +4174,6 @@ const [lists,setLists]=useState(()=>{
   const [showFinished,setShowFinished]=useState(false);
   const [lastLocalWriteAt,setLastLocalWriteAt]=useState(null);
   const currentListRef=useRef(null);
-  const [lastLocalWriteAt,setLastLocalWriteAt]=useState(null);
-  const currentListRef=useRef(null);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
