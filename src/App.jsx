@@ -5556,7 +5556,7 @@ if(sharedLandingRecord){
     }
 
     const persisted=await persistListRecordToCloud(received,{silent:true});
-    const finalReceived={...received,...(persisted||{}),originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
+    const finalReceived={...received,...(persisted||{}),sharedId:null,originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"
     const nl=mergeUniqueLists([finalReceived,...existing]);
     setLists(nl);
     localStorage.setItem("tnl_lists",JSON.stringify(nl));
