@@ -5692,14 +5692,30 @@ localStorage.setItem("tnl_lists",JSON.stringify(nl));
 setCurrentList(finalReceived);
 setScreen("list");
 
-// Vincula o userId do receptor ao registro original no Supabase.
-// Não cria novo registro — apenas atualiza o existente para que
-// o PWA instalado encontre a lista ao restaurar da nuvem no iOS.
+// Cria registro próprio no Supabase para o receptor, vinculado ao userId dele.
+// Isso permite que o PWA instalado encontre a lista ao restaurar da nuvem.
+// A sincronização em tempo real continua usando sourceSharedId (registro original).
 if(currentUserId && sourceSharedId){
-  updateSharedListRecord(sourceSharedId, {
+  const receiverRecord = {
     ...finalReceived,
-    sharedId: sourceSharedId,
+    sharedId: null,
     userId: currentUserId,
+    ownerName: currentUserName,
+    remetente: currentUserName,
+    sourceSharedId,
+    originalSharedId: sourceSharedId,
+    imported: true,
+    importedFrom: sender,
+  };
+  createSharedListRecord(receiverRecord).then(record => {
+    if(record?.id){
+      const withSharedId = {...finalReceived, sharedId: record.id, sourceSharedId, originalSharedId: sourceSharedId};
+      setCurrentList(withSharedId);
+      setLists(prev => (Array.isArray(prev)?prev:[]).map(l => l.id === finalReceived.id ? withSharedId : l));
+      try { localStorage.setItem("tnl_lists", JSON.stringify(
+        (JSON.parse(localStorage.getItem("tnl_lists")||"[]")).map(l => l.id === finalReceived.id ? withSharedId : l)
+      )); } catch {}
+    }
   }).catch(()=>null);
 }
     setSearch("");
