@@ -4956,7 +4956,23 @@ const [lists,setLists]=useState(()=>{
   const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
     if(!userId && !userName)return;
     try{
-      const records=await getSharedListsForUser(userId, userName || getAppUserName());
+      const effectiveName=userName||getAppUserName();
+      const ownRecords=await getSharedListsForUser(userId,effectiveName);
+      // Busca também listas compartilhadas com este usuário (onde ele é receptor)
+      // O registro original tem remetente=dono, mas data.sharedWithName=receptor
+      let sharedWithRecords=[];
+      if(effectiveName&&hasSupabaseConfig()){
+        try{
+          const res=await fetch(
+            `${SUPABASE_URL}/rest/v1/shared_lists?data->>sharedWithName=ilike.${encodeURIComponent(effectiveName)}&list_type=neq.auth_profile&select=*&order=created_at.desc`,
+            {method:"GET",headers:supabaseHeaders({"Cache-Control":"no-store"}),cache:"no-store"}
+          );
+          if(res.ok){const d=await res.json();sharedWithRecords=Array.isArray(d)?d:[];}
+        }catch{}
+      }
+      const seen=new Map();
+      [...ownRecords,...sharedWithRecords].forEach(r=>{if(r?.id)seen.set(r.id,r);});
+      const records=Array.from(seen.values());
       if(!records.length)return;
       setLists(prev=>{
         const current=Array.isArray(prev)?prev:[];
@@ -5694,31 +5710,16 @@ localStorage.setItem("tnl_lists",JSON.stringify(nl));
 setCurrentList(finalReceived);
 setScreen("list");
 
-// Cria registro próprio no Supabase para o receptor, vinculado ao userId dele.
-// Isso permite que o PWA instalado encontre a lista ao restaurar da nuvem.
-// A sincronização em tempo real continua usando sourceSharedId (registro original).
-if(currentUserId && sourceSharedId){
-  const receiverRecord = {
-    ...finalReceived,
-    sharedId: null,
-    userId: currentUserId,
-    ownerName: currentUserName,
-    remetente: currentUserName,
-    sourceSharedId,
-    originalSharedId: sourceSharedId,
-    imported: true,
-    importedFrom: sender,
-  };
-  createSharedListRecord(receiverRecord).then(record => {
-    if(record?.id){
-      const withSharedId = {...finalReceived, sharedId: record.id, sourceSharedId, originalSharedId: sourceSharedId};
-      setCurrentList(withSharedId);
-      setLists(prev => (Array.isArray(prev)?prev:[]).map(l => l.id === finalReceived.id ? withSharedId : l));
-      try { localStorage.setItem("tnl_lists", JSON.stringify(
-        (JSON.parse(localStorage.getItem("tnl_lists")||"[]")).map(l => l.id === finalReceived.id ? withSharedId : l)
-      )); } catch {}
-    }
-  }).catch(()=>null);
+// Usa o registro original como sharedId do receptor — não cria registro separado.
+// Um único registro no Supabase garante que leitura e escrita de ambos os lados
+// operem no mesmo documento, mantendo a sincronização em tempo real correta.
+if(sourceSharedId){
+  const withSharedId={...finalReceived,sharedId:sourceSharedId,originalSharedId:sourceSharedId,sourceSharedId};
+  setCurrentList(withSharedId);
+  setLists(prev=>(Array.isArray(prev)?prev:[]).map(l=>l.id===finalReceived.id?withSharedId:l));
+  try{localStorage.setItem("tnl_lists",JSON.stringify(
+    (JSON.parse(localStorage.getItem("tnl_lists")||"[]")).map(l=>l.id===finalReceived.id?withSharedId:l)
+  ));}catch{}
 }
     setSearch("");
     setCollapsedCats({});
@@ -7625,59 +7626,47 @@ if(!sharedId)return null;
   },[showToast]);
 
   const refreshSharedListFromCloud=useCallback(async()=>{
-    const sharedId=currentList?.originalSharedId||currentList?.sourceSharedId||currentList?.sharedId;
+    // Sempre usa o sharedId do registro original — único registro no Supabase para a lista
+    const sharedId=currentList?.sharedId||currentList?.originalSharedId||currentList?.sourceSharedId;
     if(!sharedId)return;
     setSharedSyncing(true);
     try{
       const record=await getSharedListRecord(sharedId);
       if(!record?.data)throw new Error("Lista compartilhada não encontrada.");
-      const currentUserName = getAppUserName();
-      const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
-      const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
-      const isReceivedFromAnotherUser = Boolean(currentList.imported === true || currentList.receivedAt || currentList.importedAt) && !remoteOwnerIsCurrentUser;
+      const currentUserName=getAppUserName();
+      const remoteOwner=record?.remetente||record?.data?.remetente||record?.data?.ownerName||currentList.remetente||currentList.ownerName||currentUserName||"Não informado";
+      const remoteOwnerIsCurrentUser=normalizeAuthName(remoteOwner)&&normalizeAuthName(remoteOwner)===normalizeAuthName(currentUserName);
+      const isReceivedFromAnotherUser=Boolean(currentList.imported===true||currentList.receivedAt||currentList.importedAt)&&!remoteOwnerIsCurrentUser;
       const acceptedEvent=(record.data?.sharedEvents||[]).find(e=>e.type==="shared-accepted");
-const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||currentList.sharedWithName||null;
+      const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||currentList.sharedWithName||null;
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
-        // Preserva o sharedId próprio do receptor — não sobrescreve com o ID do registro do dono.
-        // originalSharedId e sourceSharedId continuam apontando para o registro do dono (usado pelo polling).
-        sharedId: currentList.sharedId || sharedId,
-        originalSharedId: sharedId,
-        sourceSharedId: currentList.sourceSharedId || sharedId,
-        // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
-        isShared: currentList.isShared === true || record?.data?.isShared === true,
-        imported: isReceivedFromAnotherUser,
-        importedFrom: isReceivedFromAnotherUser ? remoteOwner : null,
-        remetente: remoteOwner,
-        ownerName: record?.data?.ownerName || remoteOwner,
-        sharedOwner: isReceivedFromAnotherUser ? remoteOwner : null,
-        sharedWithName: isReceivedFromAnotherUser ? null : sharedWithName,
+        sharedId,
+        originalSharedId:sharedId,
+        sourceSharedId:sharedId,
+        isShared:currentList.isShared===true||record?.data?.isShared===true,
+        imported:isReceivedFromAnotherUser,
+        importedFrom:isReceivedFromAnotherUser?remoteOwner:null,
+        remetente:remoteOwner,
+        ownerName:record?.data?.ownerName||remoteOwner,
+        sharedOwner:isReceivedFromAnotherUser?remoteOwner:null,
+        sharedWithName:isReceivedFromAnotherUser?null:sharedWithName,
         pulledAt:new Date().toISOString(),
       },record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      // Busca pelo id local do Cadu ou por qualquer um dos sharedIds para não criar duplicata
-      const hasLocal=existing.some(l=>
-        l.id===currentList.id ||
-        (currentList.sharedId && l.sharedId===currentList.sharedId) ||
-        (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
-      );
+      const hasLocal=existing.some(l=>l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)));
       const nl=hasLocal
-        ? existing.map(l=>
-            l.id===currentList.id ||
-            (currentList.sharedId && l.sharedId===currentList.sharedId) ||
-            (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
-            ? refreshed : l
-          )
-        : [refreshed,...existing];
+        ?existing.map(l=>(l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)))?refreshed:l)
+        :[refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
       const remoteSignature=sharedListSignature(record.data);
-const localSignature=sharedListSignature(currentList);
-const hasChanges=remoteSignature && remoteSignature!==localSignature;
-setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
-if(hasChanges)showToast("🔄 Lista atualizada");
+      const localSignature=sharedListSignature(currentList);
+      const hasChanges=remoteSignature&&remoteSignature!==localSignature;
+      setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
+      if(hasChanges)showToast("🔄 Lista atualizada");
     }catch(err){
       console.warn("Falha ao atualizar lista compartilhada",err);
       showToast("⚠️ Não foi possível atualizar a lista compartilhada",5200);
