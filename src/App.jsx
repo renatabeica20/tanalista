@@ -5692,12 +5692,6 @@ localStorage.setItem("tnl_lists",JSON.stringify(nl));
 setCurrentList(finalReceived);
 setScreen("list");
 
-// Persiste no Supabase vinculada ao userId do receptor.
-// Isso garante que o PWA instalado encontre a lista ao restaurar da nuvem,
-// resolvendo o isolamento de localStorage entre browser e PWA no iOS.
-if(currentUserId){
-  persistListRecordToCloud(finalReceived,{silent:true}).catch(()=>null);
-}
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
@@ -7663,9 +7657,10 @@ if(hasChanges)showToast("🔄 Lista atualizada");
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
     // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
     // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
-    if(updated.sharedId){
-     syncSharedListToCloud(updated,{silent:true,force:true});
-    }
+    const effectiveSharedId = updated.sharedId || updated.originalSharedId || updated.sourceSharedId;
+if(effectiveSharedId){
+  syncSharedListToCloud({...updated, sharedId: effectiveSharedId},{silent:true,force:true});
+}
   };
 
   const toggleCheck=(ci,ii)=>{
