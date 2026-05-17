@@ -7336,8 +7336,11 @@ const isRealSharedList=(list)=>Boolean(
       setCurrentList(null);
     }
 
-    setSearch("");
+   setSearch("");
     setCollapsedCats({});
+    // Limpa ?lista= da URL para evitar que loadSharedListFromUrl
+    // dispare novamente e abra o modal de login ao voltar para home.
+    try { window.history.replaceState({}, document.title, "/"); } catch {}
     setScreen("home");
   };
 
