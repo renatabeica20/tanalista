@@ -4172,6 +4172,7 @@ const [lists,setLists]=useState(()=>{
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [confirmDeleteAction,setConfirmDeleteAction]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
+  const [lastLocalWriteAt,setLastLocalWriteAt]=useState(null);
   const currentListRef=useRef(null);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
@@ -7639,11 +7640,7 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
-        // Preserva o sharedId próprio do receptor (registro dele no Supabase).
-        // originalSharedId aponta para o registro do dono, de onde o polling busca atualizações.
-        sharedId: currentList.sharedId || sharedId,
-        originalSharedId: sharedId,
-        sourceSharedId: currentList.sourceSharedId || sharedId,
+        sharedId,
         // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
         isShared: currentList.isShared === true || record?.data?.isShared === true,
         imported: isReceivedFromAnotherUser,
@@ -7692,6 +7689,8 @@ if(hasChanges)showToast("🔄 Lista atualizada");
     // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
     const effectiveSharedId = updated.sharedId || updated.originalSharedId || updated.sourceSharedId;
 if(effectiveSharedId){
+  // Registra o momento da gravação para pausar o polling por 6s e evitar race condition
+  setLastLocalWriteAt(Date.now());
   syncSharedListToCloud({...updated, sharedId: effectiveSharedId},{silent:true,force:true});
 }
   };
@@ -8298,6 +8297,7 @@ if(effectiveSharedId){
         getListSyncStamp={getListSyncStamp}
         autoSyncNoticeRef={autoSyncNoticeRef}
         onRefresh={refreshSharedListFromCloud}
+        lastLocalWriteAt={lastLocalWriteAt}
       />
 
       <GuidedTourController
