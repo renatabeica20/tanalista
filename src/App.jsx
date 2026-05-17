@@ -4813,7 +4813,7 @@ const [lists,setLists]=useState(()=>{
         imported:false,
         importedFrom:null,
         sharedOwner:null,
-        isShared: list.isShared === true || Boolean(list.sharedAt && list.sharedId),
+        isShared: list.isShared === true || Boolean(list.sharedId),
       };
     }
     return list;
