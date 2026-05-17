@@ -238,88 +238,6 @@ export default function CreateListScreen({
     <button onClick={()=>startGuidedTour("create")} style={{border:`1px solid ${theme.softBorder}`,background:`linear-gradient(135deg, ${theme.soft}, #FFFFFF)`,color:theme.dark,borderRadius:999,padding:"9px 14px",fontSize:12,fontWeight:800,letterSpacing:"-0.005em",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:`0 1px 2px ${themeShadowRGBA(0.10)}, 0 6px 14px -4px ${themeShadowRGBA(0.18)}`,WebkitTapHighlightColor:"transparent",flexShrink:0}}>✨ Como usar</button>
   </div>
   <div style={{padding:"20px 18px 48px",flex:1,display:"flex",flexDirection:"column",gap:16,overflowY:"auto",animation:"tnl-create-in .35s ease both"}}>
-    {/* ITENS EM CASA */}
-    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard(theme),borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <div style={{fontWeight:900,fontSize:15,color:"#111827",letterSpacing:"-0.01em"}}>Itens em Casa</div>
-            <HelpIcon text="Registre os itens que você já tem em casa. Enquanto a lista de compras estiver aberta, você pode comparar/recomparar para evitar compras desnecessárias." />
-            <span style={{fontSize:10,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"linear-gradient(135deg,#DCFCE7,#BBF7D0)":"linear-gradient(135deg,#F3E8FF,#EDE9FE)",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`,textTransform:"uppercase",letterSpacing:"0.05em"}}>{activePantry?(pantryCompared?"Comparado":"Lista ativa"):"Opcional"}</span>
-            {activePantry&&(
-              <div style={{marginLeft:"auto",position:"relative",display:"flex",alignItems:"center",gap:6}}>
-                <button
-                  onClick={shareActivePantry}
-                  style={{border:"1px solid #A7F3D0",background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",color:"#047857",borderRadius:999,padding:"6px 11px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 4px 10px rgba(4,120,87,0.15)",WebkitTapHighlightColor:"transparent"}}
-                >
-                  Enviar lista
-                </button>
-                <button
-                  onClick={()=>setPantryMenuOpen(v=>!v)}
-                  style={{border:"1px solid #E5E7EB",background:"#FFFFFF",color:"#4B5563",borderRadius:999,width:30,height:30,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",WebkitTapHighlightColor:"transparent"}}
-                  aria-label="Mais opções dos Itens em Casa"
-                >
-                  ⋯
-                </button>
-                {pantryMenuOpen&&(
-                  <div style={{position:"absolute",right:0,top:38,zIndex:450,minWidth:180,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,boxShadow:"0 22px 50px rgba(17,24,39,0.18)",overflow:"hidden",animation:"tnl-create-pop .18s ease both"}}>
-                    <button
-                      onClick={closeAndRemovePantry}
-                      style={{width:"100%",border:"none",background:"#FFFFFF",color:"#B91C1C",padding:"12px 14px",fontSize:13,fontWeight:900,textAlign:"left",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}}
-                    >
-                      🗑 Excluir
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,marginTop:5,lineHeight:1.4}}>
-            {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
-          </div>
-          {activePantry && pantryShareStatus && (
-            <div style={{fontSize:11,color:"#047857",fontWeight:900,marginTop:6,background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 9px",display:"inline-block"}}>
-              {pantryShareStatus}
-            </div>
-          )}
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
-        {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-        <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
-      </div>
-    </div>
-
-    {/* ORÇAMENTO */}
-    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_budget"))}}>
-      <label style={lbl}>💰 Orçamento</label>
-      <div>
-        <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#9CA3AF",fontSize:15,pointerEvents:"none",transition:"color .25s ease",fontVariantNumeric:"tabular-nums"}}>R$</span>
-          <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true); triggerBudgetSavedPulse();}}
-            placeholder="0,00" inputMode="numeric"
-            style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:budgetText?900:500,color:budgetText?"#6D28D9":"#111827",fontVariantNumeric:"tabular-nums"})}
-            onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=budgetText?"#6D28D9":"#E5E7EB"}/>
-        </div>
-        <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:budgetText?900:600,transition:"color .25s ease, font-weight .25s ease",display:"flex",alignItems:"center",gap:6}}>
-          {budgetText ? "✓ Orçamento salvo automaticamente" : "Deixe em branco para não definir limite"}
-        </div>
-      </div>
-    </div>
-
-    {/* NOME DA LISTA */}
-    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_name"))}}>
-      <label style={lbl}>📝 Nome da lista</label>
-      <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
-        placeholder="Ex: Compras da semana..."
-        style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827"})}
-        onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=listName?"#6D28D9":"#E5E7EB"}/>
-      <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:listName?900:600,transition:"color .25s ease, font-weight .25s ease"}}>
-        {listName ? "✓ Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
-      </div>
-    </div>
-
     {/* TIPO DE LISTA */}
     <div data-tour-step={isTourStep("create_type") ? "create_type" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_type"))}}>
       <label style={lbl}>🏷 Tipo de lista</label>
@@ -413,6 +331,70 @@ export default function CreateListScreen({
         })}
       </div>
     )}
+
+    {/* NOME DA LISTA */}
+    <div data-tour-step={isTourStep("create_name") ? "create_name" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_name"))}}>
+      <label style={lbl}>📝 Nome da lista</label>
+      <input value={listName} onChange={e=>{setListName(e.target.value); if(!listNameConfirmed)setListNameConfirmed(true); triggerListNameSavedPulse();}}
+        placeholder="Ex: Compras da semana..."
+        style={inp({width:"100%",height:58,borderColor:listName?"#6D28D9":"#E5E7EB",boxShadow:listNameSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:listName?900:500,color:listName?"#6D28D9":"#111827"})}
+        onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=listName?"#6D28D9":"#E5E7EB"}/>
+      <div style={{fontSize:12,color:listName?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:listName?900:600,transition:"color .25s ease, font-weight .25s ease"}}>
+        {listName ? "✓ Nome salvo automaticamente" : "Você pode alterar o nome quando quiser"}
+      </div>
+    </div>
+
+    {/* ORÇAMENTO */}
+    <div data-tour-step={isTourStep("create_budget") ? "create_budget" : undefined} style={{...createCard(theme),...tourHighlightStyle(isTourStep("create_budget"))}}>
+      <label style={lbl}>💰 Orçamento</label>
+      <div>
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:900,color:budgetText?"#6D28D9":"#9CA3AF",fontSize:15,pointerEvents:"none",transition:"color .25s ease",fontVariantNumeric:"tabular-nums"}}>R$</span>
+          <input value={budgetText} onChange={e=>{setBudgetText(maskBRLInput(e.target.value)); if(!budgetConfirmed)setBudgetConfirmed(true); triggerBudgetSavedPulse();}}
+            placeholder="0,00" inputMode="numeric"
+            style={inp({paddingLeft:44,width:"100%",height:58,borderColor:budgetText?"#6D28D9":"#E5E7EB",boxShadow:budgetSavedPulse?"0 0 0 4px rgba(109,40,217,0.18)":"none",fontWeight:budgetText?900:500,color:budgetText?"#6D28D9":"#111827",fontVariantNumeric:"tabular-nums"})}
+            onFocus={e=>e.target.style.borderColor="#6D28D9"} onBlur={e=>e.target.style.borderColor=budgetText?"#6D28D9":"#E5E7EB"}/>
+        </div>
+        <div style={{fontSize:12,color:budgetText?"#6D28D9":"#9CA3AF",marginTop:8,fontWeight:budgetText?900:600,transition:"color .25s ease, font-weight .25s ease",display:"flex",alignItems:"center",gap:6}}>
+          {budgetText ? "✓ Orçamento salvo automaticamente" : "Deixe em branco para não definir limite"}
+        </div>
+      </div>
+    </div>
+
+    {/* ITENS EM CASA */}
+    <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard(theme),borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <div style={{fontWeight:900,fontSize:15,color:"#111827",letterSpacing:"-0.01em"}}>Itens em Casa</div>
+            <HelpIcon text="Registre os itens que você já tem em casa. Enquanto a lista de compras estiver aberta, você pode comparar/recomparar para evitar compras desnecessárias." />
+            <span style={{fontSize:10,fontWeight:900,borderRadius:999,padding:"4px 9px",background:activePantry?"linear-gradient(135deg,#DCFCE7,#BBF7D0)":"linear-gradient(135deg,#F3E8FF,#EDE9FE)",color:activePantry?"#15803D":"#6D28D9",border:`1px solid ${activePantry?"#86EFAC":"#DDD6FE"}`,textTransform:"uppercase",letterSpacing:"0.05em"}}>{activePantry?(pantryCompared?"Comparado":"Lista ativa"):"Opcional"}</span>
+            {activePantry&&(
+              <div style={{marginLeft:"auto",position:"relative",display:"flex",alignItems:"center",gap:6}}>
+                <button onClick={shareActivePantry} style={{border:"1px solid #A7F3D0",background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",color:"#047857",borderRadius:999,padding:"6px 11px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:"0 4px 10px rgba(4,120,87,0.15)",WebkitTapHighlightColor:"transparent"}}>Enviar lista</button>
+                <button onClick={()=>setPantryMenuOpen(v=>!v)} style={{border:"1px solid #E5E7EB",background:"#FFFFFF",color:"#4B5563",borderRadius:999,width:30,height:30,fontSize:16,fontWeight:900,cursor:"pointer",fontFamily:"inherit",lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",WebkitTapHighlightColor:"transparent"}} aria-label="Mais opções dos Itens em Casa">⋯</button>
+                {pantryMenuOpen&&(
+                  <div style={{position:"absolute",right:0,top:38,zIndex:450,minWidth:180,background:"#FFFFFF",border:"1px solid #E5E7EB",borderRadius:16,boxShadow:"0 22px 50px rgba(17,24,39,0.18)",overflow:"hidden",animation:"tnl-create-pop .18s ease both"}}>
+                    <button onClick={closeAndRemovePantry} style={{width:"100%",border:"none",background:"#FFFFFF",color:"#B91C1C",padding:"12px 14px",fontSize:13,fontWeight:900,textAlign:"left",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}}>🗑 Excluir</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{fontSize:12,color:"#6B7280",fontWeight:600,marginTop:5,lineHeight:1.4}}>
+            {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
+          </div>
+          {activePantry && pantryShareStatus && (
+            <div style={{fontSize:11,color:"#047857",fontWeight:900,marginTop:6,background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 9px",display:"inline-block"}}>{pantryShareStatus}</div>
+          )}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
+        {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
+        <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
+      </div>
+    </div>
 
     {activePantry && pendingItems.length>0 && !pantryCompared && !editingListId && (
       <div style={{background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",border:"1px solid #86EFAC",borderRadius:20,padding:14,color:"#166534",display:"flex",gap:10,alignItems:"flex-start",boxShadow:"0 10px 22px rgba(22,163,74,0.12)"}}>
