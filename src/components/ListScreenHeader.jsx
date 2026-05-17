@@ -222,28 +222,27 @@ export default function ListScreenHeader({
               listThemeColor={theme.color}
             />
             {onStartTour && (
-              <button
-                onClick={onStartTour}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: 10,
-                  paddingTop: 10,
-                  borderTop: "1px solid rgba(255,255,255,0.15)",
-                  background: "transparent",
-                  border: "none",
-                  borderTop: "1px solid rgba(255,255,255,0.15)",
-                  color: "rgba(255,255,255,0.72)",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  letterSpacing: 0.1,
-                }}
-              >
-                ✨ Como usar
-              </button>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.15)", textAlign: "center" }}>
+                <button
+                  onClick={onStartTour}
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.35)",
+                    background: "rgba(255,255,255,0.15)",
+                    color: "white",
+                    borderRadius: 999,
+                    padding: "8px 16px",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 6px 14px rgba(0,0,0,0.12)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  ✨ Como usar
+                </button>
+              </div>
             )}
           </div>
         </div>
