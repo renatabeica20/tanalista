@@ -7454,7 +7454,7 @@ const isRealSharedList=(list)=>Boolean(
   },[showToast]);
 
   const refreshSharedListFromCloud=useCallback(async()=>{
-    const sharedId=currentList?.sharedId||currentList?.originalSharedId||currentList?.sourceSharedId;
+    const sharedId=currentList?.originalSharedId||currentList?.sourceSharedId||currentList?.sharedId;
     if(!sharedId)return;
     setSharedSyncing(true);
     try{
