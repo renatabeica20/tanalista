@@ -165,6 +165,7 @@ export default function CreateListScreen({
   onShowPhotoModal,
 }) {
   const [pantryMenuOpen, setPantryMenuOpen] = useState(false);
+  const [pantryExpanded, setPantryExpanded] = useState(false);
   const [confirmDeleteConfig, setConfirmDeleteConfig] = useState(null);
 
   // Tema visual dinâmico por tipo de lista. Apenas cosmético.
@@ -363,7 +364,11 @@ export default function CreateListScreen({
 
     {/* ITENS EM CASA */}
     <div data-tour-step={isTourStep("create_pantry") ? "create_pantry" : undefined} style={{...createCard(theme),borderColor:activePantry?"rgba(34,197,94,0.45)":"rgba(167,139,250,0.35)",background:activePantry?"linear-gradient(180deg,#F0FDF4 0%,#ECFDF5 100%)":"linear-gradient(180deg,#FAF9FF 0%,#F5F3FF 100%)",position:"relative",overflow:"visible",...tourHighlightStyle(isTourStep("create_pantry"))}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
+      {/* Cabeçalho — sempre visível. Clicável para expandir quando não há pantry ativa */}
+      <div
+        onClick={activePantry ? undefined : () => setPantryExpanded(v => !v)}
+        style={{display:"flex",alignItems:"center",gap:12,cursor:activePantry?"default":"pointer",WebkitTapHighlightColor:"transparent"}}
+      >
         <div style={{width:50,height:50,borderRadius:18,background:activePantry?"linear-gradient(135deg,#16A34A,#22C55E)":"linear-gradient(135deg,#4C1D95 0%,#6D28D9 60%,#8B5CF6 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:activePantry?"0 14px 28px rgba(22,163,74,0.30)":"0 14px 28px rgba(109,40,217,0.30)",flexShrink:0}}>🏠</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -381,19 +386,26 @@ export default function CreateListScreen({
                 )}
               </div>
             )}
+            {/* Chevron visível apenas quando não há pantry ativa */}
+            {!activePantry&&(
+              <span style={{marginLeft:"auto",fontSize:16,color:"#6D28D9",fontWeight:900,transition:"transform 220ms ease",display:"inline-block",transform:pantryExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+            )}
           </div>
           <div style={{fontSize:12,color:"#6B7280",fontWeight:600,marginTop:5,lineHeight:1.4}}>
-            {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Cadastre os itens que você já possui antes ou depois de criar a lista de compras."}
+            {activePantry ? `Criada em ${formatPantryDate(activePantry.createdAt)} · ${activePantry.itemCount || countCategoryItems(activePantry.categories)} itens` : "Toque para cadastrar itens que você já tem em casa."}
           </div>
           {activePantry && pantryShareStatus && (
             <div style={{fontSize:11,color:"#047857",fontWeight:900,marginTop:6,background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:999,padding:"3px 9px",display:"inline-block"}}>{pantryShareStatus}</div>
           )}
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14}}>
-        {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
-        <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
-      </div>
+      {/* Botões — sempre visíveis quando há pantry ativa; colapsáveis quando não há */}
+      {(activePantry || pantryExpanded) && (
+        <div style={{display:"grid",gridTemplateColumns:activePantry?"1fr 1fr":"1fr",gap:10,marginTop:14,animation:"tnl-create-pop .2s ease both"}}>
+          {activePantry&&(<button onClick={openPantryViewer} style={{...createSecondaryBtn,background:"#FFFFFF",borderColor:"#BBF7D0",color:"#15803D"}}>Ver lista</button>)}
+          <button data-tour-step={isTourStep("create_pantry_action") ? "create_pantry_action" : undefined} onClick={activePantry?openPantryEditor:openPantryCreator} style={{...createSecondaryBtn,background:activePantry?"#FFFFFF":"linear-gradient(135deg,#FFFFFF,#FAF9FF)",borderColor:"#DDD6FE",color:"#5B21B6",...tourHighlightStyle(isTourStep("create_pantry_action"))}}>{activePantry?"Editar lista":"Criar lista"}</button>
+        </div>
+      )}
     </div>
 
     {activePantry && pendingItems.length>0 && !pantryCompared && !editingListId && (

@@ -382,8 +382,8 @@ const GUIDED_TOUR_STEPS = [
     id: "create_pantry",
     screen: "create",
     icon: "🏠",
-    title: "Compare com Itens em Casa",
-    text: "Evite compras repetidas comparando sua lista com os produtos que já possui.",
+    title: "Itens em Casa (opcional)",
+    text: "Toque no bloco para expandir e cadastrar o que você já tem em casa. O app compara com sua lista e evita compras desnecessárias.",
     position: "top",
   },
   {
@@ -4172,6 +4172,8 @@ const [lists,setLists]=useState(()=>{
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [confirmDeleteAction,setConfirmDeleteAction]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
+  const [lastLocalWriteAt,setLastLocalWriteAt]=useState(null);
+  const currentListRef=useRef(null);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
@@ -4304,6 +4306,7 @@ const [lists,setLists]=useState(()=>{
   const [showNotificationsScreen,setShowNotificationsScreen]=useState(false);
   const [showGuidedTour,setShowGuidedTour]=useState(false);
   const [guidedTourIndex,setGuidedTourIndex]=useState(0);
+  const tourSeenScreensRef=useRef(new Set()); // telas já iniciadas no tour do primeiro acesso
   const guidedTourStep = GUIDED_TOUR_STEPS[guidedTourIndex] || null;
   const currentScreenTourSteps = GUIDED_TOUR_STEPS.filter(step => step.screen === screen);
   const guidedTourLocalIndex = Math.max(0, currentScreenTourSteps.findIndex(step => step.id === guidedTourStep?.id));
@@ -4352,8 +4355,27 @@ const [lists,setLists]=useState(()=>{
 
   const finishGuidedTour = useCallback((mode = "done") => {
     setShowGuidedTour(false);
+    // Marca como concluído quando o usuário pula explicitamente
+    // ou quando termina o tour na última tela (list)
+    if (mode === "skip" || screen === "list") {
+      setGuidedTourCompleted(mode === "skip" ? "dismissed" : "done");
+    }
     registrarEvento(mode === "skip" ? "guided_tour_skipped" : "guided_tour_closed", { step: guidedTourStep?.id || "", screen });
   }, [guidedTourStep, screen]);
+
+  // Inicia o tour automaticamente no primeiro acesso, por tela
+  useEffect(()=>{
+    if(hasCompletedGuidedTour())return;
+    if(showGuidedTour)return;
+    if(userNameModal)return;
+    if(!["home","create","list"].includes(screen))return;
+    if(tourSeenScreensRef.current.has(screen))return;
+    tourSeenScreensRef.current.add(screen);
+    const firstIndex=GUIDED_TOUR_FIRST_STEP_BY_SCREEN[screen]??0;
+    setGuidedTourIndex(firstIndex);
+    setShowGuidedTour(true);
+    registrarEvento("guided_tour_started",{screen,trigger:"first_access_auto"});
+  },[screen,showGuidedTour,userNameModal]);
 
   const nextGuidedTourStep = useCallback(() => {
     const sameScreenSteps = GUIDED_TOUR_STEPS
@@ -4954,7 +4976,22 @@ const [lists,setLists]=useState(()=>{
   const restoreUserListsFromCloud=useCallback(async(userId,userName,{silent=false}={})=>{
     if(!userId && !userName)return;
     try{
-      const records=await getSharedListsForUser(userId, userName || getAppUserName());
+      const effectiveName=userName||getAppUserName();
+      const ownRecords=await getSharedListsForUser(userId,effectiveName);
+      // Busca também listas onde este usuário é receptor (sharedWithName)
+      let sharedWithRecords=[];
+      if(effectiveName&&hasSupabaseConfig()){
+        try{
+          const res=await fetch(
+            `${SUPABASE_URL}/rest/v1/shared_lists?data->>sharedWithName=ilike.${encodeURIComponent(effectiveName)}&list_type=neq.auth_profile&select=*&order=created_at.desc`,
+            {method:"GET",headers:supabaseHeaders({"Cache-Control":"no-store"}),cache:"no-store"}
+          );
+          if(res.ok){const d=await res.json();sharedWithRecords=Array.isArray(d)?d:[];}
+        }catch{}
+      }
+      const seen=new Map();
+      [...ownRecords,...sharedWithRecords].forEach(r=>{if(r?.id)seen.set(r.id,r);});
+      const records=Array.from(seen.values());
       if(!records.length)return;
       setLists(prev=>{
         const current=Array.isArray(prev)?prev:[];
@@ -5067,7 +5104,11 @@ const [lists,setLists]=useState(()=>{
     return () => clearTimeout(t);
   }, [showGuidedTour, guidedTourStep?.id]);
 
+  const initSessionDoneRef=useRef(false);
   useEffect(()=>{
+    // Roda apenas uma vez na montagem — evita abrir modal de login ao navegar entre telas
+    if(initSessionDoneRef.current)return;
+    initSessionDoneRef.current=true;
     const existingName=getAppUserName();
     if(existingName && isPinSessionVerified(existingName)){
       setSenderName(prev=>prev||existingName);
@@ -5075,9 +5116,6 @@ const [lists,setLists]=useState(()=>{
       registerAppUser(existingName).then(async userId=>{
         if(userId){
           await restoreUserListsFromCloud(userId,existingName,{silent:true});
-          // Não migrar automaticamente listas antigas sem sharedId a cada login.
-          // Essa rotina era a origem da duplicação contínua no Supabase/localStorage.
-          // Listas novas já são persistidas no organizeList().
         }
       });
     }else{
@@ -5167,11 +5205,12 @@ if(userId && !isIncomingSharedList)await restoreUserListsFromCloud(userId,savedN
         auth_mode: pinResult.mode || "login",
       });
 if(sharedLandingRecord){
-          // Não importa automaticamente — mantém o modal de escolha visível
-          // para que o usuário decida se quer importar ou apenas visualizar.
-          setUserNameModal(false);
-          return;
-        }
+  setUserNameModal(false);
+  // Limpa a URL para evitar que o useEffect de loadSharedListFromUrl
+  // dispare novamente e abra o modal de login outra vez (parecia "deslogar").
+  try { window.history.replaceState({}, document.title, "/"); } catch {}
+  return;
+}
 
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
@@ -5686,10 +5725,21 @@ return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list:alreadyShare
 
     const finalReceived={...received,sharedId:null,originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
     const nl=mergeUniqueLists([finalReceived,...existing]);
-    setLists(nl);
-    localStorage.setItem("tnl_lists",JSON.stringify(nl));
-    setCurrentList(finalReceived);
-    setScreen("list");
+setLists(nl);
+localStorage.setItem("tnl_lists",JSON.stringify(nl));
+setCurrentList(finalReceived);
+setScreen("list");
+
+// Usa o registro original como sharedId do receptor — não cria registro separado.
+// Um único registro no Supabase garante sincronização correta entre os dois lados.
+if(sourceSharedId){
+  const withSharedId={...finalReceived,sharedId:sourceSharedId,originalSharedId:sourceSharedId,sourceSharedId};
+  setCurrentList(withSharedId);
+  setLists(prev=>(Array.isArray(prev)?prev:[]).map(l=>l.id===finalReceived.id?withSharedId:l));
+  try{localStorage.setItem("tnl_lists",JSON.stringify(
+    (JSON.parse(localStorage.getItem("tnl_lists")||"[]")).map(l=>l.id===finalReceived.id?withSharedId:l)
+  ));}catch{}
+}
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
@@ -7328,8 +7378,11 @@ const isRealSharedList=(list)=>Boolean(
       setCurrentList(null);
     }
 
-    setSearch("");
+   setSearch("");
     setCollapsedCats({});
+    // Limpa ?lista= da URL para evitar que loadSharedListFromUrl
+    // dispare novamente e abra o modal de login ao voltar para home.
+    try { window.history.replaceState({}, document.title, "/"); } catch {}
     setScreen("home");
   };
 
@@ -7526,14 +7579,16 @@ const isRealSharedList=(list)=>Boolean(
   };
 
 
+  currentListRef.current=currentList;
+
   useEffect(()=>{
     if(!showFinished)return;
     const timer=setTimeout(()=>{
-      markActivePantryAsCompleted(currentList);
+      markActivePantryAsCompleted(currentListRef.current);
       setShowFinished(false);
     },5000);
     return()=>clearTimeout(timer);
-  },[showFinished,currentList]);
+  },[showFinished]);
 
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
     const sharedId=list?.sharedId||list?.originalSharedId||list?.sourceSharedId;
@@ -7568,7 +7623,22 @@ if(!sharedId)return null;
       const eventMap=new Map();
       [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
       const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
-      const payload={...remoteDataBeforeSave,...list,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      // Merge inteligente de itens: preserva marcações de qualquer usuário.
+      const mergeCategories=(localCats,remoteCats)=>{
+        if(!Array.isArray(localCats)||!Array.isArray(remoteCats))return localCats||remoteCats||[];
+        return localCats.map((localCat,ci)=>{
+          const remoteCat=remoteCats[ci];
+          if(!remoteCat)return localCat;
+          const mergedItems=(localCat.items||[]).map((localItem,ii)=>{
+            const remoteItem=(remoteCat.items||[])[ii];
+            if(!remoteItem)return localItem;
+            return{...localItem,checked:localItem.checked||remoteItem.checked,notFound:localItem.notFound||remoteItem.notFound,checkedAt:localItem.checkedAt||remoteItem.checkedAt,price:localItem.price??remoteItem.price,total:localItem.total??remoteItem.total};
+          });
+          return{...localCat,items:mergedItems};
+        });
+      };
+      const mergedCategories=mergeCategories(list?.categories,remoteDataBeforeSave?.categories);
+      const payload={...remoteDataBeforeSave,...list,categories:mergedCategories,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
       const record=await updateSharedListRecord(sharedId,payload);
       const synced=markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
@@ -7605,7 +7675,11 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
-        sharedId,
+        // Preserva o sharedId próprio do receptor — não sobrescreve com o ID do registro do dono.
+        // originalSharedId e sourceSharedId continuam apontando para o registro do dono (usado pelo polling).
+        sharedId: currentList.sharedId || sharedId,
+        originalSharedId: sharedId,
+        sourceSharedId: currentList.sourceSharedId || sharedId,
         // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
         isShared: currentList.isShared === true || record?.data?.isShared === true,
         imported: isReceivedFromAnotherUser,
@@ -7618,9 +7692,19 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       },record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const hasLocal=existing.some(l=>l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)));
+      // Busca pelo id local do Cadu ou por qualquer um dos sharedIds para não criar duplicata
+      const hasLocal=existing.some(l=>
+        l.id===currentList.id ||
+        (currentList.sharedId && l.sharedId===currentList.sharedId) ||
+        (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
+      );
       const nl=hasLocal
-       ? existing.map(l=>(l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)))?refreshed:l)
+        ? existing.map(l=>
+            l.id===currentList.id ||
+            (currentList.sharedId && l.sharedId===currentList.sharedId) ||
+            (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
+            ? refreshed : l
+          )
         : [refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
@@ -7652,9 +7736,12 @@ if(hasChanges)showToast("🔄 Lista atualizada");
     saveLists(lists.map(l=>l.id===updated.id?updated:l));
     // Mantém a nuvem atualizada também para listas próprias, mas sem tratá-las como compartilhadas
     // e sem gerar notificações. Isso evita que listas finalizadas voltem do histórico com itens desmarcados.
-    if(updated.sharedId){
-     syncSharedListToCloud(updated,{silent:true,force:true});
-    }
+    const effectiveSharedId = updated.sharedId || updated.originalSharedId || updated.sourceSharedId;
+if(effectiveSharedId){
+  // Registra o momento da gravação para pausar o polling por 6s e evitar race condition
+  setLastLocalWriteAt(Date.now());
+  syncSharedListToCloud({...updated, sharedId: effectiveSharedId},{silent:true,force:true});
+}
   };
 
   const toggleCheck=(ci,ii)=>{
@@ -8259,6 +8346,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
         getListSyncStamp={getListSyncStamp}
         autoSyncNoticeRef={autoSyncNoticeRef}
         onRefresh={refreshSharedListFromCloud}
+        lastLocalWriteAt={lastLocalWriteAt}
       />
 
       <GuidedTourController
