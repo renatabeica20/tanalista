@@ -119,6 +119,8 @@ import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ShoppingListPreview from "./components/ShoppingListPreview";
 import HomeBanner from "./components/HomeBanner";
+import PasteModal from "./components/PasteModal";
+import PhotoModal from "./components/PhotoModal";
 import {
   LIST_TYPE_CONFIGS,
   getListTypeConfig,
@@ -9183,59 +9185,35 @@ if(hasChanges)showToast("🔄 Lista atualizada");
       })()}
 
       {/* ── MODAL: COLAR TEXTO ── */}
-      {showPasteModal&&(
-        <ModalSheet onClose={()=>setShowPasteModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>📋 Colar lista de texto</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:12}}>Cole sua lista — uma linha por item:</div>
-          <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
-            placeholder={pasteTarget === "pantry"
-              ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
-              : getListTypeConfig(listType).placeholder}
-            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:200,resize:"none",marginBottom:16}}/>
-          <button onClick={parsePastedText} disabled={!pasteText.trim()}
-            style={{...btnG,opacity:pasteText.trim()?1:0.5,cursor:pasteText.trim()?"pointer":"not-allowed"}}>
-            ✅ Importar itens
-          </button>
-        </ModalSheet>
-      )}
+      {showPasteModal && (
+  <PasteModal
+    open={showPasteModal}
+    onClose={() => setShowPasteModal(false)}
+    pasteText={pasteText}
+    setPasteText={setPasteText}
+    parsePastedText={parsePastedText}
+    placeholder={pasteTarget === "pantry"
+      ? "- Arroz\n- Feijão\n- Leite\n- Detergente"
+      : getListTypeConfig(listType).placeholder}
+  />
+)}
 
 
       {/* ── MODAL: LER FOTO DA LISTA ── */}
-      {showPhotoModal&&(()=>{
-        const ocrCtx={
-          farmacia:{title:"📋 Importar receita ou lista de farmácia",hint:"Selecione uma foto, imagem ou PDF da receita médica ou lista impressa. A IA extrai os medicamentos e quantidades automaticamente."},
-          escolar:{title:"📄 Importar lista de material escolar",hint:"Selecione uma foto, imagem ou PDF com a lista de materiais. A IA extrai os itens preservando especificações."},
-          construcao:{title:"📐 Importar lista de materiais",hint:"Selecione uma foto, imagem ou PDF da lista. A IA extrai os itens com suas especificações técnicas."},
-          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Selecione uma foto, imagem ou PDF da lista. A IA extrai os itens preservando bitola e especificações."},
-        };
-        const ctx=ocrCtx[listType]||{title:"📷 Importar lista",hint:"Tire uma foto, selecione uma imagem ou importe um PDF. A IA vai interpretar e montar os itens automaticamente."};
-        return(
-        <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
-          <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{ctx.title}</div>
-          <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>{ctx.hint}</div>
-          <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            📎 Foto, imagem ou PDF
-            <input type="file" accept="image/*,application/pdf,.pdf" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
-          </label>
-          {ocrFileName&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Arquivo: {ocrFileName}</div>}
-          {ocrLoading&&(
-            <div style={{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:18,padding:14,marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:800,color:"#111827",marginBottom:8}}>Lendo documento... {ocrProgress}%</div>
-              <div style={{height:10,background:"#E5E7EB",borderRadius:999,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${ocrProgress}%`,background:"linear-gradient(90deg,#16A34A,#22C55E)",borderRadius:999,transition:"width .25s"}}/>
-              </div>
-            </div>
-          )}
-          <textarea value={ocrText} onChange={e=>setOcrText(e.target.value)}
-            placeholder={ocrLoading?"Aguarde a leitura do documento...":"Os itens reconhecidos aparecerão aqui para revisão antes de importar."}
-            style={{width:"100%",padding:"13px 16px",border:"2px solid #E5E7EB",borderRadius:20,fontSize:15,color:"#111827",outline:"none",fontFamily:"inherit",background:"#FFFFFF",boxSizing:"border-box",height:190,resize:"none",marginBottom:14}}/>
-          <button onClick={()=>importTextAsPendingItems(ocrText,{closePhoto:true})} disabled={!ocrText.trim()||ocrLoading}
-            style={{...btnG,opacity:ocrText.trim()&&!ocrLoading?1:0.5,cursor:ocrText.trim()&&!ocrLoading?"pointer":"not-allowed"}}>
-            ✅ Transformar em itens da lista
-          </button>
-        </ModalSheet>
-        );
-      })()}
+      {showPhotoModal && (
+  <PhotoModal
+    open={showPhotoModal}
+    listType={listType}
+    ocrLoading={ocrLoading}
+    ocrProgress={ocrProgress}
+    ocrFileName={ocrFileName}
+    ocrText={ocrText}
+    setOcrText={setOcrText}
+    onClose={() => setShowPhotoModal(false)}
+    onFileChange={handlePhotoListFile}
+    onImport={() => importTextAsPendingItems(ocrText, {closePhoto: true})}
+  />
+)}
 
       {/* ── MODAL: REUTILIZAR LISTA ── */}
       {reuseModal&&(
