@@ -5302,8 +5302,11 @@ if(sharedLandingRecord){
   const publishSharedList=async(list)=>{
     if(!list)throw new Error("Lista não encontrada.");
     if(list.sharedId){
-      syncSharedListToCloud(list,{silent:true});
-      return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list,mode:"supabase"};
+      const alreadyShared={...list,isShared:true,sharedAt:list.sharedAt||new Date().toISOString()};
+setCurrentList(prev=>prev&&prev.id===list.id?alreadyShared:prev);
+saveLists(lists.map(l=>l.id===list.id?alreadyShared:l));
+syncSharedListToCloud(alreadyShared,{silent:true});
+return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list:alreadyShared,mode:"supabase"};
     }
 
     const record=await createSharedListRecord(list);
