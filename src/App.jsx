@@ -8577,6 +8577,9 @@ if(hasChanges)showToast("🔄 Lista atualizada");
           tourHighlightStyle={tourHighlightStyle}
           onShowPhotoModal={()=>setShowPhotoModal(true)}
         />
+      )}
+
+      <PantrySection
         screen={screen}
         setScreen={setScreen}
         pantryPendingItems={pantryPendingItems}
