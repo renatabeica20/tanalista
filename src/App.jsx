@@ -2332,6 +2332,13 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   // Mercado: regras explícitas ANTES do fallback genérico
   // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
   if (normalizedType === "mercado") {
+    // Exceções específicas — DEVEM vir antes das regras genéricas para evitar
+    // que "molho de tomate" caia em Hortifruti por conter "tomate",
+    // ou que "farinha de mandioca" caia em Hortifruti por conter "mandioca".
+    if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate", "molho shoyu", "molho inglês", "molho ingles", "molho de soja", "molho barbecue", "molho pesto")) return "Mercearia";
+    if (has("farinha de mandioca", "farinha mandioca", "farofa de mandioca", "farofa", "polvilho", "tapioca", "farinha de trigo", "farinha de arroz", "farinha de aveia", "farinha integral")) return "Mercearia";
+    if (has("suco de tomate", "catchup de tomate", "ketchup")) return "Mercearia";
+
     // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
     if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
 
@@ -2351,11 +2358,12 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     // Frios
     if (has("leite", "queijo", "manteiga", "margarina", "iogurte", "requeijao", "requeijão",
             "presunto", "mortadela", "ovo", "ovos", "creme de leite")) return "Frios e Laticínios";
-    // Hortifruti
+    // Hortifruti — mandioca só entra se não for farinha/processado (já tratado acima)
     if (has("alface", "tomate", "cebola", "alho", "batata", "cenoura", "banana", "maca", "maçã",
             "laranja", "limao", "limão", "manga", "abacaxi", "uva", "pera", "pêra",
             "melancia", "abacate", "mamao", "mamão", "abobrinha", "beterraba", "pepino",
-            "repolho", "couve", "berinjela", "mandioca")) return "Hortifruti";
+            "repolho", "couve", "berinjela") ||
+        (has("mandioca") && !has("farinha", "farofa", "tapioca", "polvilho"))) return "Hortifruti";
     // Limpeza
     if (has("detergente", "sabão", "sabao", "desinfetante", "agua sanitaria", "água sanitária",
             "amaciante", "lava roupa", "omo", "coala", "bombril", "esponja", "vassoura",
