@@ -7,9 +7,16 @@ export default function SharedSyncController({
   getListSyncStamp,
   autoSyncNoticeRef,
   onRefresh,
+  lastLocalWriteAt, // timestamp (ms) da última gravação local — pausa o polling por 6s após gravar
 }) {
   const intervalRef = useRef(null);
   const isPollingRef = useRef(false);
+  const lastLocalWriteAtRef = useRef(lastLocalWriteAt);
+
+  // Mantém ref sempre atualizada sem reiniciar o intervalo
+  useEffect(() => {
+    lastLocalWriteAtRef.current = lastLocalWriteAt;
+  }, [lastLocalWriteAt]);
 
   useEffect(() => {
     if (intervalRef.current) {
@@ -33,6 +40,14 @@ export default function SharedSyncController({
 
     const poll = async () => {
       if (isPollingRef.current) return;
+
+      // Pausa o polling por 6s após uma gravação local para evitar
+      // race condition: gravar → polling busca antes de completar → desmarca item
+      const msSinceWrite = lastLocalWriteAtRef.current
+        ? Date.now() - lastLocalWriteAtRef.current
+        : Infinity;
+      if (msSinceWrite < 6000) return;
+
       isPollingRef.current = true;
       try {
         await onRefresh?.();
