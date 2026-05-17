@@ -7407,8 +7407,8 @@ const isRealSharedList=(list)=>Boolean(
   },[showFinished,currentList]);
 
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
-    const sharedId=list?.sharedId;
-    if(!sharedId)return null;
+    const sharedId=list?.sharedId||list?.originalSharedId||list?.sourceSharedId;
+if(!sharedId)return null;
     try{
       if(!silent)setSharedSyncing(true);
 
