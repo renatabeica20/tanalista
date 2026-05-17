@@ -5167,11 +5167,12 @@ if(userId && !isIncomingSharedList)await restoreUserListsFromCloud(userId,savedN
         auth_mode: pinResult.mode || "login",
       });
 if(sharedLandingRecord){
-          // Não importa automaticamente — mantém o modal de escolha visível
-          // para que o usuário decida se quer importar ou apenas visualizar.
-          setUserNameModal(false);
-          return;
-        }
+  setUserNameModal(false);
+  // Limpa a URL para evitar que o useEffect de loadSharedListFromUrl
+  // dispare novamente e abra o modal de login outra vez (parecia "deslogar").
+  try { window.history.replaceState({}, document.title, "/"); } catch {}
+  return;
+}
 
       showToast(pinResult.mode==="created"?"Usuário cadastrado com PIN!":"Usuário reconhecido!",2400);
     }catch(err){
@@ -5686,10 +5687,17 @@ return{sharedId:list.sharedId,link:makeShareUrl(list.sharedId),list:alreadyShare
 
     const finalReceived={...received,sharedId:null,originalSharedId:received.originalSharedId,sourceSharedId:received.sourceSharedId,imported:true,importedFrom:sender,sharedOwner:sender,isShared:false,sharedMode:"imported-copy"};
     const nl=mergeUniqueLists([finalReceived,...existing]);
-    setLists(nl);
-    localStorage.setItem("tnl_lists",JSON.stringify(nl));
-    setCurrentList(finalReceived);
-    setScreen("list");
+setLists(nl);
+localStorage.setItem("tnl_lists",JSON.stringify(nl));
+setCurrentList(finalReceived);
+setScreen("list");
+
+// Persiste no Supabase vinculada ao userId do receptor.
+// Isso garante que o PWA instalado encontre a lista ao restaurar da nuvem,
+// resolvendo o isolamento de localStorage entre browser e PWA no iOS.
+if(currentUserId){
+  persistListRecordToCloud(finalReceived,{silent:true}).catch(()=>null);
+}
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
