@@ -409,6 +409,42 @@ function buildSafeListData(list, ownerName) {
   };
 }
 
+async function findSharedListRecordByList(list) {
+  if (!list || !hasSupabaseConfig()) return null;
+  try {
+    const userId = list.userId || list.user_id || getAppUserId();
+    const ownerName = list.ownerName || list.remetente || getAppUserName();
+    const name = list.name || "";
+    if (!name) return null;
+
+    const tryFetch = async (filter) => {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/shared_lists?${filter}&list_type=neq.auth_profile&select=*&order=created_at.desc&limit=5`,
+        { method: "GET", headers: supabaseHeaders({ "Cache-Control": "no-store" }) }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    };
+
+    const candidates = userId
+      ? await tryFetch(`user_id=eq.${encodeURIComponent(userId)}`)
+      : ownerName
+        ? await tryFetch(`remetente=ilike.${encodeURIComponent(ownerName)}`)
+        : [];
+
+    const normalizedName = String(name).trim().toLowerCase();
+    const match = candidates.find(record => {
+      const recordName = String(record?.data?.name || record?.title || "").trim().toLowerCase();
+      return recordName === normalizedName && !record?.data?.isDeleted;
+    });
+
+    return match || null;
+  } catch {
+    return null;
+  }
+}
+
 async function createSharedListRecord(list) {
   if (!hasSupabaseConfig()) {
     throw new Error("Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.");
@@ -607,6 +643,7 @@ export {
   createSharedListRecord,
   hideSharedListRecordForCurrentUser,
   softDeleteSharedListRecord,
+  findSharedListRecordByList,
   sharedListSignature,
   getListSyncStamp,
   formatRelativeSyncTime,
