@@ -8822,9 +8822,10 @@ if(hasChanges)showToast("🔄 Lista atualizada");
               const isExtraCat=normalizePlainText(cat.name)==="itens extras";
               const LIST_SOFT_BY_TYPE={"mercado":"#F5F3FF","supermercado":"#F5F3FF","festa":"#FFF7ED","eventos":"#FFF7ED","construcao":"#FFFBEB","eletrico":"#EFF6FF","escolar":"#F0FDF4","farmacia":"#FDF2F8","condominio":"#EFF6FF","outros":"#F9FAFB"};
               const listSoft=LIST_SOFT_BY_TYPE[currentList?.type||"mercado"]||"#F5F3FF";
-              const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
-              if(search&&filtered.length===0)return null;
-              const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
+              const searchNorm=search?normalizeText(search):"";
+              const filtered=searchNorm?cat.items.filter(i=>normalizeText(i.name||"").includes(searchNorm)):cat.items;
+              if(searchNorm&&filtered.length===0)return null;
+              const displayItems=[...(searchNorm?filtered:cat.items)].sort((a,b)=>{
                 const aDone=!!(a.checked||a.notFound);
                 const bDone=!!(b.checked||b.notFound);
                 if(aDone===bDone){
@@ -8854,7 +8855,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
                     <div style={{background:allDone?"#F9FFF9":"white",display:"flex",flexDirection:"column"}}>
                       {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
-                        const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
+                        const hl=searchNorm&&normalizeText(item.name||"").includes(searchNorm);
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
