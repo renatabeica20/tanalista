@@ -8918,10 +8918,22 @@ if(hasChanges)showToast("🔄 Lista atualizada");
           </div>
 
           <div data-tour-step="list_extra_item" style={{position:"relative"}}>
-          <FloatingActions
-            onAddExtraItem={() => setExtraModal(true)}
-            highlightExtraItem={isTourStep("list_extra_item")}
-          />
+         <FloatingActions
+  onAddExtraItem={() => setExtraModal(true)}
+  highlightExtraItem={isTourStep("list_extra_item")}
+  themeGradient={(() => {
+    const t = currentList?.type || listType || "mercado";
+    const TMAP = {
+      mercado:"#4C1D95,#6D28D9,#8B5CF6", supermercado:"#4C1D95,#6D28D9,#8B5CF6",
+      eventos:"#9A3412,#EA580C,#FB923C", festa:"#9A3412,#EA580C,#FB923C",
+      construcao:"#78350F,#B45309,#D97706", eletrico:"#1E3A8A,#1D4ED8,#3B82F6",
+      escolar:"#14532D,#15803D,#22C55E", farmacia:"#831843,#BE185D,#EC4899",
+      condominio:"#0B3559,#0F4C75,#3282B8", outros:"#1F2937,#374151,#6B7280",
+    };
+    const c = TMAP[t] || TMAP.mercado;
+    return `linear-gradient(135deg, ${c.split(",")[0]} 0%, ${c.split(",")[1]} 45%, ${c.split(",")[2]} 100%)`;
+  })()}
+/>
           </div>
         </div>
       )}
