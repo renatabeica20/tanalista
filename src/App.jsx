@@ -7603,30 +7603,7 @@ if(!sharedId)return null;
       const eventMap=new Map();
       [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
       const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
-      // Merge inteligente de itens: preserva marcações de qualquer usuário.
-      // Se um item está marcado no remoto ou no local, mantém marcado.
-      const mergeCategories=(localCats,remoteCats)=>{
-        if(!Array.isArray(localCats)||!Array.isArray(remoteCats))return localCats||remoteCats||[];
-        return localCats.map((localCat,ci)=>{
-          const remoteCat=remoteCats[ci];
-          if(!remoteCat)return localCat;
-          const mergedItems=(localCat.items||[]).map((localItem,ii)=>{
-            const remoteItem=(remoteCat.items||[])[ii];
-            if(!remoteItem)return localItem;
-            return{
-              ...localItem,
-              checked:localItem.checked||remoteItem.checked,
-              notFound:localItem.notFound||remoteItem.notFound,
-              checkedAt:localItem.checkedAt||remoteItem.checkedAt,
-              price:localItem.price??remoteItem.price,
-              total:localItem.total??remoteItem.total,
-            };
-          });
-          return{...localCat,items:mergedItems};
-        });
-      };
-      const mergedCategories=mergeCategories(list?.categories,remoteDataBeforeSave?.categories);
-      const payload={...remoteDataBeforeSave,...list,categories:mergedCategories,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      const payload={...remoteDataBeforeSave,...list,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
       const record=await updateSharedListRecord(sharedId,payload);
       const synced=markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
@@ -7663,7 +7640,11 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
-        sharedId,
+        // Preserva o sharedId próprio do receptor — não sobrescreve com o ID do registro do dono.
+        // originalSharedId e sourceSharedId continuam apontando para o registro do dono (usado pelo polling).
+        sharedId: currentList.sharedId || sharedId,
+        originalSharedId: sharedId,
+        sourceSharedId: currentList.sourceSharedId || sharedId,
         // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
         isShared: currentList.isShared === true || record?.data?.isShared === true,
         imported: isReceivedFromAnotherUser,
@@ -7676,9 +7657,19 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       },record.data);
       setCurrentList(refreshed);
       const existing=JSON.parse(localStorage.getItem("tnl_lists")||"[]");
-      const hasLocal=existing.some(l=>l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)));
+      // Busca pelo id local do Cadu ou por qualquer um dos sharedIds para não criar duplicata
+      const hasLocal=existing.some(l=>
+        l.id===currentList.id ||
+        (currentList.sharedId && l.sharedId===currentList.sharedId) ||
+        (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
+      );
       const nl=hasLocal
-       ? existing.map(l=>(l.id===currentList.id||(sharedId&&(l.sharedId===sharedId||l.originalSharedId===sharedId||l.sourceSharedId===sharedId)))?refreshed:l)
+        ? existing.map(l=>
+            l.id===currentList.id ||
+            (currentList.sharedId && l.sharedId===currentList.sharedId) ||
+            (sharedId && (l.originalSharedId===sharedId||l.sourceSharedId===sharedId||l.sharedId===sharedId))
+            ? refreshed : l
+          )
         : [refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
