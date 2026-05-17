@@ -7495,8 +7495,11 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
         : [refreshed,...existing];
       setLists(nl);
       localStorage.setItem("tnl_lists",JSON.stringify(nl));
-      setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
-      showToast("🔄 Lista atualizada");
+      const remoteSignature=sharedListSignature(record.data);
+const localSignature=sharedListSignature(currentList);
+const hasChanges=remoteSignature && remoteSignature!==localSignature;
+setSharedUpdateNotice({type:"ok",msg:"Atualizada agora"});
+if(hasChanges)showToast("🔄 Lista atualizada");
     }catch(err){
       console.warn("Falha ao atualizar lista compartilhada",err);
       showToast("⚠️ Não foi possível atualizar a lista compartilhada",5200);
