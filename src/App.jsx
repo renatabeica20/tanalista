@@ -1062,7 +1062,17 @@ const SMART_PRODUCT_NAME_CORRECTIONS = {
   "limpa aluminio": "Limpa alumínio",
   "limpa alumínio": "Limpa alumínio",
   "bucho": "Bucho",
-  "amendoim": "Amendoim"
+  "amendoim": "Amendoim",
+  // Correções de nomes truncados ou com acento cortado
+  "carne moi": "Carne moída",
+  "carne moí": "Carne moída",
+  "carne moida": "Carne moída",
+  "pao frances": "Pão Francês",
+  "pão frances": "Pão Francês",
+  "pao francê": "Pão Francês",
+  "pão francê": "Pão Francês",
+  "pao france": "Pão Francês",
+  "pão france": "Pão Francês",
 };
 
 function smartNormalizeProductName(value) {
@@ -1105,6 +1115,7 @@ function smartNormalizeProductName(value) {
 
 function normalizeTextForCategory(value) {
   return normalizePlainText(value)
+    .replace(/\([^)]*\)/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\b(pct|pcte|pacote|pacotes|cx|caixa|caixas|un|unid|unidade|unidades|kg|g|ml|l)\b/g, " ")
     .replace(/\s+/g, " ")
@@ -1145,6 +1156,10 @@ function singularizePortugueseWord(word) {
   if (irregular[plain]) return irregular[plain];
 
   if (["arroz", "feijao", "feijão", "macarrao", "macarrão", "leite", "oleo", "óleo", "cafe", "café", "sal", "acucar", "açúcar"].includes(plain)) return lower;
+
+  // Palavras terminadas em "ês" são adjetivos de origem/gentílico — não singularizar
+  const esAdjectives = ["frances", "ingles", "japones", "chines", "portugues", "holandes", "finlandes", "escóces", "escoces", "irandes", "danes"];
+  if (esAdjectives.includes(plain)) return lower;
 
   if (plain.endsWith("oes") && lower.length > 5) return lower.replace(/ões$/i, "ão").replace(/oes$/i, "ão");
   if (plain.endsWith("aes") && lower.length > 5) return lower.replace(/ães$/i, "ão").replace(/aes$/i, "ão");
@@ -1195,6 +1210,8 @@ function normalizeUnitValue(unit) {
   if (/^litro|^l$|^mililitro|^ml$/.test(raw)) return "litro";
   if (/^lata/.test(raw)) return "lata";
   if (/^garrafa/.test(raw)) return "garrafa";
+  if (/^bandeja/.test(raw)) return "bandeja";
+  if (/^pote/.test(raw)) return "pote";
   if (/^duzia|^dúzia/.test(raw)) return "dúzia";
   if (/^peca|^peça/.test(raw)) return "peça";
   if (/^par/.test(raw)) return "par";
@@ -1228,7 +1245,9 @@ function formatUnitForQuantity(qty, unit) {
     "dúzia":"dúzias",
     "peça":"peças",
     "par":"pares",
-    "mileiro":"mileiros"
+    "mileiro":"mileiros",
+    "bandeja":"bandejas",
+    "pote":"potes",
   };
   if (u === "kg") return "kg";
   return n > 1 ? (plural[u] || u) : u;
