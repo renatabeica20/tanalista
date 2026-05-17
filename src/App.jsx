@@ -8565,6 +8565,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
             showFinished={showFinished}
             onBackHome={archiveFinishedListsBeforeHome}
             onShare={() => { setShareTargetList(currentList); setShareModal(true); }}
+            onStartTour={() => startGuidedTour("list")}
             isTourStep={isTourStep}
             tourHighlightStyle={tourHighlightStyle}
             WhatsAppIcon={WhatsAppIcon}
@@ -8585,10 +8586,6 @@ if(hasChanges)showToast("🔄 Lista atualizada");
             formatRelativeSyncTime={formatRelativeSyncTime}
           />
 
-          {/* Search */}
-          <div style={{padding:"0 20px",margin:"-4px 0 10px"}}>
-            <button onClick={()=>startGuidedTour("list")} style={{width:"100%",border:"1px solid #DDD6FE",background:"#F5F3FF",color:"#5B21B6",borderRadius:999,padding:"10px 12px",fontSize:12,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 20px rgba(109,40,217,0.10)"}}>✨ Guia rápido desta tela</button>
-          </div>
           {/* Card integrado: orçamento excedido */}
           {budget>0&&budgetDiff!==null&&budgetDiff<0&&(()=>{
             const suggs = getSuggestions();
@@ -8822,10 +8819,9 @@ if(hasChanges)showToast("🔄 Lista atualizada");
               const isExtraCat=normalizePlainText(cat.name)==="itens extras";
               const LIST_SOFT_BY_TYPE={"mercado":"#F5F3FF","supermercado":"#F5F3FF","festa":"#FFF7ED","eventos":"#FFF7ED","construcao":"#FFFBEB","eletrico":"#EFF6FF","escolar":"#F0FDF4","farmacia":"#FDF2F8","condominio":"#EFF6FF","outros":"#F9FAFB"};
               const listSoft=LIST_SOFT_BY_TYPE[currentList?.type||"mercado"]||"#F5F3FF";
-              const searchNorm=search?normalizeText(search):"";
-              const filtered=searchNorm?cat.items.filter(i=>normalizeText(i.name||"").includes(searchNorm)):cat.items;
-              if(searchNorm&&filtered.length===0)return null;
-              const displayItems=[...(searchNorm?filtered:cat.items)].sort((a,b)=>{
+              const filtered=search?cat.items.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())):cat.items;
+              if(search&&filtered.length===0)return null;
+              const displayItems=[...(search?filtered:cat.items)].sort((a,b)=>{
                 const aDone=!!(a.checked||a.notFound);
                 const bDone=!!(b.checked||b.notFound);
                 if(aDone===bDone){
@@ -8855,7 +8851,7 @@ if(hasChanges)showToast("🔄 Lista atualizada");
                     <div style={{background:allDone?"#F9FFF9":"white",display:"flex",flexDirection:"column"}}>
                       {displayItems.map((item,ii)=>{
                         const isExtra=cat.name==="Itens Extras";
-                        const hl=searchNorm&&normalizeText(item.name||"").includes(searchNorm);
+                        const hl=search&&item.name.toLowerCase().includes(search.toLowerCase());
                         const realII=Math.max(0, cat.items.findIndex(it=>it===item || (it.id && item.id && it.id===item.id) || (it.name===item.name && it.unit===item.unit && String(it.qty)===String(item.qty))));
                         const isLast=displayItems.length-1===ii;
 
