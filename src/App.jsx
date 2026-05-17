@@ -7603,7 +7603,30 @@ if(!sharedId)return null;
       const eventMap=new Map();
       [...remoteEvents, ...localEvents].forEach((evt)=>{ if(evt?.id) eventMap.set(evt.id, evt); });
       const mergedEvents=Array.from(eventMap.values()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,80);
-      const payload={...remoteDataBeforeSave,...list,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
+      // Merge inteligente de itens: preserva marcações de qualquer usuário.
+      // Se um item está marcado no remoto ou no local, mantém marcado.
+      const mergeCategories=(localCats,remoteCats)=>{
+        if(!Array.isArray(localCats)||!Array.isArray(remoteCats))return localCats||remoteCats||[];
+        return localCats.map((localCat,ci)=>{
+          const remoteCat=remoteCats[ci];
+          if(!remoteCat)return localCat;
+          const mergedItems=(localCat.items||[]).map((localItem,ii)=>{
+            const remoteItem=(remoteCat.items||[])[ii];
+            if(!remoteItem)return localItem;
+            return{
+              ...localItem,
+              checked:localItem.checked||remoteItem.checked,
+              notFound:localItem.notFound||remoteItem.notFound,
+              checkedAt:localItem.checkedAt||remoteItem.checkedAt,
+              price:localItem.price??remoteItem.price,
+              total:localItem.total??remoteItem.total,
+            };
+          });
+          return{...localCat,items:mergedItems};
+        });
+      };
+      const mergedCategories=mergeCategories(list?.categories,remoteDataBeforeSave?.categories);
+      const payload={...remoteDataBeforeSave,...list,categories:mergedCategories,sharedEvents:mergedEvents,lastSyncedAt:new Date().toISOString(),lastSyncSource:getAppDeviceId()};
       const record=await updateSharedListRecord(sharedId,payload);
       const synced=markListCloudSynced(payload,record?.data||payload);
       setCurrentList(cur=>cur?.id===synced.id?{...cur,...synced}:cur);
