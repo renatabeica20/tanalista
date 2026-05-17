@@ -5692,6 +5692,16 @@ localStorage.setItem("tnl_lists",JSON.stringify(nl));
 setCurrentList(finalReceived);
 setScreen("list");
 
+// Vincula o userId do receptor ao registro original no Supabase.
+// Não cria novo registro — apenas atualiza o existente para que
+// o PWA instalado encontre a lista ao restaurar da nuvem no iOS.
+if(currentUserId && sourceSharedId){
+  updateSharedListRecord(sourceSharedId, {
+    ...finalReceived,
+    sharedId: sourceSharedId,
+    userId: currentUserId,
+  }).catch(()=>null);
+}
     setSearch("");
     setCollapsedCats({});
     setSharedLandingRecord(null);
