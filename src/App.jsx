@@ -118,6 +118,7 @@ import ItemRow from "./components/ItemRow";
 import SharedStatusPanel from "./components/SharedStatusPanel";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import ShoppingListPreview from "./components/ShoppingListPreview";
+import HomeBanner from "./components/HomeBanner";
 import {
   LIST_TYPE_CONFIGS,
   getListTypeConfig,
@@ -8351,128 +8352,11 @@ if(hasChanges)showToast("🔄 Lista atualizada");
 <HomeScreen>
         <div style={{display:"flex",flexDirection:"column",minHeight:"100dvh",width:"100%",maxWidth:"100%",overflowX:"hidden",boxSizing:"border-box",background:"linear-gradient(160deg,#f5f0ff 0%,#faf8ff 40%,#f0f4ff 100%)",position:"relative"}}>
 
-          {/* ── BANNER SUPERIOR ── */}
-          <div style={{background:"linear-gradient(135deg,#6d28d9 0%,#7c3aed 54%,#9f67fa 100%)",paddingTop:28,paddingRight:"max(16px, env(safe-area-inset-right, 0px))",paddingBottom:32,paddingLeft:"max(16px, env(safe-area-inset-left, 0px))",position:"relative",overflow:"hidden",boxShadow:"0 16px 48px rgba(109,40,217,0.28)"}}>
-            {/* Orbes decorativos */}
-            <div style={{position:"absolute",top:-80,right:-60,width:240,height:240,background:"radial-gradient(circle,rgba(255,255,255,0.14),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:-50,left:-40,width:180,height:180,background:"radial-gradient(circle,rgba(255,255,255,0.10),transparent 70%)",borderRadius:"50%",pointerEvents:"none"}}/>
-            <div style={{position:"relative",maxWidth:520,width:"100%",margin:"0 auto",display:"flex",flexDirection:"column",gap:16,alignItems:"center"}}>
-              <div style={{textAlign:"center",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:28,padding:"20px 20px 18px",width:"100%",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
-                <BrandWordmark />
-                <div style={{color:"rgba(255,255,255,0.80)",fontSize:13,lineHeight:1.5,fontStyle:"italic",fontWeight:500,marginTop:12}}>Organize, compartilhe e controle o orçamento</div>
-                <button
-                  onClick={()=>startGuidedTour("home")}
-                  style={{marginTop:16,border:"1.5px solid rgba(255,255,255,0.40)",borderRadius:999,padding:"11px 20px",background:"rgba(255,255,255,0.18)",color:"#FFFFFF",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",transition:"background 0.2s"}}
-                >
-                  ✨ Como usar o app
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ── GRADE DE MÓDULOS ── */}
-          <div style={{paddingTop:24,paddingRight:"max(14px, env(safe-area-inset-right, 0px))",paddingBottom:"calc(100px + env(safe-area-inset-bottom, 0px))",paddingLeft:"max(14px, env(safe-area-inset-left, 0px))",flex:1,maxWidth:720,width:"100%",margin:"0 auto",boxSizing:"border-box",overflowX:"hidden"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-              <div style={{fontWeight:800,fontSize:11,color:"#9ca3af",textTransform:"uppercase",letterSpacing:"1.2px"}}>Módulos</div>
-              <div style={{fontSize:12,color:"#7c3aed",fontWeight:700,background:"#f0ebff",padding:"3px 10px",borderRadius:999}}>6 áreas integradas</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginBottom:30}}>
-  {[
-    {iconType:"compras",name:"Compras",desc:"Lista inteligente",active:true},
-    {iconType:"festa",name:"Festa",desc:"Churrasco e eventos",active:false},
-    {iconType:"conta",name:"Conta",desc:"Dividir despesas",active:false},
-    {iconType:"saude",name:"Saúde",desc:"Receitas e remédios",active:false},
-    {iconType:"eventos",name:"Eventos",desc:"Convites e QR Code",active:false},
-    {iconType:"condominio",name:"Condomínio",desc:"Gestão e aprovações",active:false},
-  ].map(m=>{
-    const inactive = !m.active;
-    return (
-      <div
-        key={m.name}
-        role="button"
-        tabIndex={m.active ? 0 : -1}
-        aria-label={m.active ? `Abrir módulo ${m.name}` : `${m.name} em breve`}
-        data-tour-step={m.iconType === "compras" ? "home_compras" : undefined}
-        onClick={() => {
-          if (!m.active) return;
-          setScreen("create");
-        }}
-        onKeyDown={(e) => {
-          if (!m.active) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setScreen("create");
-          }
-        }}
-        style={{
-          background: m.active
-            ? "linear-gradient(140deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)"
-            : "linear-gradient(180deg,#FFFFFF 0%,#FAFAFE 100%)",
-          borderRadius: 22,
-          padding: m.active ? "20px 14px" : "18px 14px",
-          cursor: m.active ? "pointer" : "not-allowed",
-          boxShadow: m.active
-            ? "0 22px 48px -12px rgba(109,40,217,0.55), 0 6px 18px -8px rgba(76,29,149,0.4), inset 0 1px 0 rgba(255,255,255,0.18)"
-            : "0 4px 14px rgba(17,24,39,0.04)",
-          border: m.active
-            ? "1px solid rgba(255,255,255,0.18)"
-            : "1px solid #EDE9FE",
-          position: "relative", overflow: "hidden", textAlign: "center",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          minHeight: m.active ? 164 : 154,
-          transition: "transform 180ms ease, box-shadow 220ms ease",
-        }}>
-        {m.active && (
-          <>
-            <div aria-hidden style={{
-              position:"absolute", top:-40, right:-40, width:140, height:140, borderRadius:"50%",
-              background:"radial-gradient(circle,rgba(255,255,255,0.25),rgba(255,255,255,0) 70%)",
-              pointerEvents:"none"
-            }}/>
-            <div style={{
-              position:"absolute", top:10, right:10,
-              background:"#FFFFFF", color:"#6D28D9",
-              fontSize:9, fontWeight:900, padding:"3px 9px",
-              borderRadius:180, textTransform:"uppercase",
-              letterSpacing:"0.08em",
-              boxShadow:"0 4px 10px -2px rgba(0,0,0,0.18)"
-            }}>Ativo</div>
-          </>
-        )}
-        {inactive && (
-          <div style={{
-            position:"absolute", top:10, right:10,
-            background:"#EDE9FE", color:"#7C3AED",
-            fontSize:9, fontWeight:900, padding:"3px 9px",
-            borderRadius:180, textTransform:"uppercase",
-            letterSpacing:"0.08em",
-            border:"1px solid #DDD6FE"
-          }}>Em breve</div>
-        )}
-        <div style={{
-          filter: inactive ? "grayscale(1)" : "none",
-          opacity: inactive ? 0.55 : 1,
-          transition: "filter 200ms ease, opacity 200ms ease",
-        }}>
-          <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
-        </div>
-        <div style={{
-          fontWeight: 900,
-          fontSize: m.active ? 16 : 15,
-          color: m.active ? "#FFFFFF" : "#6B7280",
-          marginTop: 4,
-          letterSpacing: "-0.01em",
-        }}>{m.name}</div>
-        <div style={{
-          fontSize: 12,
-          color: m.active ? "rgba(255,255,255,0.85)" : "#9CA3AF",
-          marginTop: 4,
-          fontWeight: 500,
-        }}>{m.desc}</div>
-      </div>
-    );
-  })}
-</div>
+          <HomeBanner
+  onStartTour={() => startGuidedTour("home")}
+  onOpenCompras={() => setScreen("create")}
+  isTourStep={isTourStep}
+/>
 
 
             <ListsSection
