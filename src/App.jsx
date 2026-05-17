@@ -7639,7 +7639,11 @@ const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||curr
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
-        sharedId,
+        // Preserva o sharedId próprio do receptor (registro dele no Supabase).
+        // originalSharedId aponta para o registro do dono, de onde o polling busca atualizações.
+        sharedId: currentList.sharedId || sharedId,
+        originalSharedId: sharedId,
+        sourceSharedId: currentList.sourceSharedId || sharedId,
         // Não transformar lista própria sincronizada na nuvem em lista compartilhada.
         isShared: currentList.isShared === true || record?.data?.isShared === true,
         imported: isReceivedFromAnotherUser,
