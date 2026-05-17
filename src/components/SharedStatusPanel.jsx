@@ -4,8 +4,6 @@ export default function SharedStatusPanel({
   totalItems,
   originText = "",
   sharedUpdateNotice,
-  sharedSyncing,
-  onRefresh,
   formatRelativeSyncTime,
 }) {
   if (currentList?.isShared !== true) return null;
@@ -45,7 +43,6 @@ export default function SharedStatusPanel({
           0% { transform: translateX(-100%); }
           100% { transform: translateX(220%); }
         }
-        @keyframes tnl-ssp-spin { to { transform: rotate(360deg); } }
       `}</style>
 
       {/* decorative glow */}
@@ -130,6 +127,7 @@ export default function SharedStatusPanel({
             {progressPct}%
           </span>
         </div>
+
         <div
           style={{
             fontSize: 12,
@@ -191,21 +189,13 @@ export default function SharedStatusPanel({
           </div>
         </div>
 
-        <div
-          style={{
-            marginTop: 9,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-          }}
-        >
+        <div style={{ marginTop: 9, display: "flex", flexWrap: "wrap", gap: 6 }}>
           <span
             style={{
               fontSize: 11,
               fontWeight: 800,
               color: "#4C1D95",
-              background:
-                "linear-gradient(180deg,#FFFFFF 0%,#F8F4FF 100%)",
+              background: "linear-gradient(180deg,#FFFFFF 0%,#F8F4FF 100%)",
               border: "1px solid rgba(167,139,250,0.42)",
               borderRadius: 999,
               padding: "4px 9px",
@@ -220,97 +210,29 @@ export default function SharedStatusPanel({
             <span>Atualizado {formatRelativeSyncTime(lastUpdate)}</span>
           </span>
 
-          {sharedUpdateNotice && (
+          {isConflict && (
             <span
               style={{
                 fontSize: 11,
                 fontWeight: 800,
-                color: isConflict ? "#B91C1C" : "#047857",
-                background: isConflict
-                  ? "linear-gradient(180deg,#FEF2F2 0%,#FEE2E2 100%)"
-                  : "linear-gradient(180deg,#ECFDF5 0%,#D1FAE5 100%)",
-                border: isConflict
-                  ? "1px solid rgba(252,165,165,0.85)"
-                  : "1px solid rgba(110,231,183,0.85)",
+                color: "#B91C1C",
+                background: "linear-gradient(180deg,#FEF2F2 0%,#FEE2E2 100%)",
+                border: "1px solid rgba(252,165,165,0.85)",
                 borderRadius: 999,
                 padding: "4px 9px",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 5,
-                boxShadow: isConflict
-                  ? "inset 0 1px 0 rgba(255,255,255,0.85)"
-                  : "inset 0 1px 0 rgba(255,255,255,0.85)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.85)",
                 letterSpacing: "-0.005em",
               }}
             >
-              <span>{isConflict ? "⚠️" : "🔄"}</span>
+              <span>⚠️</span>
               <span>{sharedUpdateNotice.msg}</span>
             </span>
           )}
         </div>
       </div>
-
-      <button
-        onClick={onRefresh}
-        disabled={sharedSyncing}
-        style={{
-          position: "relative",
-          alignSelf: "flex-start",
-          border: "none",
-          borderRadius: 14,
-          padding: "10px 12px",
-          minHeight: 40,
-          background: sharedSyncing
-            ? "linear-gradient(135deg,#DDD6FE 0%,#C4B5FD 100%)"
-            : "linear-gradient(135deg,#4C1D95 0%,#6D28D9 50%,#8B5CF6 100%)",
-          color: sharedSyncing ? "#5B21B6" : "#FFFFFF",
-          fontSize: 12.5,
-          fontWeight: 900,
-          cursor: sharedSyncing ? "default" : "pointer",
-          fontFamily: "inherit",
-          whiteSpace: "nowrap",
-          boxShadow: sharedSyncing
-            ? "inset 0 1px 0 rgba(255,255,255,0.85)"
-            : "0 12px 24px -8px rgba(76,29,149,0.50), 0 4px 10px rgba(124,58,237,0.25), inset 0 1px 0 rgba(255,255,255,0.30)",
-          letterSpacing: "-0.005em",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          transition: "transform .15s ease, box-shadow .2s ease",
-          WebkitTapHighlightColor: "transparent",
-          touchAction: "manipulation",
-          opacity: sharedSyncing ? 0.95 : 1,
-        }}
-        onMouseDown={(e) =>
-          !sharedSyncing && (e.currentTarget.style.transform = "scale(0.96)")
-        }
-        onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        onTouchStart={(e) =>
-          !sharedSyncing && (e.currentTarget.style.transform = "scale(0.96)")
-        }
-        onTouchEnd={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      >
-        {sharedSyncing ? (
-          <>
-            <span
-              aria-hidden
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                border: "2px solid rgba(91,33,182,0.25)",
-                borderTopColor: "#5B21B6",
-                animation: "tnl-ssp-spin 0.7s linear infinite",
-                display: "inline-block",
-              }}
-            />
-            Atualizando
-          </>
-        ) : (
-          <>↻ Atualizar</>
-        )}
-      </button>
     </div>
   );
 }
