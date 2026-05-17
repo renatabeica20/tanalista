@@ -858,7 +858,13 @@ function getListOriginMeta(list) {
   if (receivedFromAnotherUser) {
     return { type:"received", icon:"📥", text:"Recebida de " + from };
   }
-
+const sharedWith=list.sharedWithName;
+if(sharedWith&&!receivedFromAnotherUser){
+  const normalizedWith=normalizeAuthName(sharedWith);
+  if(!normalizedCurrent||normalizedWith!==normalizedCurrent){
+    return{type:"shared",icon:"🤝",text:"Compartilhada com "+sharedWith};
+  }
+}
   if (owner) {
     return { type:"created", icon:"✍️", text: normalizedCurrent && normalizedOwner === normalizedCurrent ? "Criada por você" : "Feita por " + owner };
   }
@@ -7464,6 +7470,8 @@ const isRealSharedList=(list)=>Boolean(
       const remoteOwner = record?.remetente || record?.data?.remetente || record?.data?.ownerName || currentList.remetente || currentList.ownerName || currentUserName || "Não informado";
       const remoteOwnerIsCurrentUser = normalizeAuthName(remoteOwner) && normalizeAuthName(remoteOwner) === normalizeAuthName(currentUserName);
       const isReceivedFromAnotherUser = Boolean(currentList.imported === true || currentList.receivedAt || currentList.importedAt) && !remoteOwnerIsCurrentUser;
+      const acceptedEvent=(record.data?.sharedEvents||[]).find(e=>e.type==="shared-accepted");
+const sharedWithName=acceptedEvent?.actorName||record.data?.sharedWithName||currentList.sharedWithName||null;
       const refreshed=markListCloudSynced({
         ...record.data,
         id:currentList.id,
@@ -7475,6 +7483,7 @@ const isRealSharedList=(list)=>Boolean(
         remetente: remoteOwner,
         ownerName: record?.data?.ownerName || remoteOwner,
         sharedOwner: isReceivedFromAnotherUser ? remoteOwner : null,
+        sharedWithName: isReceivedFromAnotherUser ? null : sharedWithName,
         pulledAt:new Date().toISOString(),
       },record.data);
       setCurrentList(refreshed);
