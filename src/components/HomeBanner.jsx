@@ -131,19 +131,19 @@ export default function HomeBanner({ onStartTour, onOpenCompras, isTourStep }) {
                 style={{
                   background: m.active
                     ? "radial-gradient(120% 80% at 50% 0%, rgba(196,181,253,0.35) 0%, transparent 55%), linear-gradient(155deg,#3B0F73 0%,#5B21B6 35%,#6D28D9 70%,#8B5CF6 100%)"
-                    : "linear-gradient(180deg,#FFFFFF 0%,#FBFAFE 100%)",
+                    : "#FFFFFF",
                   borderRadius: 24,
-                  padding: m.active ? "22px 14px 18px" : "20px 14px 18px",
+                  padding: m.active ? "30px 16px 26px" : "20px 14px 18px",
                   cursor: m.active ? "pointer" : "not-allowed",
                   boxShadow: m.active
-                    ? "0 24px 50px -14px rgba(76,29,149,0.55), 0 8px 20px -10px rgba(109,40,217,0.45), inset 0 1px 0 rgba(255,255,255,0.20), inset 0 -1px 0 rgba(0,0,0,0.12)"
+                    ? "0 36px 70px -16px rgba(76,29,149,0.7), 0 18px 36px -12px rgba(109,40,217,0.55), 0 6px 14px -6px rgba(59,15,115,0.45), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15)"
                     : "0 4px 14px -4px rgba(17,24,39,0.06), inset 0 1px 0 rgba(255,255,255,0.9)",
                   border: m.active
                     ? "1px solid rgba(255,255,255,0.22)"
-                    : "1px solid #ECE6FB",
+                    : "1px solid #F3F4F6",
                   position:"relative", overflow:"hidden", textAlign:"center",
                   display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-                  minHeight: m.active ? 168 : 156,
+                  minHeight: m.active ? 200 : 140,
                   WebkitTapHighlightColor:"transparent",
                 }}>
                 {m.active && (
@@ -156,14 +156,15 @@ export default function HomeBanner({ onStartTour, onOpenCompras, isTourStep }) {
                     <div aria-hidden style={{position:"absolute",left:14,right:14,bottom:0,height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)",pointerEvents:"none"}}/>
                     {/* badge ativo */}
                     <div style={{
-                      position:"absolute",top:11,right:11,
-                      background:"linear-gradient(180deg,#FFFFFF,#F3EEFF)",
-                      color:"#5B21B6",fontSize:9,fontWeight:900,padding:"3.5px 10px",
-                      borderRadius:180,textTransform:"uppercase",letterSpacing:"0.1em",
-                      boxShadow:"0 6px 14px -4px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.9)",
-                      display:"inline-flex",alignItems:"center",gap:5,
+                      position:"absolute",top:12,right:12,
+                      background:"linear-gradient(180deg,#FFFFFF,#EDE4FF)",
+                      color:"#4C1D95",fontSize:10,fontWeight:900,padding:"5px 12px",
+                      borderRadius:180,textTransform:"uppercase",letterSpacing:"0.12em",
+                      boxShadow:"0 10px 22px -6px rgba(0,0,0,0.4), 0 4px 10px -3px rgba(76,29,149,0.45), inset 0 1px 0 rgba(255,255,255,0.95)",
+                      display:"inline-flex",alignItems:"center",gap:6,
+                      border:"1px solid rgba(255,255,255,0.6)",
                     }}>
-                      <span aria-hidden style={{width:5,height:5,borderRadius:"50%",background:"#22C55E",boxShadow:"0 0 8px rgba(34,197,94,0.85)"}}/>
+                      <span aria-hidden style={{width:6,height:6,borderRadius:"50%",background:"#22C55E",boxShadow:"0 0 10px rgba(34,197,94,0.95)"}}/>
                       Ativo
                     </div>
                   </>
@@ -174,18 +175,17 @@ export default function HomeBanner({ onStartTour, onOpenCompras, isTourStep }) {
                     <div aria-hidden style={{position:"absolute",top:-40,right:-40,width:120,height:120,borderRadius:"50%",background:"radial-gradient(circle,rgba(124,58,237,0.06),transparent 70%)",pointerEvents:"none"}}/>
                     <div style={{
                       position:"absolute",top:11,right:11,
-                      background:"linear-gradient(180deg,#F5F0FF,#EDE4FF)",
-                      color:"#7C3AED",fontSize:9,fontWeight:900,padding:"3.5px 10px",
+                      background:"#F3F4F6",
+                      color:"#9CA3AF",fontSize:9,fontWeight:800,padding:"3.5px 10px",
                       borderRadius:180,textTransform:"uppercase",letterSpacing:"0.1em",
-                      border:"1px solid #DDD6FE",
-                      boxShadow:"inset 0 1px 0 rgba(255,255,255,0.9)",
+                      border:"1px solid #E5E7EB",
                     }}>Em breve</div>
                   </>
                 )}
-                <div style={{filter:inactive?"grayscale(1)":"none",opacity:inactive?0.55:1,transition:"filter 200ms ease, opacity 200ms ease",position:"relative",zIndex:1}}>
+                <div style={{filter:inactive?"grayscale(1)":"none",opacity:inactive?0.35:1,transition:"filter 200ms ease, opacity 200ms ease",position:"relative",zIndex:1}}>
                   <ModuleIcon type={m.iconType} size={m.active?72:68} active={m.active} />
                 </div>
-                <div style={{position:"relative",zIndex:1,fontWeight:900,fontSize:m.active?16.5:15,color:m.active?"#FFFFFF":"#4B5563",marginTop:6,letterSpacing:"-0.015em",textShadow:m.active?"0 2px 10px rgba(30,10,80,0.4)":"none"}}>{m.name}</div>
+                <div style={{position:"relative",zIndex:1,fontWeight:900,fontSize:m.active?16.5:13,color:m.active?"#FFFFFF":"#4B5563",marginTop:6,letterSpacing:"-0.015em",textShadow:m.active?"0 2px 10px rgba(30,10,80,0.4)":"none"}}>{m.name}</div>
                 <div style={{position:"relative",zIndex:1,fontSize:12,color:m.active?"rgba(255,255,255,0.88)":"#9CA3AF",marginTop:4,fontWeight:500,letterSpacing:"0.005em"}}>{m.desc}</div>
               </div>
             );
