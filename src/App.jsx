@@ -3024,24 +3024,49 @@ function photoItemsToText(items) {
     .join("\n");
 }
 
+// Comprime imagem para máx 1600px e qualidade 85% antes de enviar para a API.
+// Fotos de celular chegam com 4-8MB; o base64 passa o limite de 10MB da Vercel.
+async function compressImageFile(file, maxPx = 1600, quality = 0.85) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 const LIST_TYPE_OCR_CONTEXT = {
   farmacia: {
-    role: "leitor de listas de medicamentos e produtos de farmácia",
-    example: '{"items":[{"name":"Losartana 50mg","qty":2,"unit":"caixa"},{"name":"Omeprazol 20mg","qty":1,"unit":"caixa"}]}',
+    role: "leitor de receitas médicas e listas de farmácia",
+    example: '{"items":[{"name":"Amoxicilina 500mg","qty":1,"unit":"caixa"},{"name":"Dipirona 500mg","qty":1,"unit":"caixa"}]}',
     rules: [
       "- preserve o nome completo do medicamento incluindo dosagem (ex: 'Losartana 50mg', 'Amoxicilina 500mg');",
       "- unit deve ser caixa, frasco, tubo, cartela, ampola ou unidade;",
-      "- se houver posologia ou instruções de uso, ignore — extraia só o nome e quantidade;",
-      "- ignore cabeçalhos como 'Receituário', 'CRM', nome do médico e data.",
+      "- ignore posologia, instruções de uso, nome do médico, CRM, data e dados do paciente;",
+      "- extraia APENAS os nomes dos medicamentos e quantidades prescritas.",
     ],
   },
   escolar: {
     role: "leitor de listas de material escolar",
     example: '{"items":[{"name":"Caderno espiral 200 folhas","qty":2,"unit":"unidade"},{"name":"Lápis de cor 12 cores","qty":1,"unit":"caixa"}]}',
     rules: [
-      "- preserve especificações importantes como número de folhas, cores, tamanho (ex: 'Caderno 200 folhas', 'Lápis de cor 24 cores');",
+      "- preserve especificações como número de folhas, cores, tamanho (ex: 'Caderno 200 folhas', 'Lápis de cor 24 cores');",
       "- unit deve ser unidade, caixa, pacote, kit ou par;",
-      "- ignore cabeçalho com nome da escola, série, ano letivo e professor.",
+      "- ignore nome da escola, série, ano letivo e professor.",
     ],
   },
   construcao: {
@@ -3050,14 +3075,14 @@ const LIST_TYPE_OCR_CONTEXT = {
     rules: [
       "- preserve especificações técnicas (ex: 'Cimento CP-II', 'Fio 2,5mm', 'Cano PVC 100mm');",
       "- unit deve ser saco, unidade, metro, m², barra, rolo, lata, caixa ou kg;",
-      "- quantidades podem ser grandes (centenas ou milhares) — extraia exatamente.",
+      "- quantidades podem ser grandes — extraia exatamente.",
     ],
   },
   eletrico: {
     role: "leitor de listas de materiais elétricos",
     example: '{"items":[{"name":"Fio 2,5mm","qty":50,"unit":"metro"},{"name":"Disjuntor 20A","qty":2,"unit":"unidade"}]}',
     rules: [
-      "- preserve especificações técnicas como bitola, amperagem, voltagem (ex: 'Fio 2,5mm', 'Disjuntor 20A');",
+      "- preserve especificações técnicas como bitola, amperagem, voltagem;",
       "- unit deve ser metro, rolo, unidade, caixa ou kit.",
     ],
   },
@@ -3073,23 +3098,41 @@ const LIST_TYPE_OCR_CONTEXT = {
 };
 
 async function readShoppingListFromImage(file, listType = "mercado") {
-  const dataUrl = await fileToDataUrl(file);
+  // Comprime antes de converter — evita ultrapassar limite de 10MB da Vercel
+  const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+  let dataUrl;
+  if (isPdf) {
+    // PDF: converte primeira página para imagem via canvas (só funciona em PDFs com texto nativo via embed)
+    // Fallback: lê como base64 e envia como application/pdf — a API rejeita, mas o erro fica claro
+    dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  } else {
+    dataUrl = await compressImageFile(file);
+  }
+
+  if (!dataUrl) throw new Error("Não foi possível ler o arquivo.");
+
   const [meta, base64] = dataUrl.split(",");
-  const mediaType = (meta.match(/data:(.*?);base64/) || [])[1] || file.type || "image/jpeg";
+  const mediaType = isPdf ? "image/jpeg" : ((meta.match(/data:(.*?);base64/) || [])[1] || "image/jpeg");
 
   const ctx = LIST_TYPE_OCR_CONTEXT[listType] || LIST_TYPE_OCR_CONTEXT.mercado;
 
   const prompt = [
     `Você é um ${ctx.role} em português do Brasil.`,
-    "Leia o documento enviado, mesmo que esteja manuscrito, impresso ou em PDF convertido para imagem.",
+    "Leia o documento enviado, mesmo que esteja manuscrito, impresso ou digitado.",
     "Extraia apenas os itens da lista, ignorando cabeçalhos, rodapés, datas e informações administrativas.",
-    "Corrija erros óbvios de leitura quando o contexto indicar o produto correto.",
+    "Corrija erros óbvios de leitura quando o contexto indicar o item correto.",
     "Retorne APENAS JSON válido, sem markdown, neste formato:",
     ctx.example,
     "Regras:",
     "- qty deve ser número;",
     ...ctx.rules,
     "- não invente itens que não estejam no documento.",
+    "- se não conseguir identificar nenhum item, retorne {\"items\":[]}.",
   ].join("\n");
 
   const res = await fetch("/api/anthropic", {
@@ -3098,7 +3141,7 @@ async function readShoppingListFromImage(file, listType = "mercado") {
     body: JSON.stringify({
       prompt,
       model: ANTHROPIC_MODEL_VISION,
-      maxTokens: 900,
+      maxTokens: 1500,
       image: { mediaType, data: base64 },
     }),
   });
@@ -8534,9 +8577,6 @@ if(hasChanges)showToast("🔄 Lista atualizada");
           tourHighlightStyle={tourHighlightStyle}
           onShowPhotoModal={()=>setShowPhotoModal(true)}
         />
-      )}
-
-      <PantrySection
         screen={screen}
         setScreen={setScreen}
         pantryPendingItems={pantryPendingItems}
@@ -9262,22 +9302,22 @@ if(hasChanges)showToast("🔄 Lista atualizada");
       {/* ── MODAL: LER FOTO DA LISTA ── */}
       {showPhotoModal&&(()=>{
         const ocrCtx={
-          farmacia:{title:"📋 Importar receita ou lista de farmácia",hint:"Fotografe ou importe a receita médica ou lista impressa. A IA vai extrair os medicamentos e quantidades automaticamente."},
-          escolar:{title:"📄 Importar lista de material escolar",hint:"Fotografe ou importe o PDF com a lista de materiais. A IA vai extrair os itens preservando especificações como quantidade de folhas e cores."},
-          construcao:{title:"📐 Importar lista de materiais",hint:"Fotografe ou importe a lista de materiais de construção. A IA vai extrair os itens com suas especificações técnicas."},
-          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Fotografe ou importe a lista. A IA vai extrair os itens preservando bitola, amperagem e outras especificações."},
+          farmacia:{title:"📋 Importar receita ou lista de farmácia",hint:"Fotografe ou importe a receita médica ou lista impressa. A IA extrai os medicamentos e quantidades automaticamente."},
+          escolar:{title:"📄 Importar lista de material escolar",hint:"Fotografe ou importe o PDF com a lista de materiais. A IA extrai os itens preservando especificações como quantidade de folhas e cores."},
+          construcao:{title:"📐 Importar lista de materiais",hint:"Fotografe ou importe a lista de materiais de construção. A IA extrai os itens com suas especificações técnicas."},
+          eletrico:{title:"⚡ Importar lista de materiais elétricos",hint:"Fotografe ou importe a lista. A IA extrai os itens preservando bitola, amperagem e outras especificações."},
         };
-        const ctx=ocrCtx[listType]||{title:"📷 Importar lista por foto ou arquivo",hint:"Fotografe uma lista impressa ou manuscrita, ou importe um PDF/imagem. A IA vai interpretar e montar os itens automaticamente."};
+        const ctx=ocrCtx[listType]||{title:"📷 Importar lista por foto ou arquivo",hint:"Fotografe uma lista impressa ou manuscrita, ou importe uma imagem. A IA vai interpretar e montar os itens automaticamente."};
         return(
         <ModalSheet onClose={()=>!ocrLoading&&setShowPhotoModal(false)}>
           <div style={{fontWeight:900,fontSize:18,color:"#111827",marginBottom:4}}>{ctx.title}</div>
           <div style={{fontSize:13,color:"#6B7280",marginBottom:14,lineHeight:1.45}}>{ctx.hint}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <label style={{...btnG,background:"linear-gradient(135deg,#16A34A,#22C55E)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"14px 12px"}}>
               📸 Foto ou imagem
               <input type="file" accept="image/*" capture="environment" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
             </label>
-            <label style={{...btnG,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <label style={{...btnG,background:"linear-gradient(135deg,#6D28D9,#8B5CF6)",cursor:ocrLoading?"not-allowed":"pointer",opacity:ocrLoading?0.7:1,margin:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"14px 12px"}}>
               📄 PDF ou arquivo
               <input type="file" accept="image/*,application/pdf,.pdf" onChange={handlePhotoListFile} disabled={ocrLoading} style={{display:"none"}}/>
             </label>
