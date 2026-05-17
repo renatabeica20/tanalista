@@ -4172,6 +4172,7 @@ const [lists,setLists]=useState(()=>{
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [confirmDeleteAction,setConfirmDeleteAction]=useState(null);
   const [showFinished,setShowFinished]=useState(false);
+  const currentListRef=useRef(null);
   const toastTimer=useRef(null);
   const searchRef=useRef(null);
   const listRef=useRef(null);
@@ -7557,14 +7558,16 @@ const isRealSharedList=(list)=>Boolean(
   };
 
 
+  currentListRef.current=currentList;
+
   useEffect(()=>{
     if(!showFinished)return;
     const timer=setTimeout(()=>{
-      markActivePantryAsCompleted(currentList);
+      markActivePantryAsCompleted(currentListRef.current);
       setShowFinished(false);
     },5000);
     return()=>clearTimeout(timer);
-  },[showFinished,currentList]);
+  },[showFinished]);
 
   const syncSharedListToCloud=useCallback(async(list,{silent=true,force=false}={})=>{
     const sharedId=list?.sharedId||list?.originalSharedId||list?.sourceSharedId;
