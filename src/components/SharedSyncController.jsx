@@ -1,5 +1,14 @@
 import { useEffect, useRef } from "react";
 
+// Intervalo de polling em ms.
+// 15s é suficiente para sincronização em tempo real no mercado
+// e reduz o egress em ~75% comparado ao intervalo anterior de 4s.
+const POLL_INTERVAL_MS = 15000;
+
+// Pausa após gravação local — evita race condition onde o polling
+// busca antes da escrita completar e desfaz a marcação do usuário.
+const POST_WRITE_PAUSE_MS = 8000;
+
 export default function SharedSyncController({
   screen,
   currentList,
@@ -7,7 +16,7 @@ export default function SharedSyncController({
   getListSyncStamp,
   autoSyncNoticeRef,
   onRefresh,
-  lastLocalWriteAt, // timestamp (ms) da última gravação local — pausa o polling por 6s após gravar
+  lastLocalWriteAt,
 }) {
   const intervalRef = useRef(null);
   const isPollingRef = useRef(false);
@@ -24,8 +33,6 @@ export default function SharedSyncController({
       intervalRef.current = null;
     }
 
-    // Verifica sharedId em todos os campos possíveis — listas importadas
-    // guardam o ID original em originalSharedId ou sourceSharedId
     const effectiveSharedId =
       currentList?.sharedId ||
       currentList?.originalSharedId ||
@@ -41,12 +48,10 @@ export default function SharedSyncController({
     const poll = async () => {
       if (isPollingRef.current) return;
 
-      // Pausa o polling por 6s após uma gravação local para evitar
-      // race condition: gravar → polling busca antes de completar → desmarca item
       const msSinceWrite = lastLocalWriteAtRef.current
         ? Date.now() - lastLocalWriteAtRef.current
         : Infinity;
-      if (msSinceWrite < 6000) return;
+      if (msSinceWrite < POST_WRITE_PAUSE_MS) return;
 
       isPollingRef.current = true;
       try {
@@ -58,7 +63,7 @@ export default function SharedSyncController({
       }
     };
 
-    intervalRef.current = setInterval(poll, 4000);
+    intervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
 
     return () => {
       if (intervalRef.current) {
