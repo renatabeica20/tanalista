@@ -4,7 +4,7 @@ export const ANTHROPIC_MODEL_CLASSIFY =
 
 export const ANTHROPIC_MODEL_ORGANIZE =
   import.meta.env.VITE_ANTHROPIC_MODEL_ORGANIZE ||
-  "claude-sonnet-4-6";
+  "claude-haiku-4-5-20251001";
 
 export const ANTHROPIC_MODEL_VISION =
   import.meta.env.VITE_ANTHROPIC_MODEL_VISION ||
