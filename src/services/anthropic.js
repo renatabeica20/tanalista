@@ -1,92 +1,57 @@
-const API_URL = "https://api.anthropic.com/v1/messages";
-
-// 🔥 CLASSIFICAÇÃO LOCAL (rápida e confiável)
+// Classificação local rápida para itens comuns — sem chamada de rede
 function classificarLocal(nome) {
   const item = nome.toLowerCase();
 
   if (item.includes("arroz") || item.includes("feijão")) {
-    return {
-      categoria: "mercearia",
-      tipo: "alimento",
-      subtipo: "grãos"
-    };
+    return { categoria: "mercearia", tipo: "alimento", subtipo: "grãos" };
   }
-
   if (item.includes("macarrão")) {
-    return {
-      categoria: "mercearia",
-      tipo: "alimento",
-      subtipo: "massas"
-    };
+    return { categoria: "mercearia", tipo: "alimento", subtipo: "massas" };
   }
-
   if (item.includes("leite")) {
-    return {
-      categoria: "laticínios",
-      tipo: "bebida",
-      subtipo: "leite"
-    };
+    return { categoria: "laticínios", tipo: "bebida", subtipo: "leite" };
   }
 
   return null;
 }
 
 export async function classificarItem(nomeItem) {
-  // ✅ tenta primeiro local
+  // Tenta classificação local primeiro — sem custo e sem risco
   const local = classificarLocal(nomeItem);
   if (local) return local;
 
-  // 🌐 fallback IA
+  // Fallback: chama /api/anthropic (função serverless da Vercel)
+  // A chave da Anthropic fica protegida no servidor — nunca exposta no browser.
   try {
-    const response = await fetch(API_URL, {
+    const res = await fetch("/api/anthropic", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 200,
-        messages: [
-          {
-            role: "user",
-            content: `
-Responda SOMENTE com JSON válido.
+        model: "claude-haiku-4-5-20251001",
+        maxTokens: 200,
+        prompt: `Responda SOMENTE com JSON válido, sem texto adicional.
 
 Item: "${nomeItem}"
 
-Formato:
+Formato obrigatório:
 {
   "categoria": "string",
   "tipo": "string",
   "subtipo": "string"
-}
-`
-          }
-        ]
-      })
+}`,
+      }),
     });
 
-    const data = await response.json();
-    const texto = data?.content?.[0]?.text || "";
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+    const data = await res.json();
+    const texto = data?.text || "";
     const match = texto.match(/\{[\s\S]*\}/);
-
-    if (!match) {
-      throw new Error("JSON não encontrado");
-    }
+    if (!match) throw new Error("JSON não encontrado");
 
     return JSON.parse(match[0]);
-
   } catch (error) {
-    console.error("Erro IA:", error);
-
-    // 🔥 fallback final (evita erro no app)
-    return {
-      categoria: "outros",
-      tipo: "outros",
-      subtipo: "outros"
-    };
+    console.error("Erro ao classificar item via IA:", error);
+    return { categoria: "outros", tipo: "outros", subtipo: "outros" };
   }
 }
