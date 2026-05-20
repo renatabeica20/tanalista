@@ -1400,7 +1400,7 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "construcao") {
-    if (includesAny(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
+    if (includesAny(["cimento", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
     if (includesAny(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) return "Acabamento";
     if (includesAny(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "arame", "barra"])) return "Ferragens";
     if (includesAny(["tinta", "rolo", "pincel", "lixa", "selador"])) return "Tintas e Pintura";
@@ -1506,7 +1506,7 @@ function getKeywordCategoryForItem(type, item) {
 
     construcao: {
       "Materiais Básicos": [
-        "cimento", "cimento 50kg", "areia", "brita", "pedra brita", "argamassa", "rejunte",
+        "cimento", "cimento 50kg", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte",
         "massa corrida", "cal", "gesso"
       ],
       "Acabamento": [
@@ -1694,7 +1694,7 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Construção
     if (normalizedType === "construcao" || hasAllowedCategory("Materiais Básicos")) {
-      if (has(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
+      if (has(["cimento", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
         return pick("Materiais Básicos");
       }
       if (has(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) {
@@ -2277,7 +2277,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   });
 
   if (normalizedType === "construcao") {
-    if (has("cimento", "areia", "brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
+    if (has("cimento", "areia", "brita", "pedra", "pedra brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
     if (has("piso", "porcelanato", "azulejo", "ceramica", "cerâmica", "rodape", "rodapé", "soleira", "revestimento")) return "Acabamento";
     if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas e Pintura";
     if (has("cano", "tubo", "pvc", "joelho", "luva", "registro", "torneira", "sifao", "sifão", "ralo")) return "Hidráulica";
@@ -2290,7 +2290,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     if (has("fio", "cabo", "flexivel", "flexível", "bitola", "2,5", "4mm", "6mm")) return "Fios e Cabos";
     if (has("tomada", "interruptor", "placa", "espelho")) return "Tomadas e Interruptores";
     if (has("disjuntor", "dr", "dps", "quadro de distribuição", "quadro distribuicao", "barramento")) return "Disjuntores e Proteção";
-    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor")) return "Iluminação";
+    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor", "fita de led", "fita led", "fita rgb", "fita neon")) return "Iluminação";
     if (has("barra de aterramento", "aterramento", "conector", "conectores")) return "Conectores";
     if (has("conduite", "conduíte", "eletroduto", "canaleta", "caixa de passagem", "caixa 4x2", "caixa 4x4")) return "Conduítes e Eletrodutos";
     if (has("alicate", "chave teste", "multimetro", "multímetro", "fita isolante")) return "Ferramentas";
@@ -2335,6 +2335,15 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   // Mercado: regras explícitas ANTES do fallback genérico
   // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
   if (normalizedType === "mercado") {
+    // Derivados de mandioca → Mercearia (antes de Hortifruti capturar "mandioca")
+    if (has("farinha de mandioca", "farinha mandioca", "farofa de mandioca", "polvilho", "tapioca", "goma de tapioca")) return "Mercearia";
+
+    // Derivados de tomate → Mercearia (antes de Hortifruti capturar "tomate")
+    if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
+
+    // Bolacha/biscoito → Snacks e Doces (antes de Frios capturar pela IA)
+    if (has("bolacha", "biscoito", "cookie", "wafer", "rosca doce")) return "Snacks e Doces";
+
     // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
     if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
 
@@ -8186,8 +8195,8 @@ if(effectiveSharedId){
 
   const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
 
-  const recentLists = visibleLists.slice(0,1);
-  const historyLists = visibleLists.slice(1);
+  const recentLists = visibleLists.filter(l => !isListFinished(l));
+  const historyLists = visibleLists.filter(l => isListFinished(l));
 
   const shouldIgnoreSwipeTarget=(target)=>{
     try{
