@@ -1400,7 +1400,7 @@ function getDirectCategoryOverride(type, item) {
   }
 
   if (normalizedType === "construcao") {
-    if (includesAny(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
+    if (includesAny(["cimento", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) return "Materiais Básicos";
     if (includesAny(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) return "Acabamento";
     if (includesAny(["ferro", "vergalhão", "vergalhao", "prego", "parafuso", "arame", "barra"])) return "Ferragens";
     if (includesAny(["tinta", "rolo", "pincel", "lixa", "selador"])) return "Tintas e Pintura";
@@ -1506,7 +1506,7 @@ function getKeywordCategoryForItem(type, item) {
 
     construcao: {
       "Materiais Básicos": [
-        "cimento", "cimento 50kg", "areia", "brita", "pedra brita", "argamassa", "rejunte",
+        "cimento", "cimento 50kg", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte",
         "massa corrida", "cal", "gesso"
       ],
       "Acabamento": [
@@ -1694,7 +1694,7 @@ function postProcessOrganizedCategories(categories, type = "mercado") {
 
     // Construção
     if (normalizedType === "construcao" || hasAllowedCategory("Materiais Básicos")) {
-      if (has(["cimento", "areia", "brita", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
+      if (has(["cimento", "areia", "brita", "pedra", "pedra brita", "argamassa", "rejunte", "massa corrida", "cal", "gesso"])) {
         return pick("Materiais Básicos");
       }
       if (has(["piso", "porcelanato", "azulejo", "revestimento", "rodapé", "rodape"])) {
@@ -2277,7 +2277,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   });
 
   if (normalizedType === "construcao") {
-    if (has("cimento", "areia", "brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
+    if (has("cimento", "areia", "brita", "pedra", "pedra brita", "tijolo", "bloco", "cal", "argamassa", "rejunte", "massa corrida", "gesso")) return "Materiais Básicos";
     if (has("piso", "porcelanato", "azulejo", "ceramica", "cerâmica", "rodape", "rodapé", "soleira", "revestimento")) return "Acabamento";
     if (has("tinta", "selador", "verniz", "rolo de pintura", "pincel", "bandeja de pintura", "massa acrilica", "massa acrílica")) return "Tintas e Pintura";
     if (has("cano", "tubo", "pvc", "joelho", "luva", "registro", "torneira", "sifao", "sifão", "ralo")) return "Hidráulica";
