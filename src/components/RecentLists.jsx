@@ -52,8 +52,8 @@ export default function RecentLists({
     })
     .sort((a, b) => getListTime(b) - getListTime(a));
 
-  const safeRecentLists = allListsChronological.slice(0, 3);
-  const safeHistoryLists = allListsChronological.slice(3);
+  const safeRecentLists = allListsChronological.filter(l => !isListFinished(l));
+  const safeHistoryLists = allListsChronological.filter(l => isListFinished(l));
   const baseVisibleLists = allListsChronological;
 
   const listCardProps = {
