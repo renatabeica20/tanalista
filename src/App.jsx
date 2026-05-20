@@ -8195,8 +8195,8 @@ if(effectiveSharedId){
 
   const visibleLists = mergeUniqueLists(Array.isArray(lists) ? lists : []);
 
-  const recentLists = visibleLists.slice(0,1);
-  const historyLists = visibleLists.slice(1);
+  const recentLists = visibleLists.filter(l => !isListFinished(l));
+  const historyLists = visibleLists.filter(l => isListFinished(l));
 
   const shouldIgnoreSwipeTarget=(target)=>{
     try{
