@@ -2290,7 +2290,7 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
     if (has("fio", "cabo", "flexivel", "flexível", "bitola", "2,5", "4mm", "6mm")) return "Fios e Cabos";
     if (has("tomada", "interruptor", "placa", "espelho")) return "Tomadas e Interruptores";
     if (has("disjuntor", "dr", "dps", "quadro de distribuição", "quadro distribuicao", "barramento")) return "Disjuntores e Proteção";
-    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor")) return "Iluminação";
+    if (has("lampada", "lâmpada", "luminaria", "luminária", "bocal", "spot", "refletor", "fita de led", "fita led", "fita rgb", "fita neon")) return "Iluminação";
     if (has("barra de aterramento", "aterramento", "conector", "conectores")) return "Conectores";
     if (has("conduite", "conduíte", "eletroduto", "canaleta", "caixa de passagem", "caixa 4x2", "caixa 4x4")) return "Conduítes e Eletrodutos";
     if (has("alicate", "chave teste", "multimetro", "multímetro", "fita isolante")) return "Ferramentas";
@@ -2335,6 +2335,15 @@ function inferPreferredCategoryForItemByType(item, type = "mercado") {
   // Mercado: regras explícitas ANTES do fallback genérico
   // Sem isso, isAllowedCategoryForType filtra "Bebidas" se não estiver em listTypeConfigs
   if (normalizedType === "mercado") {
+    // Derivados de mandioca → Mercearia (antes de Hortifruti capturar "mandioca")
+    if (has("farinha de mandioca", "farinha mandioca", "farofa de mandioca", "polvilho", "tapioca", "goma de tapioca")) return "Mercearia";
+
+    // Derivados de tomate → Mercearia (antes de Hortifruti capturar "tomate")
+    if (has("molho de tomate", "extrato de tomate", "polpa de tomate", "tomate pelado", "massa de tomate")) return "Mercearia";
+
+    // Bolacha/biscoito → Snacks e Doces (antes de Frios capturar pela IA)
+    if (has("bolacha", "biscoito", "cookie", "wafer", "rosca doce")) return "Snacks e Doces";
+
     // Massas/Mercearia — regra rígida para impedir classificação indevida como Hortifruti.
     if (has("macarrão", "macarrao", "massa", "espaguete", "spaghetti", "parafuso", "penne", "talharim", "fusilli", "lasanha", "massa para lasanha", "massa de pastel")) return "Mercearia";
 
